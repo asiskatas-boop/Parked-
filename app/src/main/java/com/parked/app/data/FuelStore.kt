@@ -60,17 +60,17 @@ class FuelStore(context: Context) {
             .apply()
     }
 
-    fun setTankCapacity(v: Double) {
+    fun updateTankCapacity(v: Double) {
         tankCapacity = v
         prefs.edit().putFloat("tankCapacity", v.toFloat()).apply()
     }
 
-    fun setCurrency(v: String) {
+    fun updateCurrency(v: String) {
         currency = v
         prefs.edit().putString("currency", v).apply()
     }
 
-    fun setUnits(v: String) {
+    fun updateUnits(v: String) {
         units = v
         prefs.edit().putString("units", v).apply()
     }
