@@ -594,8 +594,8 @@ fun FuelScreen(modifier: Modifier = Modifier, fuel: FuelStore) {
 
     val level by remember { derivedStateOf { fuel.estimateLevelPct() } }
     val rangeRemaining by remember { derivedStateOf { fuel.estimatedRangeRemainingKm() } }
-    val avg = remember { derivedStateOf { fuel.averageL100km() } }
-    val rangeFull = remember { derivedStateOf { fuel.estimatedRangeKm() } }
+    val avg by remember { derivedStateOf { fuel.averageL100km() } }
+    val rangeFull by remember { derivedStateOf { fuel.estimatedRangeKm() } }
 
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
