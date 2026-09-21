@@ -16,6 +16,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +24,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -32,7 +35,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationCallback
@@ -42,6 +47,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.parked.app.data.ParkingStore
 import com.parked.app.service.ParkingMonitorService
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -86,21 +92,30 @@ private fun ensureLocationOn(context: Context) {
     }
 }
 
-// ---------- Theme ----------
+// ---------- Colors (Apple Maps / Uber inspired) ----------
+
+private val AccentBlue = Color(0xFF0A84FF)
+private val SuccessGreen = Color(0xFF34C759)
+private val WarningOrange = Color(0xFFFF9500)
+private val TextPrimary = Color(0xFF000000)
+private val TextSecondary = Color(0xFF8E8E93)
+private val CardGray = Color(0xFFF2F2F7)
+private val HairlineGray = Color(0xFFE5E5EA)
 
 private val ParkedColors = lightColorScheme(
-    primary = Color(0xFF2563EB),
+    primary = AccentBlue,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFDBEAFE),
-    onPrimaryContainer = Color(0xFF0B2C6B),
-    secondary = Color(0xFF0EA5E9),
+    primaryContainer = Color(0xFFE1EFFF),
+    onPrimaryContainer = Color(0xFF002F66),
+    secondary = AccentBlue,
     onSecondary = Color.White,
-    surface = Color(0xFFF8FAFC),
-    onSurface = Color(0xFF0F172A),
-    surfaceVariant = Color(0xFFE2E8F0),
-    onSurfaceVariant = Color(0xFF475569),
-    background = Color(0xFFF1F5F9),
-    onBackground = Color(0xFF0F172A),
+    surface = Color.White,
+    onSurface = TextPrimary,
+    surfaceVariant = CardGray,
+    onSurfaceVariant = TextSecondary,
+    background = Color.White,
+    onBackground = TextPrimary,
+    outline = HairlineGray,
 )
 
 // ---------- App ----------
@@ -112,7 +127,13 @@ fun ParkedApp() {
     val scope = rememberCoroutineScope()
     val store = remember { ParkingStore(context) }
     val state by store.state.collectAsState(initial = com.parked.app.data.ParkingState())
-    var showDevices by remember { mutableStateOf(state.deviceAddress == null) }
+
+    // ✅ FIX: don't show the picker every launch. Wait for DataStore to load once.
+    var showDevices by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val real = store.state.first()
+        if (real.deviceAddress == null) showDevices = true
+    }
 
     var liveLat by remember { mutableStateOf<Double?>(null) }
     var liveLng by remember { mutableStateOf<Double?>(null) }
@@ -157,9 +178,7 @@ fun ParkedApp() {
         permissionLauncher.launch(p)
     }
 
-    LaunchedEffect(Unit) {
-        requestPermissions()
-    }
+    LaunchedEffect(Unit) { requestPermissions() }
 
     LaunchedEffect(hasLocationPermission) {
         if (hasLocationPermission) {
@@ -183,33 +202,34 @@ fun ParkedApp() {
 
     MaterialTheme(colorScheme = ParkedColors) {
         Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
+            containerColor = Color.White,
             topBar = {
                 TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 Modifier
-                                    .size(10.dp)
+                                    .size(9.dp)
                                     .background(
-                                        if (state.monitoring) Color(0xFF22C55E) else Color(0xFF94A3B8),
+                                        if (state.monitoring) SuccessGreen else TextSecondary,
                                         CircleShape
                                     )
                             )
                             Spacer(Modifier.width(10.dp))
-                            Text("Parked!", fontWeight = FontWeight.Bold)
+                            Text("Parked!", fontWeight = FontWeight.Bold, fontSize = 22.sp)
                         }
                     },
                     actions = {
                         TextButton(onClick = { showDevices = true }) {
-                            Icon(Icons.Filled.Settings, contentDescription = null)
+                            Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Car")
+                            Text("Car", fontWeight = FontWeight.SemiBold)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        containerColor = Color.White,
+                        titleContentColor = TextPrimary,
+                        actionIconContentColor = AccentBlue,
                     )
                 )
             }
@@ -304,40 +324,65 @@ fun DevicePicker(modifier: Modifier = Modifier, onSelected: (String, String) -> 
         ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
     val devices = if (canRead) runCatching { adapter?.bondedDevices?.toList().orEmpty() }.getOrDefault(emptyList()) else emptyList()
 
-    Column(modifier.fillMaxSize().padding(20.dp)) {
-        Text("Choose your car", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+    Column(modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+        Spacer(Modifier.height(24.dp))
+        Text("Choose your car", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         Spacer(Modifier.height(8.dp))
         Text(
             "Pick the Bluetooth device your car connects to. Parked! will watch for it to disconnect.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            fontSize = 15.sp,
+            color = TextSecondary,
+            lineHeight = 21.sp
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(28.dp))
         if (!canRead) {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                Text("Bluetooth permission is required. Return after allowing it.", Modifier.padding(16.dp))
+            Surface(shape = RoundedCornerShape(16.dp), color = CardGray) {
+                Text(
+                    "Bluetooth permission is required. Return after allowing it.",
+                    Modifier.padding(18.dp),
+                    color = TextPrimary
+                )
             }
         } else if (devices.isEmpty()) {
-            Card {
-                Text("No paired Bluetooth devices found. Pair your car in Android Settings first.", Modifier.padding(16.dp))
+            Surface(shape = RoundedCornerShape(16.dp), color = CardGray) {
+                Text(
+                    "No paired Bluetooth devices found. Pair your car in Android Settings first.",
+                    Modifier.padding(18.dp),
+                    color = TextPrimary
+                )
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(devices, key = { it.address }) { device ->
-                    Card(
+                    Surface(
                         onClick = { onSelected(device.name ?: "Car Bluetooth", device.address) },
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        color = Color.White,
+                        modifier = Modifier.fillMaxWidth().border(1.dp, HairlineGray, RoundedCornerShape(16.dp))
                     ) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Filled.LocationOn,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(device.name ?: "Unnamed device", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                Text(device.address, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(
+                            Modifier.fillMaxWidth().padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                Modifier.size(40.dp).background(Color(0xFFE1EFFF), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Filled.Place, contentDescription = null, tint = AccentBlue)
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    device.name ?: "Unnamed device",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    device.address,
+                                    fontSize = 13.sp,
+                                    color = TextSecondary
+                                )
                             }
                         }
                     }
@@ -360,7 +405,9 @@ fun Home(
     onDirections: () -> Unit,
     onPickCar: () -> Unit,
 ) {
-    val distanceMeters = remember(liveLat, liveLng, state.parkedLat, state.parkedLng) {
+    val mapRef = remember { mutableStateOf<MapView?>(null) }
+
+    val distanceMeters: Double? = remember(liveLat, liveLng, state.parkedLat, state.parkedLng) {
         if (liveLat != null && liveLng != null && state.parkedLat != null && state.parkedLng != null) {
             haversine(liveLat, liveLng, state.parkedLat, state.parkedLng)
         } else null
@@ -372,119 +419,281 @@ fun Home(
                 parkedLat = state.parkedLat,
                 parkedLng = state.parkedLng,
                 liveLat = liveLat,
-                liveLng = liveLng
+                liveLng = liveLng,
+                onMapReady = { mapRef.value = it }
             )
+
+            // Status pill — top center
             Surface(
-                modifier = Modifier.align(Alignment.TopCenter).padding(12.dp),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 14.dp),
                 shape = RoundedCornerShape(999.dp),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 4.dp
+                color = Color.White,
+                shadowElevation = 6.dp
             ) {
                 Row(
-                    Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                    Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         Modifier.size(8.dp).background(
-                            if (state.monitoring) Color(0xFF22C55E) else Color(0xFF94A3B8),
+                            if (state.monitoring) SuccessGreen else TextSecondary,
                             CircleShape
                         )
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        if (state.monitoring) "Watching: ${state.deviceName ?: "car"}" else "Monitoring is off",
-                        style = MaterialTheme.typography.labelLarge
+                        if (state.monitoring) "Watching: ${state.deviceName ?: "car"}" else "Monitoring off",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
                     )
+                }
+            }
+
+            // Two floating buttons — right side
+            Column(
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 80.dp, end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Recenter on parked car
+                Surface(
+                    onClick = {
+                        val lat = state.parkedLat
+                        val lng = state.parkedLng
+                        if (lat != null && lng != null) {
+                            mapRef.value?.controller?.animateTo(GeoPoint(lat, lng))
+                        }
+                    },
+                    modifier = Modifier.size(52.dp),
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 6.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Filled.LocationOn,
+                            contentDescription = "Center on parked car",
+                            tint = AccentBlue,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+
+                // Recenter on me
+                Surface(
+                    onClick = {
+                        if (liveLat != null && liveLng != null) {
+                            mapRef.value?.controller?.animateTo(GeoPoint(liveLat, liveLng))
+                        }
+                    },
+                    modifier = Modifier.size(52.dp),
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 6.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Filled.MyLocation,
+                            contentDescription = "Center on my location",
+                            tint = AccentBlue,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
         }
 
+        // Bottom sheet
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 12.dp
+            color = Color.White,
+            shadowElevation = 16.dp
         ) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Grab handle
+                Box(
+                    Modifier
+                        .padding(top = 4.dp, bottom = 16.dp)
+                        .size(width = 40.dp, height = 4.dp)
+                        .background(HairlineGray, RoundedCornerShape(999.dp))
+                )
+
                 if (state.parkedLat != null && state.parkedLng != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.size(44.dp).background(
-                                MaterialTheme.colorScheme.primaryContainer, CircleShape
-                            ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Filled.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("Your car", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+
+                    // Big distance number
+                    val numberText: String = when {
+                        distanceMeters == null -> "—"
+                        distanceMeters < 1000 -> "${distanceMeters.toInt()}"
+                        else -> String.format("%.1f", distanceMeters / 1000.0)
+                    }
+                    val unitText: String = when {
+                        distanceMeters == null -> ""
+                        distanceMeters < 1000 -> "m"
+                        else -> "km"
+                    }
+
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            numberText,
+                            fontSize = 64.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary,
+                            lineHeight = 64.sp
+                        )
+                        if (unitText.isNotEmpty()) {
+                            Spacer(Modifier.width(6.dp))
                             Text(
-                                "Saved ${
-                                    state.parkedAt?.let {
-                                        DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
-                                    } ?: "recently"
-                                }",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium
+                                unitText,
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary,
+                                modifier = Modifier.padding(bottom = 8.dp)
                             )
                         }
                     }
+                    Text(
+                        if (distanceMeters == null) "Waiting for GPS…" else "away from your car",
+                        fontSize = 15.sp,
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center
+                    )
 
-                    if (distanceMeters != null) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant
+                    Spacer(Modifier.height(20.dp))
+
+                    // Parked info card
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = CardGray,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.Refresh, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(10.dp))
+                            Box(
+                                Modifier.size(38.dp).background(Color.White, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Filled.LocationOn,
+                                    contentDescription = null,
+                                    tint = AccentBlue,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
                                 Text(
-                                    if (distanceMeters < 1000) "${distanceMeters.toInt()} m away"
-                                    else String.format("%.2f km away", distanceMeters / 1000.0),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold
+                                    "Your car",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    "Saved ${
+                                        state.parkedAt?.let {
+                                            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
+                                        } ?: "recently"
+                                    }",
+                                    fontSize = 13.sp,
+                                    color = TextSecondary
                                 )
                             }
                         }
                     }
 
+                    Spacer(Modifier.height(16.dp))
+
+                    // Directions button
                     Button(
                         onClick = onDirections,
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) { Text("Directions", fontWeight = FontWeight.SemiBold) }
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentBlue,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("Directions", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    }
 
+                    Spacer(Modifier.height(10.dp))
+
+                    // Save button
                     OutlinedButton(
                         onClick = onSaveNow,
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) { Text("Save current location now") }
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, HairlineGray),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                    ) {
+                        Text("Save current location", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    }
+
+                    Spacer(Modifier.height(4.dp))
 
                     TextButton(onClick = onPickCar, modifier = Modifier.fillMaxWidth()) {
-                        Text("Change car Bluetooth")
+                        Text("Change car Bluetooth", color = AccentBlue, fontSize = 14.sp)
                     }
+
+                    Spacer(Modifier.height(8.dp))
+
                 } else {
-                    Text("No parked location yet", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    // No parked location yet
+                    Text(
+                        "No parked location yet",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         "Connect to your car once. We'll save where you parked whenever Bluetooth disconnects.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontSize = 15.sp,
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 21.sp
                     )
+
+                    Spacer(Modifier.height(20.dp))
+
                     if (!state.monitoring) {
                         Button(
                             onClick = onEnableMonitoring,
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) { Text("Start monitoring", fontWeight = FontWeight.SemiBold) }
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AccentBlue,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("Start monitoring", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Spacer(Modifier.height(10.dp))
                     }
+
                     OutlinedButton(
                         onClick = onSaveNow,
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) { Text("Save current location now") }
-                    TextButton(onClick = onPickCar, modifier = Modifier.fillMaxWidth()) {
-                        Text("Change car Bluetooth")
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, HairlineGray),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                    ) {
+                        Text("Save current location", fontSize = 16.sp, fontWeight = FontWeight.Medium)
                     }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    TextButton(onClick = onPickCar, modifier = Modifier.fillMaxWidth()) {
+                        Text("Change car Bluetooth", color = AccentBlue, fontSize = 14.sp)
+                    }
+
+                    Spacer(Modifier.height(8.dp))
                 }
             }
         }
@@ -508,6 +717,7 @@ fun ParkedMap(
     parkedLng: Double?,
     liveLat: Double?,
     liveLng: Double?,
+    onMapReady: (MapView) -> Unit,
 ) {
     AndroidView(
         modifier = Modifier.fillMaxSize(),
@@ -519,6 +729,7 @@ fun ParkedMap(
                 val startLat = liveLat ?: parkedLat ?: 37.9838
                 val startLng = liveLng ?: parkedLng ?: 23.7275
                 controller.setCenter(GeoPoint(startLat, startLng))
+                onMapReady(this)
             }
         },
         update = { map ->
@@ -535,7 +746,6 @@ fun ParkedMap(
 
             if (liveLat != null && liveLng != null) {
                 val livePoint = GeoPoint(liveLat, liveLng)
-                map.controller.animateTo(livePoint)
                 map.overlays.add(Marker(map).apply {
                     position = livePoint
                     title = "You are here"
