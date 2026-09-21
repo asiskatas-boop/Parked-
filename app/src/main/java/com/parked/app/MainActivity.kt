@@ -985,9 +985,9 @@ private fun SettingsModal(fuel: FuelStore, onDismiss: () -> Unit) {
 
         Button(
             onClick = {
-                tank.toDoubleOrNull()?.let { fuel.setTankCapacity(it) }
+                tank.toDoubleOrNull()?.let { fuel.updateTankCapacity(it) }
                 odo.toDoubleOrNull()?.let { fuel.setOdometer(it) }
-                fuel.setCurrency(cur.ifBlank { "€" })
+                fuel.updateCurrency(cur.ifBlank { "€" })
                 onDismiss()
             },
             modifier = Modifier.fillMaxWidth().height(54.dp),
