@@ -16,10 +16,20 @@ android {
         versionName = "0.1.0"
     }
 
-   buildFeatures {
-    compose = true
-    buildConfig = true
-}
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    // ✅ FIX: Java and Kotlin must both target version 17
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
