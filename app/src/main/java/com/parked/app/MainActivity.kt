@@ -88,10 +88,6 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.*
 
-// ============================================================
-// MainActivity
-// ============================================================
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -99,10 +95,6 @@ class MainActivity : ComponentActivity() {
         setContent { ParkedRoot() }
     }
 }
-
-// ============================================================
-// Colors & accents
-// ============================================================
 
 data class AccentDef(val name: String, val color: Color)
 
@@ -127,10 +119,6 @@ private val SuccessGreen = Color(0xFF34C759)
 private val WarningYellow= Color(0xFFFFCC00)
 private val DangerRed    = Color(0xFFFF453A)
 
-// ============================================================
-// Theme
-// ============================================================
-
 @Composable
 fun ParkedTheme(accent: Color, content: @Composable () -> Unit) {
     val scheme = darkColorScheme(
@@ -149,10 +137,6 @@ fun ParkedTheme(accent: Color, content: @Composable () -> Unit) {
     )
     MaterialTheme(colorScheme = scheme, content = content)
 }
-
-// ============================================================
-// Root
-// ============================================================
 
 @Composable
 fun ParkedRoot() {
@@ -199,10 +183,6 @@ fun SplashScreen(accent: Color) {
     }
 }
 
-// ============================================================
-// Screens enum
-// ============================================================
-
 enum class AppScreen(
     val label: String,
     val filled: ImageVector,
@@ -212,10 +192,6 @@ enum class AppScreen(
     Fuel("Fuel", Icons.Filled.LocalGasStation, Icons.Outlined.LocalGasStation),
     Car("Car", Icons.Filled.DirectionsCar, Icons.Outlined.DirectionsCar),
 }
-
-// ============================================================
-// Helpers
-// ============================================================
 
 private fun ensureBluetoothOn(context: Context) {
     val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return
@@ -259,10 +235,6 @@ private fun distanceDisplay(meters: Double?, lowAccuracy: Boolean): String {
     }
 }
 
-// ============================================================
-// Custom car marker
-// ============================================================
-
 private fun makeCarMarker(ctx: Context, accent: Color): BitmapDrawable {
     val size = 120
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -292,10 +264,6 @@ private fun makeCarMarker(ctx: Context, accent: Color): BitmapDrawable {
 
     return BitmapDrawable(ctx.resources, bmp)
 }
-
-// ============================================================
-// Main content
-// ============================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -484,10 +452,6 @@ fun MainContent(fuel: FuelStore, accent: Color) {
     }
 }
 
-// ============================================================
-// Compact header + bottom nav
-// ============================================================
-
 @Composable
 fun CompactHeader(title: String, subtitle: String? = null) {
     Box(
@@ -559,10 +523,6 @@ fun BottomNav(screen: AppScreen, accent: Color, onChange: (AppScreen) -> Unit) {
         }
     }
 }
-
-// ============================================================
-// Parking screen
-// ============================================================
 
 @Composable
 fun ParkingScreen(
@@ -804,10 +764,6 @@ fun AmbientSheet(accent: Color, content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
-// ============================================================
-// Fuel screen
-// ============================================================
-
 @Composable
 fun FuelScreen(fuel: FuelStore, accent: Color) {
     var showSlider by remember { mutableStateOf(false) }
@@ -1025,10 +981,6 @@ fun FuelScreen(fuel: FuelStore, accent: Color) {
         )
     }
 }
-
-// ============================================================
-// Car screen
-// ============================================================
 
 @Composable
 fun CarScreen(
@@ -1248,10 +1200,6 @@ private fun PreferenceRow(label: String, value: String) {
     }
 }
 
-// ============================================================
-// Appearance modal
-// ============================================================
-
 @Composable
 private fun AppearanceModal(fuel: FuelStore, accent: Color, onDismiss: () -> Unit) {
     ModalScaffold(accent = accent, onDismiss = onDismiss) {
@@ -1325,10 +1273,6 @@ private fun AccentSwatch(
     }
 }
 
-// ============================================================
-// Device picker dialog
-// ============================================================
-
 @Composable
 fun DevicePickerDialog(
     accent: Color,
@@ -1377,10 +1321,6 @@ fun DevicePickerDialog(
         }
     )
 }
-
-// ============================================================
-// Map
-// ============================================================
 
 private class RippleOverlay(
     private val point: GeoPoint,
@@ -1477,12 +1417,12 @@ fun ParkedMap(
                     parkedMarkerRef.value?.let { map.overlays.remove(it) }
                     rippleRef.value?.let { map.overlays.remove(it) }
 
+                    // Start with anchor way below → marker appears high above ground
                     val marker = Marker(map).apply {
                         position = newParked
                         title = "Parked car"
                         icon = carMarkerIcon
-                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                        setOffset(0, -300)
+                        setAnchor(Marker.ANCHOR_CENTER, 1.8f)
                     }
                     map.overlays.add(marker)
                     parkedMarkerRef.value = marker
@@ -1491,17 +1431,18 @@ fun ParkedMap(
                     map.overlays.add(ripple)
                     rippleRef.value = ripple
 
+                    // Drop: animate anchor from 1.8 → 1.0
                     scope.launch {
                         val frames = 24
                         for (i in 0..frames) {
                             val t = i.toFloat() / frames
                             val eased = 1f - (1f - t) * (1f - t)
-                            val yOff = (-300 * (1 - eased)).toInt()
-                            marker.setOffset(0, yOff)
+                            val anchorV = 1.8f - 0.8f * eased
+                            marker.setAnchor(Marker.ANCHOR_CENTER, anchorV)
                             map.invalidate()
                             delay(20)
                         }
-                        marker.setOffset(0, 0)
+                        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                         map.invalidate()
                     }
                     scope.launch {
@@ -1547,10 +1488,6 @@ fun ParkedMap(
         }
     )
 }
-
-// ============================================================
-// Stat card + refuel row
-// ============================================================
 
 @Composable
 private fun StatCard(label: String, value: String, unit: String, sub: String, modifier: Modifier = Modifier) {
@@ -1609,10 +1546,6 @@ private fun RefuelRow(r: Refuel, fuel: FuelStore, accent: Color) {
         }
     }
 }
-
-// ============================================================
-// Modals
-// ============================================================
 
 @Composable
 private fun SliderModal(
