@@ -15,6 +15,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,17 +31,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.LocalGasStation
+import androidx.compose.material.icons.filled.LocalParking
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.LocalGasStation
+import androidx.compose.material.icons.outlined.LocalParking
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -50,6 +61,7 @@ import com.parked.app.data.FuelStore
 import com.parked.app.data.ParkingStore
 import com.parked.app.data.Refuel
 import com.parked.app.service.ParkingMonitorService
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
@@ -66,28 +78,40 @@ import kotlin.math.*
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrashLogger.install(this)
         Configuration.getInstance().userAgentValue = packageName
         setContent { ParkedTheme { ParkedApp() } }
     }
 }
 
+// ============ Colors ============
+
+private val AccentBlue = Color(0xFF0A84FF)
+private val SuccessGreen = Color(0xFF34C759)
+private val WarningYellow = Color(0xFFFFCC00)
+private val DangerRed = Color(0xFFFF3B30)
+private val TextPrimary = Color(0xFF000000)
+private val TextSecondary = Color(0xFF6B7280)
+private val CardGray = Color(0xFFF2F2F7)
+private val HairlineGray = Color(0xFFE5E5EA)
+
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF0A84FF),
+    primary = AccentBlue,
     onPrimary = Color.White,
     primaryContainer = Color(0xFFE1EFFF),
     onPrimaryContainer = Color(0xFF002F66),
     background = Color.White,
-    onBackground = Color(0xFF000000),
+    onBackground = TextPrimary,
     surface = Color.White,
-    onSurface = Color(0xFF000000),
-    surfaceVariant = Color(0xFFF2F2F7),
-    onSurfaceVariant = Color(0xFF8E8E93),
-    outline = Color(0xFFE5E5EA),
-    error = Color(0xFFFF3B30),
+    onSurface = TextPrimary,
+    surfaceVariant = CardGray,
+    onSurfaceVariant = TextSecondary,
+    outline = HairlineGray,
+    error = DangerRed,
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF0A84FF),
+    primary = AccentBlue,
     onPrimary = Color.White,
     primaryContainer = Color(0xFF0A2540),
     onPrimaryContainer = Color(0xFFE1EFFF),
@@ -96,7 +120,7 @@ private val DarkColors = darkColorScheme(
     surface = Color(0xFF1C1C1E),
     onSurface = Color.White,
     surfaceVariant = Color(0xFF1C1C1E),
-    onSurfaceVariant = Color(0xFF8E8E93),
+    onSurfaceVariant = Color(0xFF9CA3AF),
     outline = Color(0xFF2C2C2E),
     error = Color(0xFFFF453A),
 )
@@ -106,6 +130,8 @@ fun ParkedTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, content = content)
 }
+
+// ============ Helpers ============
 
 private fun ensureBluetoothOn(context: Context) {
     val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return
@@ -126,26 +152,108 @@ private fun ensureLocationOn(context: Context) {
     }
 }
 
-enum class AppScreen { Map, Fuel }
+private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val r = 6371000.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = sin(dLat / 2).pow(2.0) + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2.0)
+    val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return r * c
+}
+
+// Distance display rules from UX doc
+private fun distanceDisplay(meters: Double?, lowAccuracy: Boolean): String {
+    if (meters == null) return "Finding your location…"
+    val rounded10 = (meters / 10.0).roundToInt() * 10
+    val rounded50 = (meters / 50.0).roundToInt() * 50
+    return when {
+        meters < 15 -> "You're at your car"
+        meters < 100 -> "About $rounded10 m away"
+        meters < 1000 && lowAccuracy -> "Approx. $rounded50 m away"
+        meters < 1000 -> "$rounded10 m away"
+        lowAccuracy -> "Approx. ${String.format(Locale.US, "%.1f", meters / 1000)} km away"
+        else -> "${String.format(Locale.US, "%.1f", meters / 1000)} km away"
+    }
+}
+
+// ============ Screens ============
+
+enum class AppScreen(
+    val label: String,
+    val filled: ImageVector,
+    val outlined: ImageVector,
+) {
+    Parking("Parking", Icons.Filled.LocalParking, Icons.Outlined.LocalParking),
+    Fuel("Fuel", Icons.Filled.LocalGasStation, Icons.Outlined.LocalGasStation),
+    Car("Car", Icons.Filled.DirectionsCar, Icons.Outlined.DirectionsCar),
+}
+
+// ============ Root ============
+
+@Composable
+fun ParkedApp() {
+    var showSplash by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        delay(1600)
+        showSplash = false
+    }
+
+    Crossfade(targetState = showSplash, animationSpec = tween(500)) { splash ->
+        if (splash) SplashScreen() else MainContent()
+    }
+}
+
+@Composable
+fun SplashScreen() {
+    Box(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                Modifier.size(96.dp).background(AccentBlue, RoundedCornerShape(24.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("P", fontSize = 56.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+            Spacer(Modifier.height(20.dp))
+            Text(
+                "Parked!",
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Never lose your car again",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ParkedApp() {
+fun MainContent() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val store = remember { ParkingStore(context) }
     val fuel = remember { FuelStore(context) }
     val state by store.state.collectAsState(initial = com.parked.app.data.ParkingState())
 
-    var screen by remember { mutableStateOf(AppScreen.Map) }
-    var showDevices by remember { mutableStateOf(false) }
+    var screen by remember { mutableStateOf(AppScreen.Parking) }
+
+    // First-run: if no car selected, jump to Car screen
     LaunchedEffect(Unit) {
         val real = store.state.first()
-        if (real.deviceAddress == null) showDevices = true
+        if (real.deviceAddress == null) screen = AppScreen.Car
     }
 
     var liveLat by remember { mutableStateOf<Double?>(null) }
     var liveLng by remember { mutableStateOf<Double?>(null) }
+    var liveAccuracy by remember { mutableStateOf<Float>(100f) }
 
     var hasLocationPermission by remember {
         mutableStateOf(
@@ -161,6 +269,7 @@ fun ParkedApp() {
                 val loc = result.lastLocation ?: return
                 liveLat = loc.latitude
                 liveLng = loc.longitude
+                liveAccuracy = loc.accuracy
             }
         }
     }
@@ -205,346 +314,815 @@ fun ParkedApp() {
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.size(9.dp).background(
-                                if (state.monitoring) Color(0xFF34C759) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                CircleShape
+        bottomBar = {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp
+            ) {
+                AppScreen.values().forEach { s ->
+                    NavigationBarItem(
+                        selected = screen == s,
+                        onClick = { screen = s },
+                        icon = {
+                            Icon(
+                                if (screen == s) s.filled else s.outlined,
+                                contentDescription = s.label
                             )
+                        },
+                        label = { Text(s.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = AccentBlue,
+                            selectedTextColor = AccentBlue,
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Spacer(Modifier.width(10.dp))
-                        Text("Parked!", fontWeight = FontWeight.Bold, fontSize = 22.sp)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { screen = if (screen == AppScreen.Fuel) AppScreen.Map else AppScreen.Fuel }) {
-                        Icon(
-                            if (screen == AppScreen.Fuel) Icons.Filled.LocationOn else Icons.Filled.LocalGasStation,
-                            contentDescription = "Fuel",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    TextButton(onClick = { showDevices = true }) {
-                        Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Car", fontWeight = FontWeight.SemiBold)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                )
-            )
+                    )
+                }
+            }
         }
     ) { padding ->
-        when {
-            showDevices -> DevicePicker(
-                modifier = Modifier.padding(padding),
-                onSelected = { name, address ->
-                    scope.launch { store.selectDevice(name, address) }
-                    showDevices = false
-                }
-            )
-            screen == AppScreen.Map -> HomeScreen(
-                modifier = Modifier.padding(padding),
-                state = state,
-                liveLat = liveLat,
-                liveLng = liveLng,
-                onEnableMonitoring = {
-                    requestPermissions()
-                    ensureBluetoothOn(context); ensureLocationOn(context)
-                    ContextCompat.startForegroundService(
-                        context, Intent(context, ParkingMonitorService::class.java)
-                    )
-                    scope.launch { store.setMonitoring(true) }
-                },
-                onSaveNow = {
-                    requestPermissions(); ensureLocationOn(context)
-                    val granted = ContextCompat.checkSelfPermission(
-                        context, Manifest.permission.ACCESS_FINE_LOCATION
-                    ) == PackageManager.PERMISSION_GRANTED
-                    if (granted) {
-                        LocationServices.getFusedLocationProviderClient(context)
-                            .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-                            .addOnSuccessListener { loc ->
-                                if (loc != null) scope.launch {
-                                    store.saveParking(loc.latitude, loc.longitude)
-                                }
-                            }
-                    }
-                },
-                onDirections = {
-                    val lat = state.parkedLat; val lng = state.parkedLng
-                    if (lat != null && lng != null) {
-                        ensureLocationOn(context)
-                        val navIntent = Intent(
-                            Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$lat,$lng&mode=d")
-                        ).apply {
-                            setPackage("com.google.android.apps.maps")
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        val ok = runCatching { context.startActivity(navIntent) }.isSuccess
-                        if (!ok) runCatching {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW,
-                                    Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
-                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            when (screen) {
+                AppScreen.Parking -> ParkingScreen(
+                    state = state,
+                    liveLat = liveLat,
+                    liveLng = liveLng,
+                    liveAccuracy = liveAccuracy,
+                    onEnableMonitoring = {
+                        requestPermissions()
+                        ensureBluetoothOn(context); ensureLocationOn(context)
+                        runCatching {
+                            ContextCompat.startForegroundService(
+                                context, Intent(context, ParkingMonitorService::class.java)
                             )
                         }
-                    }
-                },
-                onPickCar = { showDevices = true }
-            )
-            else -> FuelScreen(
-                modifier = Modifier.padding(padding),
-                fuel = fuel
-            )
-        }
-    }
-}
-
-@Composable
-fun DevicePicker(modifier: Modifier = Modifier, onSelected: (String, String) -> Unit) {
-    val context = LocalContext.current
-    val adapter: BluetoothAdapter? = context.getSystemService(BluetoothManager::class.java)?.adapter
-    val canRead = android.os.Build.VERSION.SDK_INT < 31 ||
-        ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-    val devices = if (canRead) runCatching { adapter?.bondedDevices?.toList().orEmpty() }.getOrDefault(emptyList()) else emptyList()
-
-    Column(modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-        Spacer(Modifier.height(24.dp))
-        Text("Choose your car", fontSize = 32.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Pick the Bluetooth device your car connects to. Parked! will watch for it to disconnect.",
-            fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 21.sp
-        )
-        Spacer(Modifier.height(28.dp))
-        if (!canRead) {
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-                Text("Bluetooth permission is required. Return after allowing it.", Modifier.padding(18.dp))
-            }
-        } else if (devices.isEmpty()) {
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-                Text("No paired Bluetooth devices found.", Modifier.padding(18.dp))
-            }
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(devices, key = { it.address }) { device ->
-                    Surface(
-                        onClick = { onSelected(device.name ?: "Car Bluetooth", device.address) },
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
-                    ) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier.size(40.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) { Icon(Icons.Filled.LocationOn, null, tint = MaterialTheme.colorScheme.primary) }
-                            Spacer(Modifier.width(14.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(device.name ?: "Unnamed", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                Text(device.address, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        scope.launch { store.setMonitoring(true) }
+                    },
+                    onDisableMonitoring = {
+                        runCatching { context.stopService(Intent(context, ParkingMonitorService::class.java)) }
+                        scope.launch { store.setMonitoring(false) }
+                    },
+                    onUpdateSpot = {
+                        requestPermissions(); ensureLocationOn(context)
+                        val granted = ContextCompat.checkSelfPermission(
+                            context, Manifest.permission.ACCESS_FINE_LOCATION
+                        ) == PackageManager.PERMISSION_GRANTED
+                        if (granted) {
+                            LocationServices.getFusedLocationProviderClient(context)
+                                .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                                .addOnSuccessListener { loc ->
+                                    if (loc != null) scope.launch {
+                                        store.saveParking(loc.latitude, loc.longitude)
+                                    }
+                                }
+                        }
+                    },
+                    onEndParking = {
+                        scope.launch { store.saveParking(0.0, 0.0) }
+                    },
+                    onDirections = {
+                        val lat = state.parkedLat; val lng = state.parkedLng
+                        if (lat != null && lng != null && !(lat == 0.0 && lng == 0.0)) {
+                            ensureLocationOn(context)
+                            val navIntent = Intent(
+                                Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$lat,$lng&mode=d")
+                            ).apply {
+                                setPackage("com.google.android.apps.maps")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            val ok = runCatching { context.startActivity(navIntent) }.isSuccess
+                            if (!ok) runCatching {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW,
+                                        Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
+                                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
                             }
                         }
                     }
-                }
+                )
+                AppScreen.Fuel -> FuelScreen(fuel = fuel)
+                AppScreen.Car -> CarScreen(
+                    state = state,
+                    fuel = fuel,
+                    onMonitoringToggle = { on ->
+                        if (on) {
+                            requestPermissions()
+                            ensureBluetoothOn(context); ensureLocationOn(context)
+                            runCatching {
+                                ContextCompat.startForegroundService(
+                                    context, Intent(context, ParkingMonitorService::class.java)
+                                )
+                            }
+                            scope.launch { store.setMonitoring(true) }
+                        } else {
+                            runCatching { context.stopService(Intent(context, ParkingMonitorService::class.java)) }
+                            scope.launch { store.setMonitoring(false) }
+                        }
+                    },
+                    onSelectDevice = { name, address ->
+                        scope.launch { store.selectDevice(name, address) }
+                    }
+                )
             }
         }
     }
 }
 
+// ============ Parking ============
+
 @Composable
-fun HomeScreen(
-    modifier: Modifier = Modifier,
+fun ParkingScreen(
     state: com.parked.app.data.ParkingState,
-    liveLat: Double?, liveLng: Double?,
+    liveLat: Double?,
+    liveLng: Double?,
+    liveAccuracy: Float,
     onEnableMonitoring: () -> Unit,
-    onSaveNow: () -> Unit,
+    onDisableMonitoring: () -> Unit,
+    onUpdateSpot: () -> Unit,
+    onEndParking: () -> Unit,
     onDirections: () -> Unit,
-    onPickCar: () -> Unit,
 ) {
     val mapRef = remember { mutableStateOf<MapView?>(null) }
-    val distanceMeters: Double? = remember(liveLat, liveLng, state.parkedLat, state.parkedLng) {
-        if (liveLat != null && liveLng != null && state.parkedLat != null && state.parkedLng != null)
-            haversine(liveLat, liveLng, state.parkedLat, state.parkedLng) else null
+    var confirmMove by remember { mutableStateOf(false) }
+
+    val hasValidParking = state.parkedLat != null && state.parkedLng != null &&
+        !(state.parkedLat == 0.0 && state.parkedLng == 0.0)
+
+    val distanceMeters: Double? = remember(liveLat, liveLng, state.parkedLat, state.parkedLng, hasValidParking) {
+        if (liveLat != null && liveLng != null && hasValidParking)
+            haversine(liveLat, liveLng, state.parkedLat!!, state.parkedLng!!)
+        else null
     }
 
-    Column(modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            ParkedMap(state.parkedLat, state.parkedLng, liveLat, liveLng) { mapRef.value = it }
+    val isAtCar = distanceMeters != null && distanceMeters < 15
+    val lowAccuracy = liveAccuracy > 50f
 
-            Surface(
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 14.dp),
-                shape = RoundedCornerShape(999.dp),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 6.dp
-            ) {
-                Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(8.dp).background(
-                        if (state.monitoring) Color(0xFF34C759) else MaterialTheme.colorScheme.onSurfaceVariant, CircleShape))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        if (state.monitoring) "Watching: ${state.deviceName ?: "car"}" else "Monitoring off",
-                        fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+    Column(Modifier.fillMaxSize()) {
+        // Header
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)
+        ) {
+            Text("Parking", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(8.dp).background(
+                        if (state.monitoring) SuccessGreen else TextSecondary, CircleShape
                     )
-                }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (state.monitoring) "Parked" else "Not watching",
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+        }
 
+        // Map
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            ParkedMap(
+                parkedLat = if (hasValidParking) state.parkedLat else null,
+                parkedLng = if (hasValidParking) state.parkedLng else null,
+                liveLat = liveLat,
+                liveLng = liveLng,
+                onMapReady = { mapRef.value = it }
+            )
+
+            // Two floating buttons (right side, no zoom)
             Column(
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 80.dp, end = 16.dp),
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Surface(
-                    onClick = {
-                        val lat = state.parkedLat; val lng = state.parkedLng
-                        if (lat != null && lng != null) mapRef.value?.controller?.animateTo(GeoPoint(lat, lng))
-                    },
-                    modifier = Modifier.size(52.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 6.dp
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.LocationOn, "Parked car", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                if (hasValidParking) {
+                    Surface(
+                        onClick = {
+                            val lat = state.parkedLat; val lng = state.parkedLng
+                            if (lat != null && lng != null) mapRef.value?.controller?.animateTo(GeoPoint(lat, lng))
+                        },
+                        modifier = Modifier.size(48.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface,
+                        shadowElevation = 6.dp
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.LocationOn, "Saved car", tint = AccentBlue, modifier = Modifier.size(22.dp))
+                        }
                     }
                 }
                 Surface(
                     onClick = {
                         if (liveLat != null && liveLng != null) mapRef.value?.controller?.animateTo(GeoPoint(liveLat, liveLng))
                     },
-                    modifier = Modifier.size(52.dp),
+                    modifier = Modifier.size(48.dp),
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.surface,
                     shadowElevation = 6.dp
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.MyLocation, "My location", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Filled.MyLocation, "Recenter on me", tint = AccentBlue, modifier = Modifier.size(20.dp))
                     }
                 }
             }
         }
 
+        // Info card
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 16.dp
+            shadowElevation = 12.dp
         ) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    Modifier.padding(top = 4.dp, bottom = 16.dp)
-                        .size(width = 40.dp, height = 4.dp)
-                        .background(MaterialTheme.colorScheme.outline, RoundedCornerShape(999.dp))
-                )
-
-                if (state.parkedLat != null && state.parkedLng != null) {
-                    val num: String = when {
-                        distanceMeters == null -> "—"
-                        distanceMeters < 1000 -> "${distanceMeters.toInt()}"
-                        else -> String.format(Locale.US, "%.1f", distanceMeters / 1000.0)
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                when {
+                    !hasValidParking -> {
+                        Text(
+                            "No parking spot saved yet",
+                            fontSize = 20.sp, fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Save your spot to find it later.",
+                            fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    val unit = when {
-                        distanceMeters == null -> ""
-                        distanceMeters < 1000 -> "m"
-                        else -> "km"
+                    liveLat == null -> {
+                        Text("Finding your location…", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        Text("Your parking spot is saved.", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(num, fontSize = 64.sp, fontWeight = FontWeight.Bold, lineHeight = 64.sp)
-                        if (unit.isNotEmpty()) {
-                            Spacer(Modifier.width(6.dp))
-                            Text(unit, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-                        }
+                    else -> {
+                        Text(
+                            distanceDisplay(distanceMeters, lowAccuracy),
+                            fontSize = 22.sp, fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Parked ${
+                                state.parkedAt?.let {
+                                    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
+                                } ?: "recently"
+                            }",
+                            fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    Text(
-                        if (distanceMeters == null) "Waiting for GPS…" else "away from your car",
-                        fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                }
 
-                    Spacer(Modifier.height(20.dp))
-
-                    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
-                        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(38.dp).background(MaterialTheme.colorScheme.surface, CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Filled.LocationOn, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("Your car", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    "Saved ${
-                                        state.parkedAt?.let {
-                                            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
-                                        } ?: "recently"
-                                    }",
-                                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
+                // Primary CTA
+                if (hasValidParking && isAtCar) {
+                    Button(
+                        onClick = onEndParking,
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SuccessGreen, contentColor = Color.White
+                        )
+                    ) { Text("End parking", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                } else if (hasValidParking) {
                     Button(
                         onClick = onDirections,
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
-                        shape = RoundedCornerShape(16.dp)
-                    ) { Text("Directions", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedButton(
-                        onClick = onSaveNow,
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                    ) { Text("Save current location", fontSize = 16.sp) }
-                    TextButton(onClick = onPickCar, modifier = Modifier.fillMaxWidth()) {
-                        Text("Change car Bluetooth", fontSize = 14.sp)
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Get directions", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                } else if (!state.monitoring) {
+                    Button(
+                        onClick = onEnableMonitoring,
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Start automatic parking", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                }
+
+                // Secondary CTA
+                TextButton(
+                    onClick = {
+                        if (hasValidParking) confirmMove = true else onUpdateSpot()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (hasValidParking) "Update parking spot" else "Save current location", color = AccentBlue, fontSize = 14.sp)
+                }
+
+                // Automatic parking status row (inside Parking only)
+                if (state.monitoring) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.size(8.dp).background(SuccessGreen, CircleShape))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Automatic parking on", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Spacer(Modifier.height(8.dp))
-                } else {
-                    Text("No parked location yet", fontSize = 24.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Connect to your car once. We'll save where you parked whenever Bluetooth disconnects.",
-                        fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center, lineHeight = 21.sp
-                    )
-                    Spacer(Modifier.height(20.dp))
-                    if (!state.monitoring) {
-                        Button(
-                            onClick = onEnableMonitoring,
-                            modifier = Modifier.fillMaxWidth().height(54.dp),
-                            shape = RoundedCornerShape(16.dp)
-                        ) { Text("Start monitoring", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
-                        Spacer(Modifier.height(10.dp))
-                    }
-                    OutlinedButton(
-                        onClick = onSaveNow,
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                    ) { Text("Save current location", fontSize = 16.sp) }
-                    TextButton(onClick = onPickCar, modifier = Modifier.fillMaxWidth()) {
-                        Text("Change car Bluetooth", fontSize = 14.sp)
-                    }
-                    Spacer(Modifier.height(8.dp))
                 }
             }
         }
     }
+
+    if (confirmMove) {
+        AlertDialog(
+            onDismissRequest = { confirmMove = false },
+            title = { Text("Move your parking spot?") },
+            text = { Text("This will replace the saved spot with your current location.") },
+            confirmButton = {
+                TextButton(onClick = { confirmMove = false; onUpdateSpot() }) {
+                    Text("Move", color = AccentBlue)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmMove = false }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
-private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-    val r = 6371000.0
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
-    val a = sin(dLat / 2).pow(2.0) + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2.0)
-    val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return r * c
+// ============ Fuel ============
+
+@Composable
+fun FuelScreen(fuel: FuelStore) {
+    var showSlider by remember { mutableStateOf(false) }
+    var showRefuel by remember { mutableStateOf(false) }
+    var showSetup by remember { mutableStateOf(false) }
+
+    val level by remember { derivedStateOf { fuel.estimateLevelPct() } }
+    val rangeRemaining by remember { derivedStateOf { fuel.estimatedRangeRemainingKm() } }
+    val avg by remember { derivedStateOf { fuel.averageL100km() } }
+    val rangeFull by remember { derivedStateOf { fuel.estimatedRangeKm() } }
+
+    val hasAnyFill = fuel.refuels.isNotEmpty()
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+
+        // Header
+        Text("Fuel", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            if (fuel.isConfigured) "Odometer · ${String.format(Locale.US, "%,.0f", fuel.currentOdo)} km"
+            else "Set up your car to track fuel",
+            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(20.dp))
+
+        if (!fuel.isConfigured) {
+            // Not configured at all — quick setup prompt
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(20.dp)) {
+                    Text(
+                        "Set up your car",
+                        fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Add tank capacity and odometer in the Car tab.",
+                        fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimaryContainer, lineHeight = 20.sp
+                    )
+                }
+            }
+            return@Column
+        }
+
+        // Fuel level card
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(20.dp)) {
+                Text(
+                    "FUEL LEVEL",
+                    fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    letterSpacing = 1.sp
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(level.toInt().toString(), fontSize = 40.sp, fontWeight = FontWeight.Bold, lineHeight = 40.sp)
+                    Text(
+                        "%", fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 3.dp, bottom = 6.dp)
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+
+                val lowFuel = level < 20
+                val barColor = if (lowFuel) WarningYellow else SuccessGreen
+
+                Box(
+                    Modifier.fillMaxWidth().height(12.dp)
+                        .background(MaterialTheme.colorScheme.outline, RoundedCornerShape(999.dp))
+                        .clickable { showSlider = true }
+                ) {
+                    Box(
+                        Modifier.fillMaxHeight().fillMaxWidth((level.toFloat() / 100f).coerceIn(0f, 1f))
+                            .background(barColor, RoundedCornerShape(999.dp))
+                    )
+                }
+
+                if (lowFuel) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).background(WarningYellow, CircleShape))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Low fuel", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = WarningYellow)
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                Spacer(Modifier.height(14.dp))
+
+                if (rangeRemaining != null) {
+                    Text(
+                        "≈ ${rangeRemaining!!.toInt()} km estimated range",
+                        fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+                    )
+                } else {
+                    Text("Range unavailable", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "Log your first fill to start estimating range.",
+                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        if (!hasAnyFill) {
+            // First-run state — no stats, no floating button
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(20.dp)) {
+                    Text("Track your fuel usage", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Log your first fill to see consumption, costs and estimated range.",
+                        fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 20.sp
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = { showRefuel = true },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Log first fill", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                }
+            }
+        } else {
+            // Normal state — stats + list
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                val last = fuel.refuels.first()
+                StatCard(
+                    "LAST FILL",
+                    String.format(Locale.US, "%.1f", last.litres), "L",
+                    "${fuel.currency}${String.format(Locale.US, "%.2f", last.cost)}",
+                    Modifier.weight(1f)
+                )
+                val sinceFill = (fuel.currentOdo - last.odometer).coerceAtLeast(0.0)
+                StatCard(
+                    "DISTANCE",
+                    String.format(Locale.US, "%,.0f", sinceFill), "km",
+                    "Since fill",
+                    Modifier.weight(1f)
+                )
+            }
+
+            if (avg != null) {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    StatCard(
+                        "AVERAGE",
+                        String.format(Locale.US, "%.1f", avg!!), "L/100 km",
+                        "Last fills",
+                        Modifier.weight(1f)
+                    )
+                    val costPerKm = run {
+                        val last5 = fuel.refuels.take(5)
+                        if (last5.size < 2) null else {
+                            val dist = last5.first().odometer - last5.last().odometer
+                            val cost = last5.dropLast(1).sumOf { it.cost }
+                            if (dist > 50) cost / dist else null
+                        }
+                    }
+                    StatCard(
+                        "COST",
+                        costPerKm?.let { String.format(Locale.US, "%.2f", it) } ?: "—",
+                        "${fuel.currency}/km",
+                        "Fuel only",
+                        Modifier.weight(1f)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(22.dp))
+            Text(
+                "RECENT FILLS", fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp
+            )
+            Spacer(Modifier.height(10.dp))
+            fuel.refuels.take(20).forEach { r -> RefuelRow(r, fuel) }
+            Spacer(Modifier.height(90.dp))
+        }
+    }
+
+    // Floating + only when there's already data
+    if (hasAnyFill) {
+        Box(Modifier.fillMaxSize()) {
+            Surface(
+                onClick = { showRefuel = true },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).size(56.dp),
+                shape = CircleShape,
+                color = AccentBlue,
+                shadowElevation = 10.dp
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Add, "Log refuel", tint = Color.White, modifier = Modifier.size(26.dp))
+                }
+            }
+        }
+    }
+
+    if (showSlider) {
+        SliderModal(
+            currentLevel = level,
+            rangeFullKm = rangeFull,
+            onDismiss = { showSlider = false },
+            onSave = { v -> fuel.setLevel(v); fuel.dismissPrompt(); showSlider = false }
+        )
+    }
+    if (showRefuel) {
+        RefuelModal(
+            fuel = fuel,
+            onDismiss = { showRefuel = false },
+            onSave = { litres, cost, odo, tankFull ->
+                fuel.logRefuel(litres, cost, odo, tankFull); showRefuel = false
+            }
+        )
+    }
+    if (showSetup) showSetup = false
 }
+
+// ============ Car ============
+
+@Composable
+fun CarScreen(
+    state: com.parked.app.data.ParkingState,
+    fuel: FuelStore,
+    onMonitoringToggle: (Boolean) -> Unit,
+    onSelectDevice: (String, String) -> Unit,
+) {
+    var showDevicePicker by remember { mutableStateOf(false) }
+    var showFuelSettings by remember { mutableStateOf(false) }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)
+    ) {
+        Text("Car", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(20.dp))
+
+        // Vehicle
+        SectionHeader("VEHICLE")
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Your car", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    state.deviceName ?: "Not set",
+                    fontSize = 17.sp, fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Automatic parking
+        SectionHeader("AUTOMATIC PARKING")
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(8.dp).background(
+                                    if (state.monitoring) SuccessGreen else TextSecondary, CircleShape
+                                )
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (state.monitoring) "On" else "Off",
+                                fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        if (state.monitoring && state.deviceName != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Connected to ${state.deviceName}",
+                                fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = state.monitoring,
+                        onCheckedChange = { onMonitoringToggle(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = SuccessGreen,
+                        )
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth().clickable { showDevicePicker = true },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.DirectionsCar, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Bluetooth device", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            state.deviceName ?: "Choose a device",
+                            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text("Change", fontSize = 13.sp, color = AccentBlue, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Odometer
+        SectionHeader("ODOMETER")
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxWidth().clickable { showFuelSettings = true }
+        ) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (fuel.isConfigured) String.format(Locale.US, "%,.0f km", fuel.currentOdo)
+                        else "Not set",
+                        fontSize = 17.sp, fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Tracked in background via GPS",
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text("Edit", fontSize = 13.sp, color = AccentBlue, fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Fuel settings
+        SectionHeader("FUEL")
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxWidth().clickable { showFuelSettings = true }
+        ) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (fuel.tankCapacity > 0) "Tank · ${fuel.tankCapacity.toInt()} L"
+                        else "Tank size not set",
+                        fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Currency · ${fuel.currency}",
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text("Edit", fontSize = 13.sp, color = AccentBlue, fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Preferences
+        SectionHeader("PREFERENCES")
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column {
+                PreferenceRow("Units", "L/100 km")
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                PreferenceRow("Notifications", "On")
+            }
+        }
+
+        Spacer(Modifier.height(40.dp))
+    }
+
+    if (showDevicePicker) {
+        DevicePickerDialog(
+            onDismiss = { showDevicePicker = false },
+            onSelected = { name, address ->
+                onSelectDevice(name, address); showDevicePicker = false
+            }
+        )
+    }
+    if (showFuelSettings) {
+        FuelSettingsModal(
+            fuel = fuel,
+            onDismiss = { showFuelSettings = false }
+        )
+    }
+}
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text,
+        fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        letterSpacing = 1.sp,
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
+}
+
+@Composable
+private fun PreferenceRow(label: String, value: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        Text(value, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+// ============ Device Picker ============
+
+@Composable
+fun DevicePickerDialog(
+    onDismiss: () -> Unit,
+    onSelected: (String, String) -> Unit,
+) {
+    val context = LocalContext.current
+    val adapter: BluetoothAdapter? = context.getSystemService(BluetoothManager::class.java)?.adapter
+    val canRead = android.os.Build.VERSION.SDK_INT < 31 ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+    val devices = if (canRead) runCatching { adapter?.bondedDevices?.toList().orEmpty() }.getOrDefault(emptyList()) else emptyList()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Choose your car") },
+        text = {
+            Column {
+                if (!canRead) {
+                    Text("Bluetooth permission is required.")
+                } else if (devices.isEmpty()) {
+                    Text("No paired Bluetooth devices found.")
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(devices, key = { it.address }) { device ->
+                            Surface(
+                                onClick = { onSelected(device.name ?: "Car Bluetooth", device.address) },
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(device.name ?: "Unnamed", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(device.address, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
+// ============ Map ============
 
 @Composable
 fun ParkedMap(
@@ -586,219 +1164,19 @@ fun ParkedMap(
     )
 }
 
-@Composable
-fun FuelScreen(modifier: Modifier = Modifier, fuel: FuelStore) {
-    var showSlider by remember { mutableStateOf(false) }
-    var showRefuel by remember { mutableStateOf(false) }
-    var showSettings by remember { mutableStateOf(false) }
-
-    val level by remember { derivedStateOf { fuel.estimateLevelPct() } }
-    val rangeRemaining by remember { derivedStateOf { fuel.estimatedRangeRemainingKm() } }
-    val avg by remember { derivedStateOf { fuel.averageL100km() } }
-    val rangeFull by remember { derivedStateOf { fuel.estimatedRangeKm() } }
-
-    Box(modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
-
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Fuel", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                    val sub = if (fuel.isConfigured) {
-                        val odoText = String.format(Locale.US, "%,.0f km", fuel.currentOdo)
-                        val avgText = avg?.let { " · avg ${String.format(Locale.US, "%.1f", it)} L/100km" } ?: ""
-                        odoText + avgText
-                    } else "Not configured yet"
-                    Text(sub, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                IconButton(onClick = { showSettings = true }) {
-                    Icon(Icons.Filled.Settings, "Settings", tint = MaterialTheme.colorScheme.primary)
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            if (!fuel.isConfigured) {
-                Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(20.dp)) {
-                        Text("Set up your car", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "Enter your tank capacity and current odometer to start tracking fuel economy.",
-                            fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimaryContainer, lineHeight = 20.sp
-                        )
-                        Spacer(Modifier.height(14.dp))
-                        Button(onClick = { showSettings = true }, shape = RoundedCornerShape(12.dp)) {
-                            Text("Set up")
-                        }
-                    }
-                }
-            } else {
-                if (fuel.shouldShowPrompt()) {
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(32.dp).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Filled.Refresh, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                            }
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("Looks like ${level.toInt()}% full.", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                Text("Is that right?", fontSize = 13.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            }
-                            TextButton(onClick = { fuel.dismissPrompt() }) { Text("Yes") }
-                            TextButton(onClick = { showSlider = true }) { Text("Adjust") }
-                        }
-                    }
-                    Spacer(Modifier.height(14.dp))
-                }
-
-                Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(20.dp)) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                            Column(Modifier.weight(1f)) {
-                                Text("ESTIMATED LEVEL", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Row(verticalAlignment = Alignment.Bottom) {
-                                Text(level.toInt().toString(), fontSize = 34.sp, fontWeight = FontWeight.Bold, lineHeight = 34.sp)
-                                Text("%", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 2.dp, bottom = 4.dp))
-                            }
-                        }
-                        Spacer(Modifier.height(14.dp))
-
-                        val barColor = when {
-                            level < 15 -> Color(0xFFFF3B30)
-                            level < 40 -> Color(0xFFFFCC00)
-                            else -> Color(0xFF34C759)
-                        }
-                        Box(
-                            Modifier.fillMaxWidth().height(14.dp)
-                                .background(MaterialTheme.colorScheme.outline, RoundedCornerShape(999.dp))
-                                .clickable { showSlider = true }
-                        ) {
-                            Box(
-                                Modifier.fillMaxHeight().fillMaxWidth(level.toFloat() / 100f)
-                                    .background(barColor, RoundedCornerShape(999.dp))
-                            )
-                        }
-
-                        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                            listOf("0", "25", "50", "75", "100").forEach {
-                                Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-
-                        Spacer(Modifier.height(14.dp))
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                        Spacer(Modifier.height(14.dp))
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.LocationOn, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "≈ ${rangeRemaining?.toInt() ?: 0} km range",
-                                fontSize = 15.sp, fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.weight(1f))
-                            Text("est.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    StatCard("AVERAGE", avg?.let { String.format(Locale.US, "%.1f", it) } ?: "—", "L/100", "Last 5 fills", Modifier.weight(1f))
-                    val last = fuel.refuels.firstOrNull()
-                    StatCard("LAST FILL", last?.let { String.format(Locale.US, "%.1f", it.litres) } ?: "—", "L",
-                        last?.let { "${fuel.currency}${String.format(Locale.US, "%.2f", it.cost)}" } ?: "No fills yet", Modifier.weight(1f))
-                }
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    val sinceFill = fuel.refuels.firstOrNull()?.let { (fuel.currentOdo - it.odometer).coerceAtLeast(0.0) } ?: 0.0
-                    StatCard("DISTANCE", String.format(Locale.US, "%,.0f", sinceFill), "km", "Since last fill", Modifier.weight(1f))
-                    val costPerKm = run {
-                        val last5 = fuel.refuels.take(5)
-                        if (last5.size < 2) null else {
-                            val dist = last5.first().odometer - last5.last().odometer
-                            val cost = last5.dropLast(1).sumOf { it.cost }
-                            if (dist > 50) cost / dist else null
-                        }
-                    }
-                    StatCard("COST", costPerKm?.let { String.format(Locale.US, "%.2f", it) } ?: "—",
-                        fuel.currency + "/km", "Fuel only", Modifier.weight(1f))
-                }
-
-                Spacer(Modifier.height(22.dp))
-
-                Text("RECENT FILLS", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(10.dp))
-
-                if (fuel.refuels.isEmpty()) {
-                    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
-                        Text("No refuels logged yet. Tap + to add one.", Modifier.padding(18.dp), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    fuel.refuels.take(20).forEach { r -> RefuelRow(r, fuel) }
-                }
-
-                Spacer(Modifier.height(90.dp))
-            }
-        }
-
-        if (fuel.isConfigured) {
-            Surface(
-                onClick = { showRefuel = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).size(60.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
-                shadowElevation = 10.dp
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Add, "Log refuel", tint = Color.White, modifier = Modifier.size(28.dp))
-                }
-            }
-        }
-    }
-
-    if (showSlider) {
-        SliderModal(
-            currentLevel = level,
-            rangeFullKm = rangeFull,
-            onDismiss = { showSlider = false },
-            onSave = { v -> fuel.setLevel(v); fuel.dismissPrompt(); showSlider = false }
-        )
-    }
-    if (showRefuel) {
-        RefuelModal(
-            fuel = fuel,
-            onDismiss = { showRefuel = false },
-            onSave = { litres, cost, odo, tankFull ->
-                fuel.logRefuel(litres, cost, odo, tankFull); showRefuel = false
-            }
-        )
-    }
-    if (showSettings) {
-        SettingsModal(
-            fuel = fuel,
-            onDismiss = { showSettings = false }
-        )
-    }
-}
+// ============ Stat Card + Refuel Row ============
 
 @Composable
 private fun StatCard(label: String, value: String, unit: String, sub: String, modifier: Modifier = Modifier) {
     Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = modifier) {
         Column(Modifier.padding(14.dp)) {
-            Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 0.5.sp)
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, lineHeight = 22.sp)
+                Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold, lineHeight = 20.sp)
                 if (unit.isNotEmpty()) {
                     Spacer(Modifier.width(3.dp))
-                    Text(unit, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(unit, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             Spacer(Modifier.height(4.dp))
@@ -810,10 +1188,17 @@ private fun StatCard(label: String, value: String, unit: String, sub: String, mo
 @Composable
 private fun RefuelRow(r: Refuel, fuel: FuelStore) {
     val fmt = remember { SimpleDateFormat("d MMM", Locale.getDefault()) }
-    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+    ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(36.dp).background(MaterialTheme.colorScheme.surface, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.LocalGasStation, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            Box(
+                Modifier.size(36.dp).background(MaterialTheme.colorScheme.surface, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.LocalGasStation, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -824,11 +1209,13 @@ private fun RefuelRow(r: Refuel, fuel: FuelStore) {
                 )
             }
             if (r.tankFull) {
-                Text("FULL", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text("FULL", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = SuccessGreen)
             }
         }
     }
 }
+
+// ============ Modals ============
 
 @Composable
 private fun SliderModal(
@@ -851,7 +1238,9 @@ private fun SliderModal(
                     Text(v.toInt().toString(), fontSize = 52.sp, fontWeight = FontWeight.Bold, lineHeight = 52.sp)
                     Text("%", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 3.dp, bottom = 8.dp))
                 }
-                Text("≈ ${range.toInt()} km range", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (range > 0) {
+                    Text("≈ ${range.toInt()} km range", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 Spacer(Modifier.height(20.dp))
                 Slider(
                     value = v, onValueChange = { v = it },
@@ -948,13 +1337,13 @@ private fun RefuelModal(
 }
 
 @Composable
-private fun SettingsModal(fuel: FuelStore, onDismiss: () -> Unit) {
+private fun FuelSettingsModal(fuel: FuelStore, onDismiss: () -> Unit) {
     var tank by remember { mutableStateOf(if (fuel.tankCapacity > 0) String.format(Locale.US, "%.0f", fuel.tankCapacity) else "") }
     var odo by remember { mutableStateOf(if (fuel.baselineOdo > 0) String.format(Locale.US, "%.0f", fuel.baselineOdo) else "") }
     var cur by remember { mutableStateOf(fuel.currency) }
 
     ModalScaffold(onDismiss = onDismiss) {
-        Text("Car setup", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("Fuel settings", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text("These values power the fuel estimate", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
 
