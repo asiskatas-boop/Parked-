@@ -1588,7 +1588,7 @@ fun CarScreen(
                 }
                 Switch(
                     checked = fuel.notificationsEnabled,
-                    onCheckedChange = { fuel.setNotificationsEnabled(it) },
+                    onCheckedChange = { fuel.updateNotificationsEnabled(it) },,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
                         checkedTrackColor = accent.solid,
