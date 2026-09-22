@@ -15,7 +15,9 @@ import android.graphics.drawable.BitmapDrawable
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -73,10 +75,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Overlay
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -110,7 +115,6 @@ private val Accents = listOf(
     AccentDef("Mono",         Color(0xFFE5E7EB)),
 )
 
-// Dark surface levels
 private val AppBg        = Color(0xFF0B0B0D)
 private val CardBg       = Color(0xFF16171A)
 private val ElevatedBg   = Color(0xFF1F2024)
@@ -119,7 +123,6 @@ private val TextPrimary  = Color(0xFFF5F5F7)
 private val TextSecondary= Color(0xFF9CA3AF)
 private val TextMuted    = Color(0xFF6B7280)
 
-// Semantic
 private val SuccessGreen = Color(0xFF34C759)
 private val WarningYellow= Color(0xFFFFCC00)
 private val DangerRed    = Color(0xFFFF453A)
@@ -591,6 +594,17 @@ fun ParkingScreen(
     val isAtCar = distance != null && distance < 15
     val lowAcc = liveAccuracy > 50f
 
+    var parkedButtonVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(parkedButtonVisible, hasValidParking) {
+        if (parkedButtonVisible && hasValidParking) {
+            delay(5000)
+            parkedButtonVisible = false
+        }
+    }
+    LaunchedEffect(hasValidParking) {
+        if (hasValidParking) parkedButtonVisible = true
+    }
+
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             ParkedMap(
@@ -600,21 +614,25 @@ fun ParkingScreen(
                 liveLng = liveLng,
                 carMarkerIcon = carMarkerIcon,
                 accent = accent,
-                onMapReady = { mapRef.value = it }
+                onMapReady = { mapRef.value = it },
+                onUserTap = { parkedButtonVisible = true }
             )
 
             Column(
                 Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (hasValidParking) {
+                if (hasValidParking && parkedButtonVisible) {
                     FloatingControl(
                         icon = Icons.Filled.LocationOn,
                         label = "Show parked car",
                         accent = accent
                     ) {
                         val lat = state.parkedLat; val lng = state.parkedLng
-                        if (lat != null && lng != null) mapRef.value?.controller?.animateTo(GeoPoint(lat, lng))
+                        if (lat != null && lng != null) {
+                            mapRef.value?.controller?.animateTo(GeoPoint(lat, lng))
+                        }
+                        parkedButtonVisible = true
                     }
                 }
                 FloatingControl(
@@ -622,8 +640,10 @@ fun ParkingScreen(
                     label = "Recenter on me",
                     accent = accent
                 ) {
-                    if (liveLat != null && liveLng != null)
+                    if (liveLat != null && liveLng != null) {
                         mapRef.value?.controller?.animateTo(GeoPoint(liveLat, liveLng))
+                    }
+                    parkedButtonVisible = true
                 }
             }
         }
@@ -1362,6 +1382,47 @@ fun DevicePickerDialog(
 // Map
 // ============================================================
 
+private class RippleOverlay(
+    private val point: GeoPoint,
+    private val color: Int,
+) : Overlay() {
+    private var progress = 0f
+    private var running = false
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    fun start(mapView: MapView) {
+        running = true
+        progress = 0f
+        val handler = Handler(Looper.getMainLooper())
+        val startTime = SystemClock.uptimeMillis()
+        val durationMs = 800L
+        val runnable = object : Runnable {
+            override fun run() {
+                val elapsed = SystemClock.uptimeMillis() - startTime
+                progress = (elapsed.toFloat() / durationMs).coerceIn(0f, 1f)
+                mapView.invalidate()
+                if (progress < 1f) handler.postDelayed(this, 16)
+            }
+        }
+        handler.post(runnable)
+    }
+
+    override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+        if (shadow) return
+        if (!running && progress >= 1f) return
+        val pt = mapView.projection.toPixels(point, null)
+        val density = mapView.resources.displayMetrics.density
+        val maxRadius = 60f * density
+        val radius = maxRadius * progress
+        val alpha = ((1f - progress) * 180).toInt().coerceIn(0, 255)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 4f * density
+        paint.color = color
+        paint.alpha = alpha
+        canvas.drawCircle(pt.x.toFloat(), pt.y.toFloat(), radius, paint)
+    }
+}
+
 @Composable
 fun ParkedMap(
     parkedLat: Double?, parkedLng: Double?,
@@ -1369,7 +1430,16 @@ fun ParkedMap(
     carMarkerIcon: BitmapDrawable,
     accent: Color,
     onMapReady: (MapView) -> Unit,
+    onUserTap: () -> Unit = {},
 ) {
+    val scope = rememberCoroutineScope()
+    val lastParked = remember { mutableStateOf<GeoPoint?>(null) }
+    val lastLive = remember { mutableStateOf<GeoPoint?>(null) }
+    val parkedMarkerRef = remember { mutableStateOf<Marker?>(null) }
+    val liveMarkerRef = remember { mutableStateOf<Marker?>(null) }
+    val rippleRef = remember { mutableStateOf<RippleOverlay?>(null) }
+    var eventsOverlayAdded by remember { mutableStateOf(false) }
+
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
@@ -1385,22 +1455,94 @@ fun ParkedMap(
             }
         },
         update = { map ->
-            map.overlays.removeAll { it is Marker }
-            if (parkedLat != null && parkedLng != null) {
-                map.overlays.add(Marker(map).apply {
-                    position = GeoPoint(parkedLat, parkedLng)
-                    title = "Parked car"
-                    icon = carMarkerIcon
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                })
+            if (!eventsOverlayAdded) {
+                val receiver = object : MapEventsReceiver {
+                    override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                        onUserTap()
+                        return false
+                    }
+                    override fun longPressHelper(p: GeoPoint?): Boolean = false
+                }
+                map.overlays.add(0, MapEventsOverlay(receiver))
+                eventsOverlayAdded = true
             }
-            if (liveLat != null && liveLng != null) {
-                map.overlays.add(Marker(map).apply {
-                    position = GeoPoint(liveLat, liveLng)
-                    title = "You are here"
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                })
+
+            val newParked = if (parkedLat != null && parkedLng != null)
+                GeoPoint(parkedLat, parkedLng) else null
+
+            if (newParked != null) {
+                val same = lastParked.value?.latitude == parkedLat &&
+                        lastParked.value?.longitude == parkedLng
+                if (!same) {
+                    parkedMarkerRef.value?.let { map.overlays.remove(it) }
+                    rippleRef.value?.let { map.overlays.remove(it) }
+
+                    val marker = Marker(map).apply {
+                        position = newParked
+                        title = "Parked car"
+                        icon = carMarkerIcon
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        setOffset(0, -300)
+                    }
+                    map.overlays.add(marker)
+                    parkedMarkerRef.value = marker
+
+                    val ripple = RippleOverlay(newParked, accent.toArgb())
+                    map.overlays.add(ripple)
+                    rippleRef.value = ripple
+
+                    scope.launch {
+                        val frames = 24
+                        for (i in 0..frames) {
+                            val t = i.toFloat() / frames
+                            val eased = 1f - (1f - t) * (1f - t)
+                            val yOff = (-300 * (1 - eased)).toInt()
+                            marker.setOffset(0, yOff)
+                            map.invalidate()
+                            delay(20)
+                        }
+                        marker.setOffset(0, 0)
+                        map.invalidate()
+                    }
+                    scope.launch {
+                        delay(400)
+                        ripple.start(map)
+                    }
+
+                    lastParked.value = newParked
+                }
+            } else {
+                if (lastParked.value != null) {
+                    parkedMarkerRef.value?.let { map.overlays.remove(it) }
+                    rippleRef.value?.let { map.overlays.remove(it) }
+                    parkedMarkerRef.value = null
+                    rippleRef.value = null
+                    lastParked.value = null
+                }
             }
+
+            val newLive = if (liveLat != null && liveLng != null)
+                GeoPoint(liveLat, liveLng) else null
+
+            if (newLive != null) {
+                val same = lastLive.value?.latitude == liveLat &&
+                        lastLive.value?.longitude == liveLng
+                if (!same) {
+                    if (liveMarkerRef.value == null) {
+                        val marker = Marker(map).apply {
+                            position = newLive
+                            title = "You are here"
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        }
+                        map.overlays.add(marker)
+                        liveMarkerRef.value = marker
+                    } else {
+                        liveMarkerRef.value?.position = newLive
+                    }
+                    lastLive.value = newLive
+                }
+            }
+
             map.invalidate()
         }
     )
