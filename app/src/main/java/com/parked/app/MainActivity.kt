@@ -78,7 +78,6 @@ import kotlin.math.*
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        CrashLogger.install(this)
         Configuration.getInstance().userAgentValue = packageName
         setContent { ParkedTheme { ParkedApp() } }
     }
