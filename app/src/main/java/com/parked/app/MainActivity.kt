@@ -6,6 +6,12 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.graphics.drawable.BitmapDrawable
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
@@ -16,12 +22,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -38,7 +44,6 @@ import androidx.compose.material.icons.filled.LocalParking
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.LocalGasStation
 import androidx.compose.material.icons.outlined.LocalParking
@@ -46,10 +51,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -75,62 +82,136 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.*
 
+// ============================================================
+// MainActivity
+// ============================================================
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Configuration.getInstance().userAgentValue = packageName
-        setContent { ParkedTheme { ParkedApp() } }
+        setContent { ParkedRoot() }
     }
 }
 
-// ============ Colors ============
+// ============================================================
+// Colors & accents
+// ============================================================
 
-private val AccentBlue = Color(0xFF0A84FF)
+data class AccentDef(val name: String, val color: Color)
+
+private val Accents = listOf(
+    AccentDef("Electric",     Color(0xFF0A84FF)),
+    AccentDef("Iris",         Color(0xFF7C5CFF)),
+    AccentDef("Racing Green", Color(0xFF10B981)),
+    AccentDef("Ember",        Color(0xFFFF6B35)),
+    AccentDef("Carmine",      Color(0xFFE11D48)),
+    AccentDef("Mono",         Color(0xFFE5E7EB)),
+)
+
+// Dark surface levels
+private val AppBg        = Color(0xFF0B0B0D)
+private val CardBg       = Color(0xFF16171A)
+private val ElevatedBg   = Color(0xFF1F2024)
+private val BorderSubtle = Color(0x14FFFFFF)   // ~0.08 alpha
+private val TextPrimary  = Color(0xFFF5F5F7)
+private val TextSecondary= Color(0xFF9CA3AF)
+private val TextMuted    = Color(0xFF6B7280)
+
+// Semantic
 private val SuccessGreen = Color(0xFF34C759)
-private val WarningYellow = Color(0xFFFFCC00)
-private val DangerRed = Color(0xFFFF3B30)
-private val TextPrimary = Color(0xFF000000)
-private val TextSecondary = Color(0xFF6B7280)
-private val CardGray = Color(0xFFF2F2F7)
-private val HairlineGray = Color(0xFFE5E5EA)
+private val WarningYellow= Color(0xFFFFCC00)
+private val DangerRed    = Color(0xFFFF453A)
 
-private val LightColors = lightColorScheme(
-    primary = AccentBlue,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE1EFFF),
-    onPrimaryContainer = Color(0xFF002F66),
-    background = Color.White,
-    onBackground = TextPrimary,
-    surface = Color.White,
-    onSurface = TextPrimary,
-    surfaceVariant = CardGray,
-    onSurfaceVariant = TextSecondary,
-    outline = HairlineGray,
-    error = DangerRed,
-)
-
-private val DarkColors = darkColorScheme(
-    primary = AccentBlue,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF0A2540),
-    onPrimaryContainer = Color(0xFFE1EFFF),
-    background = Color.Black,
-    onBackground = Color.White,
-    surface = Color(0xFF1C1C1E),
-    onSurface = Color.White,
-    surfaceVariant = Color(0xFF1C1C1E),
-    onSurfaceVariant = Color(0xFF9CA3AF),
-    outline = Color(0xFF2C2C2E),
-    error = Color(0xFFFF453A),
-)
+// ============================================================
+// Theme
+// ============================================================
 
 @Composable
-fun ParkedTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, content = content)
+fun ParkedTheme(accent: Color, content: @Composable () -> Unit) {
+    val scheme = darkColorScheme(
+        primary = accent,
+        onPrimary = Color.White,
+        primaryContainer = accent.copy(alpha = 0.15f),
+        onPrimaryContainer = accent,
+        background = AppBg,
+        onBackground = TextPrimary,
+        surface = CardBg,
+        onSurface = TextPrimary,
+        surfaceVariant = CardBg,
+        onSurfaceVariant = TextSecondary,
+        outline = BorderSubtle,
+        error = DangerRed,
+    )
+    MaterialTheme(colorScheme = scheme, content = content)
 }
 
-// ============ Helpers ============
+// ============================================================
+// Root
+// ============================================================
+
+@Composable
+fun ParkedRoot() {
+    val context = LocalContext.current
+    val fuel = remember { FuelStore(context) }
+    val accentName = fuel.accentName
+    val accent = Accents.firstOrNull { it.name == accentName }?.color ?: Accents[0].color
+
+    ParkedTheme(accent = accent) {
+        ParkedApp(fuel = fuel, accent = accent)
+    }
+}
+
+@Composable
+fun ParkedApp(fuel: FuelStore, accent: Color) {
+    var showSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(1500)
+        showSplash = false
+    }
+    Crossfade(targetState = showSplash, animationSpec = tween(450)) { splash ->
+        if (splash) SplashScreen(accent) else MainContent(fuel = fuel, accent = accent)
+    }
+}
+
+@Composable
+fun SplashScreen(accent: Color) {
+    Box(
+        Modifier.fillMaxSize().background(AppBg),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                Modifier.size(96.dp).background(accent, RoundedCornerShape(24.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("P", fontSize = 56.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+            Spacer(Modifier.height(20.dp))
+            Text("Parked!", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Spacer(Modifier.height(6.dp))
+            Text("Never lose your car again", fontSize = 14.sp, color = TextSecondary)
+        }
+    }
+}
+
+// ============================================================
+// Screens enum
+// ============================================================
+
+enum class AppScreen(
+    val label: String,
+    val filled: ImageVector,
+    val outlined: ImageVector,
+) {
+    Parking("Parking", Icons.Filled.LocalParking, Icons.Outlined.LocalParking),
+    Fuel("Fuel", Icons.Filled.LocalGasStation, Icons.Outlined.LocalGasStation),
+    Car("Car", Icons.Filled.DirectionsCar, Icons.Outlined.DirectionsCar),
+}
+
+// ============================================================
+// Helpers
+// ============================================================
 
 private fun ensureBluetoothOn(context: Context) {
     val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return
@@ -160,91 +241,68 @@ private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): D
     return r * c
 }
 
-// Distance display rules from UX doc
 private fun distanceDisplay(meters: Double?, lowAccuracy: Boolean): String {
     if (meters == null) return "Finding your location…"
-    val rounded10 = (meters / 10.0).roundToInt() * 10
-    val rounded50 = (meters / 50.0).roundToInt() * 50
+    val r10 = (meters / 10.0).roundToInt() * 10
+    val r50 = (meters / 50.0).roundToInt() * 50
     return when {
         meters < 15 -> "You're at your car"
-        meters < 100 -> "About $rounded10 m away"
-        meters < 1000 && lowAccuracy -> "Approx. $rounded50 m away"
-        meters < 1000 -> "$rounded10 m away"
+        meters < 100 -> "About $r10 m away"
+        meters < 1000 && lowAccuracy -> "Approx. $r50 m away"
+        meters < 1000 -> "$r10 m away"
         lowAccuracy -> "Approx. ${String.format(Locale.US, "%.1f", meters / 1000)} km away"
         else -> "${String.format(Locale.US, "%.1f", meters / 1000)} km away"
     }
 }
 
-// ============ Screens ============
+// ============================================================
+// Custom car marker (drawn at runtime with accent color)
+// ============================================================
 
-enum class AppScreen(
-    val label: String,
-    val filled: ImageVector,
-    val outlined: ImageVector,
-) {
-    Parking("Parking", Icons.Filled.LocalParking, Icons.Outlined.LocalParking),
-    Fuel("Fuel", Icons.Filled.LocalGasStation, Icons.Outlined.LocalGasStation),
-    Car("Car", Icons.Filled.DirectionsCar, Icons.Outlined.DirectionsCar),
+private fun makeCarMarker(ctx: Context, accent: Color): BitmapDrawable {
+    val size = 120
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val c = Canvas(bmp)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    val cx = size / 2f
+    val cy = size / 2f - 14f
+
+    paint.color = accent.toArgb()
+    val path = Path().apply {
+        moveTo(cx - 11f, cy + 22f)
+        lineTo(cx, cy + 44f)
+        lineTo(cx + 11f, cy + 22f)
+        close()
+    }
+    c.drawPath(path, paint)
+    c.drawCircle(cx, cy, 30f, paint)
+
+    paint.color = android.graphics.Color.WHITE
+    c.drawCircle(cx, cy, 22f, paint)
+
+    paint.color = accent.toArgb()
+    c.drawRoundRect(RectF(cx - 14f, cy - 2f, cx + 14f, cy + 10f), 4f, 4f, paint)
+    c.drawRoundRect(RectF(cx - 9f, cy - 10f, cx + 9f, cy + 2f), 3f, 3f, paint)
+    c.drawCircle(cx - 9f, cy + 11f, 2.5f, paint)
+    c.drawCircle(cx + 9f, cy + 11f, 2.5f, paint)
+
+    return BitmapDrawable(ctx.resources, bmp)
 }
 
-// ============ Root ============
-
-@Composable
-fun ParkedApp() {
-    var showSplash by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        delay(1600)
-        showSplash = false
-    }
-
-    Crossfade(targetState = showSplash, animationSpec = tween(500)) { splash ->
-        if (splash) SplashScreen() else MainContent()
-    }
-}
-
-@Composable
-fun SplashScreen() {
-    Box(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                Modifier.size(96.dp).background(AccentBlue, RoundedCornerShape(24.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("P", fontSize = 56.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-            Spacer(Modifier.height(20.dp))
-            Text(
-                "Parked!",
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Never lose your car again",
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
+// ============================================================
+// Main content — Scaffold with compact header + bottom nav
+// ============================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainContent() {
+fun MainContent(fuel: FuelStore, accent: Color) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val store = remember { ParkingStore(context) }
-    val fuel = remember { FuelStore(context) }
     val state by store.state.collectAsState(initial = com.parked.app.data.ParkingState())
 
     var screen by remember { mutableStateOf(AppScreen.Parking) }
 
-    // First-run: if no car selected, jump to Car screen
     LaunchedEffect(Unit) {
         val real = store.state.first()
         if (real.deviceAddress == null) screen = AppScreen.Car
@@ -252,7 +310,7 @@ fun MainContent() {
 
     var liveLat by remember { mutableStateOf<Double?>(null) }
     var liveLng by remember { mutableStateOf<Double?>(null) }
-    var liveAccuracy by remember { mutableStateOf<Float>(100f) }
+    var liveAccuracy by remember { mutableStateOf(100f) }
 
     var hasLocationPermission by remember {
         mutableStateOf(
@@ -311,34 +369,23 @@ fun MainContent() {
         onDispose { try { fusedClient.removeLocationUpdates(locationCallback) } catch (_: Exception) {} }
     }
 
+    val fuelOdoSub = if (fuel.isConfigured)
+        "Odometer · ${String.format(Locale.US, "%,.0f", fuel.currentOdo)} km"
+    else null
+
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp
-            ) {
-                AppScreen.values().forEach { s ->
-                    NavigationBarItem(
-                        selected = screen == s,
-                        onClick = { screen = s },
-                        icon = {
-                            Icon(
-                                if (screen == s) s.filled else s.outlined,
-                                contentDescription = s.label
-                            )
-                        },
-                        label = { Text(s.label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = AccentBlue,
-                            selectedTextColor = AccentBlue,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    )
-                }
+        containerColor = AppBg,
+        topBar = {
+            Column {
+                CompactHeader(
+                    title = screen.label,
+                    subtitle = if (screen == AppScreen.Fuel) fuelOdoSub else null
+                )
+                HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
             }
+        },
+        bottomBar = {
+            BottomNav(screen = screen, accent = accent, onChange = { screen = it })
         }
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
@@ -348,6 +395,7 @@ fun MainContent() {
                     liveLat = liveLat,
                     liveLng = liveLng,
                     liveAccuracy = liveAccuracy,
+                    accent = accent,
                     onEnableMonitoring = {
                         requestPermissions()
                         ensureBluetoothOn(context); ensureLocationOn(context)
@@ -357,10 +405,6 @@ fun MainContent() {
                             )
                         }
                         scope.launch { store.setMonitoring(true) }
-                    },
-                    onDisableMonitoring = {
-                        runCatching { context.stopService(Intent(context, ParkingMonitorService::class.java)) }
-                        scope.launch { store.setMonitoring(false) }
                     },
                     onUpdateSpot = {
                         requestPermissions(); ensureLocationOn(context)
@@ -401,10 +445,11 @@ fun MainContent() {
                         }
                     }
                 )
-                AppScreen.Fuel -> FuelScreen(fuel = fuel)
+                AppScreen.Fuel -> FuelScreen(fuel = fuel, accent = accent)
                 AppScreen.Car -> CarScreen(
                     state = state,
                     fuel = fuel,
+                    accent = accent,
                     onMonitoringToggle = { on ->
                         if (on) {
                             requestPermissions()
@@ -429,7 +474,77 @@ fun MainContent() {
     }
 }
 
-// ============ Parking ============
+// ============================================================
+// Compact header + bottom nav
+// ============================================================
+
+@Composable
+fun CompactHeader(title: String, subtitle: String? = null) {
+    Box(
+        Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 20.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Column {
+            Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            if (subtitle != null) {
+                Text(subtitle, fontSize = 12.sp, color = TextSecondary)
+            }
+        }
+    }
+}
+
+@Composable
+fun BottomNav(screen: AppScreen, accent: Color, onChange: (AppScreen) -> Unit) {
+    Column(Modifier.fillMaxWidth().background(CardBg)) {
+        HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+        Row(
+            Modifier.fillMaxWidth().height(64.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AppScreen.values().forEach { s ->
+                val selected = screen == s
+                val tint by animateColorAsState(
+                    targetValue = if (selected) accent else TextMuted,
+                    animationSpec = tween(220),
+                    label = "navTint"
+                )
+                Box(
+                    Modifier.weight(1f).fillMaxHeight().clickable { onChange(s) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Top indicator
+                    Box(
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 2.dp)
+                            .width(20.dp)
+                            .height(2.dp)
+                            .background(if (selected) accent else Color.Transparent, RoundedCornerShape(999.dp))
+                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            if (selected) s.filled else s.outlined,
+                            contentDescription = s.label,
+                            tint = tint,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            s.label,
+                            fontSize = 11.sp,
+                            color = tint,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// Parking screen
+// ============================================================
 
 @Composable
 fun ParkingScreen(
@@ -437,139 +552,100 @@ fun ParkingScreen(
     liveLat: Double?,
     liveLng: Double?,
     liveAccuracy: Float,
+    accent: Color,
     onEnableMonitoring: () -> Unit,
-    onDisableMonitoring: () -> Unit,
     onUpdateSpot: () -> Unit,
     onEndParking: () -> Unit,
     onDirections: () -> Unit,
 ) {
+    val context = LocalContext.current
     val mapRef = remember { mutableStateOf<MapView?>(null) }
     var confirmMove by remember { mutableStateOf(false) }
+
+    val carMarkerIcon = remember(accent) { makeCarMarker(context, accent) }
 
     val hasValidParking = state.parkedLat != null && state.parkedLng != null &&
         !(state.parkedLat == 0.0 && state.parkedLng == 0.0)
 
-    val distanceMeters: Double? = remember(liveLat, liveLng, state.parkedLat, state.parkedLng, hasValidParking) {
+    val distance: Double? = remember(liveLat, liveLng, state.parkedLat, state.parkedLng, hasValidParking) {
         if (liveLat != null && liveLng != null && hasValidParking)
             haversine(liveLat, liveLng, state.parkedLat!!, state.parkedLng!!)
         else null
     }
 
-    val isAtCar = distanceMeters != null && distanceMeters < 15
-    val lowAccuracy = liveAccuracy > 50f
+    val isAtCar = distance != null && distance < 15
+    val lowAcc = liveAccuracy > 50f
 
     Column(Modifier.fillMaxSize()) {
-        // Header
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)
-        ) {
-            Text("Parking", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Spacer(Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(8.dp).background(
-                        if (state.monitoring) SuccessGreen else TextSecondary, CircleShape
-                    )
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    if (state.monitoring) "Parked" else "Not watching",
-                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        // Map
         Box(Modifier.weight(1f).fillMaxWidth()) {
             ParkedMap(
                 parkedLat = if (hasValidParking) state.parkedLat else null,
                 parkedLng = if (hasValidParking) state.parkedLng else null,
                 liveLat = liveLat,
                 liveLng = liveLng,
+                carMarkerIcon = carMarkerIcon,
+                accent = accent,
                 onMapReady = { mapRef.value = it }
             )
 
-            // Two floating buttons (right side, no zoom)
             Column(
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (hasValidParking) {
-                    Surface(
-                        onClick = {
-                            val lat = state.parkedLat; val lng = state.parkedLng
-                            if (lat != null && lng != null) mapRef.value?.controller?.animateTo(GeoPoint(lat, lng))
-                        },
-                        modifier = Modifier.size(48.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface,
-                        shadowElevation = 6.dp
+                    FloatingControl(
+                        icon = Icons.Filled.LocationOn,
+                        label = "Show parked car",
+                        accent = accent
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.LocationOn, "Saved car", tint = AccentBlue, modifier = Modifier.size(22.dp))
-                        }
+                        val lat = state.parkedLat; val lng = state.parkedLng
+                        if (lat != null && lng != null) mapRef.value?.controller?.animateTo(GeoPoint(lat, lng))
                     }
                 }
-                Surface(
-                    onClick = {
-                        if (liveLat != null && liveLng != null) mapRef.value?.controller?.animateTo(GeoPoint(liveLat, liveLng))
-                    },
-                    modifier = Modifier.size(48.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 6.dp
+                FloatingControl(
+                    icon = Icons.Filled.MyLocation,
+                    label = "Recenter on me",
+                    accent = accent
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.MyLocation, "Recenter on me", tint = AccentBlue, modifier = Modifier.size(20.dp))
-                    }
+                    if (liveLat != null && liveLng != null)
+                        mapRef.value?.controller?.animateTo(GeoPoint(liveLat, liveLng))
                 }
             }
         }
 
-        // Info card
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 12.dp
-        ) {
-            Column(
-                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                when {
-                    !hasValidParking -> {
-                        Text(
-                            "No parking spot saved yet",
-                            fontSize = 20.sp, fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "Save your spot to find it later.",
-                            fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    liveLat == null -> {
-                        Text("Finding your location…", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                        Text("Your parking spot is saved.", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    else -> {
-                        Text(
-                            distanceDisplay(distanceMeters, lowAccuracy),
-                            fontSize = 22.sp, fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "Parked ${
-                                state.parkedAt?.let {
-                                    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
-                                } ?: "recently"
-                            }",
-                            fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+        AmbientSheet(accent = accent) {
+            when {
+                !hasValidParking -> {
+                    Text("Save where you parked", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Never lose track of your car again.", fontSize = 14.sp, color = TextSecondary)
+                    Spacer(Modifier.height(4.dp))
+                    Button(
+                        onClick = onUpdateSpot,
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Save parking spot", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
                 }
-
-                // Primary CTA
-                if (hasValidParking && isAtCar) {
+                liveLat == null -> {
+                    Text("Finding your location…", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Your parking spot is saved.", fontSize = 14.sp, color = TextSecondary)
+                    Spacer(Modifier.height(4.dp))
+                    Button(
+                        onClick = onDirections,
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Get directions", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                }
+                isAtCar -> {
+                    Text("You're at your car", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text(
+                        "Parked ${
+                            state.parkedAt?.let {
+                                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
+                            } ?: "recently"
+                        }",
+                        fontSize = 14.sp, color = TextSecondary
+                    )
+                    Spacer(Modifier.height(4.dp))
                     Button(
                         onClick = onEndParking,
                         modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -578,39 +654,50 @@ fun ParkingScreen(
                             containerColor = SuccessGreen, contentColor = Color.White
                         )
                     ) { Text("End parking", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
-                } else if (hasValidParking) {
+                    TextButton(
+                        onClick = { confirmMove = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Update parking spot", color = accent, fontSize = 14.sp) }
+                }
+                else -> {
+                    Text(
+                        distanceDisplay(distance, lowAcc),
+                        fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary
+                    )
+                    Text(
+                        "Parked ${
+                            state.parkedAt?.let {
+                                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
+                            } ?: "recently"
+                        }",
+                        fontSize = 14.sp, color = TextSecondary
+                    )
+                    Spacer(Modifier.height(4.dp))
                     Button(
                         onClick = onDirections,
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(14.dp)
                     ) { Text("Get directions", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
-                } else if (!state.monitoring) {
-                    Button(
-                        onClick = onEnableMonitoring,
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) { Text("Start automatic parking", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                    TextButton(
+                        onClick = { confirmMove = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Update parking spot", color = accent, fontSize = 14.sp) }
                 }
+            }
 
-                // Secondary CTA
-                TextButton(
-                    onClick = {
-                        if (hasValidParking) confirmMove = true else onUpdateSpot()
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (hasValidParking) "Update parking spot" else "Save current location", color = AccentBlue, fontSize = 14.sp)
-                }
-
-                // Automatic parking status row (inside Parking only)
-                if (state.monitoring) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(top = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(Modifier.size(8.dp).background(SuccessGreen, CircleShape))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Automatic parking on", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).background(
+                    if (state.monitoring) SuccessGreen else TextMuted, CircleShape))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (state.monitoring) "Automatic parking on" else "Automatic parking off",
+                    fontSize = 13.sp, color = TextSecondary
+                )
+                if (!state.monitoring) {
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onEnableMonitoring) {
+                        Text("Turn on", color = accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -620,27 +707,77 @@ fun ParkingScreen(
     if (confirmMove) {
         AlertDialog(
             onDismissRequest = { confirmMove = false },
+            containerColor = CardBg,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary,
             title = { Text("Move your parking spot?") },
             text = { Text("This will replace the saved spot with your current location.") },
             confirmButton = {
                 TextButton(onClick = { confirmMove = false; onUpdateSpot() }) {
-                    Text("Move", color = AccentBlue)
+                    Text("Move spot", color = accent, fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { confirmMove = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmMove = false }) { Text("Cancel", color = TextSecondary) }
             }
         )
     }
 }
 
-// ============ Fuel ============
+@Composable
+fun FloatingControl(icon: ImageVector, label: String, accent: Color, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp),
+        shape = CircleShape,
+        color = ElevatedBg,
+        shadowElevation = 6.dp,
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = label, tint = accent, modifier = Modifier.size(22.dp))
+        }
+    }
+}
+
+// Ambient gradient bottom sheet
+@Composable
+fun AmbientSheet(accent: Color, content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        color = CardBg,
+        shadowElevation = 12.dp
+    ) {
+        Box {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(accent.copy(alpha = 0.10f), Color.Transparent),
+                            start = Offset(0f, 0f),
+                            end = Offset(800f, 350f)
+                        )
+                    )
+            )
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                content = content
+            )
+        }
+    }
+}
+
+// ============================================================
+// Fuel screen
+// ============================================================
 
 @Composable
-fun FuelScreen(fuel: FuelStore) {
+fun FuelScreen(fuel: FuelStore, accent: Color) {
     var showSlider by remember { mutableStateOf(false) }
     var showRefuel by remember { mutableStateOf(false) }
-    var showSetup by remember { mutableStateOf(false) }
 
     val level by remember { derivedStateOf { fuel.estimateLevelPct() } }
     val rangeRemaining by remember { derivedStateOf { fuel.estimatedRangeRemainingKm() } }
@@ -649,198 +786,174 @@ fun FuelScreen(fuel: FuelStore) {
 
     val hasAnyFill = fuel.refuels.isNotEmpty()
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
 
-        // Header
-        Text("Fuel", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            if (fuel.isConfigured) "Odometer · ${String.format(Locale.US, "%,.0f", fuel.currentOdo)} km"
-            else "Set up your car to track fuel",
-            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(Modifier.height(20.dp))
-
-        if (!fuel.isConfigured) {
-            // Not configured at all — quick setup prompt
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(20.dp)) {
-                    Text(
-                        "Set up your car",
-                        fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Add tank capacity and odometer in the Car tab.",
-                        fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimaryContainer, lineHeight = 20.sp
-                    )
-                }
-            }
-            return@Column
-        }
-
-        // Fuel level card
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(Modifier.padding(20.dp)) {
+            if (!fuel.isConfigured) {
+                Text("Set up your car", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    "FUEL LEVEL",
-                    fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 1.sp
+                    "Add your tank capacity and odometer in the Car tab to start tracking fuel.",
+                    fontSize = 14.sp, color = TextSecondary, lineHeight = 20.sp
                 )
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(level.toInt().toString(), fontSize = 40.sp, fontWeight = FontWeight.Bold, lineHeight = 40.sp)
-                    Text(
-                        "%", fontSize = 20.sp, fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 3.dp, bottom = 6.dp)
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-
-                val lowFuel = level < 20
-                val barColor = if (lowFuel) WarningYellow else SuccessGreen
-
-                Box(
-                    Modifier.fillMaxWidth().height(12.dp)
-                        .background(MaterialTheme.colorScheme.outline, RoundedCornerShape(999.dp))
-                        .clickable { showSlider = true }
-                ) {
-                    Box(
-                        Modifier.fillMaxHeight().fillMaxWidth((level.toFloat() / 100f).coerceIn(0f, 1f))
-                            .background(barColor, RoundedCornerShape(999.dp))
-                    )
-                }
-
-                if (lowFuel) {
-                    Spacer(Modifier.height(10.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).background(WarningYellow, CircleShape))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Low fuel", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = WarningYellow)
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                Spacer(Modifier.height(14.dp))
-
-                if (rangeRemaining != null) {
-                    Text(
-                        "≈ ${rangeRemaining!!.toInt()} km estimated range",
-                        fontSize = 15.sp, fontWeight = FontWeight.SemiBold
-                    )
-                } else {
-                    Text("Range unavailable", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        "Log your first fill to start estimating range.",
-                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                return@Column
             }
-        }
 
-        Spacer(Modifier.height(20.dp))
-
-        if (!hasAnyFill) {
-            // First-run state — no stats, no floating button
+            // Fuel level card
             Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(20.dp),
+                color = CardBg,
+                border = BorderStroke(1.dp, BorderSubtle),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(20.dp)) {
-                    Text("Track your fuel usage", fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(6.dp))
                     Text(
-                        "Log your first fill to see consumption, costs and estimated range.",
-                        fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 20.sp
+                        "FUEL LEVEL",
+                        fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                        color = TextSecondary, letterSpacing = 1.sp
                     )
-                    Spacer(Modifier.height(16.dp))
-                    Button(
-                        onClick = { showRefuel = true },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) { Text("Log first fill", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
-                }
-            }
-        } else {
-            // Normal state — stats + list
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                val last = fuel.refuels.first()
-                StatCard(
-                    "LAST FILL",
-                    String.format(Locale.US, "%.1f", last.litres), "L",
-                    "${fuel.currency}${String.format(Locale.US, "%.2f", last.cost)}",
-                    Modifier.weight(1f)
-                )
-                val sinceFill = (fuel.currentOdo - last.odometer).coerceAtLeast(0.0)
-                StatCard(
-                    "DISTANCE",
-                    String.format(Locale.US, "%,.0f", sinceFill), "km",
-                    "Since fill",
-                    Modifier.weight(1f)
-                )
-            }
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(level.toInt().toString(), fontSize = 42.sp, fontWeight = FontWeight.Bold, color = TextPrimary, lineHeight = 42.sp)
+                        Text(
+                            "%", fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(start = 3.dp, bottom = 6.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
 
-            if (avg != null) {
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    StatCard(
-                        "AVERAGE",
-                        String.format(Locale.US, "%.1f", avg!!), "L/100 km",
-                        "Last fills",
-                        Modifier.weight(1f)
-                    )
-                    val costPerKm = run {
-                        val last5 = fuel.refuels.take(5)
-                        if (last5.size < 2) null else {
-                            val dist = last5.first().odometer - last5.last().odometer
-                            val cost = last5.dropLast(1).sumOf { it.cost }
-                            if (dist > 50) cost / dist else null
+                    val lowFuel = level < 20
+                    val barColor = if (lowFuel) WarningYellow else accent
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(12.dp)
+                            .background(ElevatedBg, RoundedCornerShape(999.dp))
+                            .clickable { showSlider = true }
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth((level.toFloat() / 100f).coerceIn(0f, 1f))
+                                .background(barColor, RoundedCornerShape(999.dp))
+                        )
+                    }
+                    if (lowFuel) {
+                        Spacer(Modifier.height(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(8.dp).background(WarningYellow, CircleShape))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Low fuel", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = WarningYellow)
                         }
                     }
-                    StatCard(
-                        "COST",
-                        costPerKm?.let { String.format(Locale.US, "%.2f", it) } ?: "—",
-                        "${fuel.currency}/km",
-                        "Fuel only",
-                        Modifier.weight(1f)
-                    )
+
+                    Spacer(Modifier.height(16.dp))
+                    HorizontalDivider(color = BorderSubtle)
+                    Spacer(Modifier.height(14.dp))
+
+                    if (rangeRemaining != null) {
+                        Text(
+                            "≈ ${rangeRemaining!!.toInt()} km estimated range",
+                            fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary
+                        )
+                    } else {
+                        Text("Range unavailable", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            "Log your first fill to start estimating range.",
+                            fontSize = 13.sp, color = TextSecondary
+                        )
+                    }
                 }
             }
 
-            Spacer(Modifier.height(22.dp))
-            Text(
-                "RECENT FILLS", fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp
-            )
-            Spacer(Modifier.height(10.dp))
-            fuel.refuels.take(20).forEach { r -> RefuelRow(r, fuel) }
-            Spacer(Modifier.height(90.dp))
-        }
-    }
+            Spacer(Modifier.height(20.dp))
 
-    // Floating + only when there's already data
-    if (hasAnyFill) {
-        Box(Modifier.fillMaxSize()) {
+            if (!hasAnyFill) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = CardBg,
+                    border = BorderStroke(1.dp, BorderSubtle),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(20.dp)) {
+                        Text("Track your fuel usage", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Log your first fill to see consumption, costs and estimated range.",
+                            fontSize = 14.sp, color = TextSecondary, lineHeight = 20.sp
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = { showRefuel = true },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) { Text("Log first fill", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                    }
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    val last = fuel.refuels.first()
+                    StatCard(
+                        "LAST FILL",
+                        String.format(Locale.US, "%.1f", last.litres), "L",
+                        "${fuel.currency}${String.format(Locale.US, "%.2f", last.cost)}",
+                        Modifier.weight(1f)
+                    )
+                    val sinceFill = (fuel.currentOdo - last.odometer).coerceAtLeast(0.0)
+                    StatCard(
+                        "DISTANCE",
+                        String.format(Locale.US, "%,.0f", sinceFill), "km",
+                        "Since fill",
+                        Modifier.weight(1f)
+                    )
+                }
+
+                if (avg != null) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        StatCard(
+                            "AVERAGE",
+                            String.format(Locale.US, "%.1f", avg!!), "L/100 km",
+                            "Last fills",
+                            Modifier.weight(1f)
+                        )
+                        val costPerKm = run {
+                            val last5 = fuel.refuels.take(5)
+                            if (last5.size < 2) null else {
+                                val dist = last5.first().odometer - last5.last().odometer
+                                val cost = last5.dropLast(1).sumOf { it.cost }
+                                if (dist > 50) cost / dist else null
+                            }
+                        }
+                        StatCard(
+                            "COST",
+                            costPerKm?.let { String.format(Locale.US, "%.2f", it) } ?: "—",
+                            "${fuel.currency}/km",
+                            "Fuel only",
+                            Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(22.dp))
+                Text(
+                    "RECENT FILLS", fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                    color = TextSecondary, letterSpacing = 1.sp
+                )
+                Spacer(Modifier.height(10.dp))
+                fuel.refuels.take(20).forEach { r -> RefuelRow(r, fuel, accent) }
+                Spacer(Modifier.height(90.dp))
+            }
+        }
+
+        if (hasAnyFill) {
             Surface(
                 onClick = { showRefuel = true },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).size(56.dp),
                 shape = CircleShape,
-                color = AccentBlue,
+                color = accent,
                 shadowElevation = 10.dp
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -854,6 +967,7 @@ fun FuelScreen(fuel: FuelStore) {
         SliderModal(
             currentLevel = level,
             rangeFullKm = rangeFull,
+            accent = accent,
             onDismiss = { showSlider = false },
             onSave = { v -> fuel.setLevel(v); fuel.dismissPrompt(); showSlider = false }
         )
@@ -861,57 +975,65 @@ fun FuelScreen(fuel: FuelStore) {
     if (showRefuel) {
         RefuelModal(
             fuel = fuel,
+            accent = accent,
             onDismiss = { showRefuel = false },
             onSave = { litres, cost, odo, tankFull ->
                 fuel.logRefuel(litres, cost, odo, tankFull); showRefuel = false
             }
         )
     }
-    if (showSetup) showSetup = false
 }
 
-// ============ Car ============
+// ============================================================
+// Car screen
+// ============================================================
 
 @Composable
 fun CarScreen(
     state: com.parked.app.data.ParkingState,
     fuel: FuelStore,
+    accent: Color,
     onMonitoringToggle: (Boolean) -> Unit,
     onSelectDevice: (String, String) -> Unit,
 ) {
     var showDevicePicker by remember { mutableStateOf(false) }
     var showFuelSettings by remember { mutableStateOf(false) }
+    var showAppearance by remember { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)
     ) {
-        Text("Car", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        SectionHeader("VEHICLE")
+        SettingsRow(
+            title = state.deviceName ?: "Not set",
+            subtitle = "Your car",
+            accent = accent,
+            onClick = { showDevicePicker = true }
+        )
+
         Spacer(Modifier.height(20.dp))
 
-        // Vehicle
-        SectionHeader("VEHICLE")
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text("Your car", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    state.deviceName ?: "Not set",
-                    fontSize = 17.sp, fontWeight = FontWeight.SemiBold
+        SectionHeader("APPEARANCE")
+        SettingsRow(
+            title = Accents.firstOrNull { it.color.value == accent.value }?.name ?: "Accent",
+            subtitle = "Accent color",
+            accent = accent,
+            onClick = { showAppearance = true },
+            leading = {
+                Box(
+                    Modifier.size(28.dp).background(accent, CircleShape)
+                        .border(2.dp, Color.White.copy(alpha = 0.15f), CircleShape)
                 )
             }
-        }
+        )
 
         Spacer(Modifier.height(20.dp))
 
-        // Automatic parking
         SectionHeader("AUTOMATIC PARKING")
         Surface(
             shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
+            color = CardBg,
+            border = BorderStroke(1.dp, BorderSubtle),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(Modifier.padding(16.dp)) {
@@ -920,20 +1042,20 @@ fun CarScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 Modifier.size(8.dp).background(
-                                    if (state.monitoring) SuccessGreen else TextSecondary, CircleShape
+                                    if (state.monitoring) SuccessGreen else TextMuted, CircleShape
                                 )
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 if (state.monitoring) "On" else "Off",
-                                fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+                                fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary
                             )
                         }
                         if (state.monitoring && state.deviceName != null) {
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 "Connected to ${state.deviceName}",
-                                fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontSize = 13.sp, color = TextSecondary
                             )
                         }
                     }
@@ -942,93 +1064,65 @@ fun CarScreen(
                         onCheckedChange = { onMonitoringToggle(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
-                            checkedTrackColor = SuccessGreen,
+                            checkedTrackColor = accent,
+                            uncheckedThumbColor = TextSecondary,
+                            uncheckedTrackColor = ElevatedBg,
                         )
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                HorizontalDivider(color = BorderSubtle)
                 Spacer(Modifier.height(12.dp))
                 Row(
                     Modifier.fillMaxWidth().clickable { showDevicePicker = true },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Filled.DirectionsCar, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.DirectionsCar, null, tint = accent, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Bluetooth device", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Bluetooth device", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                         Text(
                             state.deviceName ?: "Choose a device",
-                            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                            fontSize = 13.sp, color = TextSecondary
                         )
                     }
-                    Text("Change", fontSize = 13.sp, color = AccentBlue, fontWeight = FontWeight.SemiBold)
+                    Text("Change", fontSize = 13.sp, color = accent, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
 
         Spacer(Modifier.height(20.dp))
 
-        // Odometer
         SectionHeader("ODOMETER")
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.fillMaxWidth().clickable { showFuelSettings = true }
-        ) {
-            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        if (fuel.isConfigured) String.format(Locale.US, "%,.0f km", fuel.currentOdo)
-                        else "Not set",
-                        fontSize = 17.sp, fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        "Tracked in background via GPS",
-                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Text("Edit", fontSize = 13.sp, color = AccentBlue, fontWeight = FontWeight.SemiBold)
-            }
-        }
+        SettingsRow(
+            title = if (fuel.isConfigured) String.format(Locale.US, "%,.0f km", fuel.currentOdo) else "Not set",
+            subtitle = "Tracked via GPS while connected",
+            accent = accent,
+            onClick = { showFuelSettings = true }
+        )
 
         Spacer(Modifier.height(20.dp))
 
-        // Fuel settings
         SectionHeader("FUEL")
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.fillMaxWidth().clickable { showFuelSettings = true }
-        ) {
-            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        if (fuel.tankCapacity > 0) "Tank · ${fuel.tankCapacity.toInt()} L"
-                        else "Tank size not set",
-                        fontSize = 15.sp, fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        "Currency · ${fuel.currency}",
-                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Text("Edit", fontSize = 13.sp, color = AccentBlue, fontWeight = FontWeight.SemiBold)
-            }
-        }
+        SettingsRow(
+            title = if (fuel.tankCapacity > 0) "Tank · ${fuel.tankCapacity.toInt()} L" else "Tank size not set",
+            subtitle = "Currency · ${fuel.currency}",
+            accent = accent,
+            onClick = { showFuelSettings = true }
+        )
 
         Spacer(Modifier.height(20.dp))
 
-        // Preferences
         SectionHeader("PREFERENCES")
         Surface(
             shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
+            color = CardBg,
+            border = BorderStroke(1.dp, BorderSubtle),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column {
                 PreferenceRow("Units", "L/100 km")
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                HorizontalDivider(color = BorderSubtle)
                 PreferenceRow("Notifications", "On")
             }
         }
@@ -1038,6 +1132,7 @@ fun CarScreen(
 
     if (showDevicePicker) {
         DevicePickerDialog(
+            accent = accent,
             onDismiss = { showDevicePicker = false },
             onSelected = { name, address ->
                 onSelectDevice(name, address); showDevicePicker = false
@@ -1047,7 +1142,15 @@ fun CarScreen(
     if (showFuelSettings) {
         FuelSettingsModal(
             fuel = fuel,
+            accent = accent,
             onDismiss = { showFuelSettings = false }
+        )
+    }
+    if (showAppearance) {
+        AppearanceModal(
+            fuel = fuel,
+            accent = accent,
+            onDismiss = { showAppearance = false }
         )
     }
 }
@@ -1057,10 +1160,39 @@ private fun SectionHeader(text: String) {
     Text(
         text,
         fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = TextSecondary,
         letterSpacing = 1.sp,
         modifier = Modifier.padding(bottom = 8.dp)
     )
+}
+
+@Composable
+private fun SettingsRow(
+    title: String,
+    subtitle: String,
+    accent: Color,
+    onClick: () -> Unit,
+    leading: (@Composable () -> Unit)? = null,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = CardBg,
+        border = BorderStroke(1.dp, BorderSubtle),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (leading != null) {
+                leading()
+                Spacer(Modifier.width(12.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                Text(subtitle, fontSize = 12.sp, color = TextSecondary)
+            }
+            Text("Edit", fontSize = 13.sp, color = accent, fontWeight = FontWeight.SemiBold)
+        }
+    }
 }
 
 @Composable
@@ -1069,15 +1201,95 @@ private fun PreferenceRow(label: String, value: String) {
         Modifier.fillMaxWidth().padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, fontSize = 15.sp, modifier = Modifier.weight(1f))
-        Text(value, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, fontSize = 15.sp, color = TextPrimary, modifier = Modifier.weight(1f))
+        Text(value, fontSize = 13.sp, color = TextSecondary)
     }
 }
 
-// ============ Device Picker ============
+// ============================================================
+// Appearance modal
+// ============================================================
+
+@Composable
+private fun AppearanceModal(fuel: FuelStore, accent: Color, onDismiss: () -> Unit) {
+    ModalScaffold(accent = accent, onDismiss = onDismiss) {
+        Text("Appearance", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text("Accent color", fontSize = 13.sp, color = TextSecondary)
+        Spacer(Modifier.height(18.dp))
+
+        Accents.chunked(3).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+                row.forEach { def ->
+                    AccentSwatch(
+                        def = def,
+                        selected = fuel.accentName == def.name,
+                        onClick = { fuel.setAccent(def.name) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Text("MATCH MY CAR", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary, letterSpacing = 1.sp)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Coming soon — uses a photo of your car to pick the accent.",
+            fontSize = 13.sp, color = TextSecondary, lineHeight = 18.sp
+        )
+
+        Spacer(Modifier.height(22.dp))
+        Button(
+            onClick = onDismiss,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(14.dp)
+        ) { Text("Done", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+    }
+}
+
+@Composable
+private fun AccentSwatch(
+    def: AccentDef,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier.clickable { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier
+                .size(56.dp)
+                .background(def.color, CircleShape)
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) Color.White else Color.White.copy(alpha = 0.12f),
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (selected) Icon(Icons.Filled.Check, "Selected", tint = Color.White, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            def.name,
+            fontSize = 11.sp,
+            color = if (selected) TextPrimary else TextSecondary,
+            textAlign = TextAlign.Center,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+        )
+    }
+}
+
+// ============================================================
+// Device picker dialog
+// ============================================================
 
 @Composable
 fun DevicePickerDialog(
+    accent: Color,
     onDismiss: () -> Unit,
     onSelected: (String, String) -> Unit,
 ) {
@@ -1089,6 +1301,9 @@ fun DevicePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = CardBg,
+        titleContentColor = TextPrimary,
+        textContentColor = TextSecondary,
         title = { Text("Choose your car") },
         text = {
             Column {
@@ -1102,12 +1317,12 @@ fun DevicePickerDialog(
                             Surface(
                                 onClick = { onSelected(device.name ?: "Car Bluetooth", device.address) },
                                 shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                color = ElevatedBg,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(Modifier.padding(12.dp)) {
-                                    Text(device.name ?: "Unnamed", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                                    Text(device.address, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(device.name ?: "Unnamed", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                    Text(device.address, fontSize = 12.sp, color = TextSecondary)
                                 }
                             }
                         }
@@ -1116,17 +1331,21 @@ fun DevicePickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) { Text("Close", color = accent) }
         }
     )
 }
 
-// ============ Map ============
+// ============================================================
+// Map
+// ============================================================
 
 @Composable
 fun ParkedMap(
     parkedLat: Double?, parkedLng: Double?,
     liveLat: Double?, liveLng: Double?,
+    carMarkerIcon: BitmapDrawable,
+    accent: Color,
     onMapReady: (MapView) -> Unit,
 ) {
     AndroidView(
@@ -1148,6 +1367,7 @@ fun ParkedMap(
                 map.overlays.add(Marker(map).apply {
                     position = GeoPoint(parkedLat, parkedLng)
                     title = "Parked car"
+                    icon = carMarkerIcon
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                 })
             }
@@ -1163,48 +1383,59 @@ fun ParkedMap(
     )
 }
 
-// ============ Stat Card + Refuel Row ============
+// ============================================================
+// Stat card + refuel row
+// ============================================================
 
 @Composable
 private fun StatCard(label: String, value: String, unit: String, sub: String, modifier: Modifier = Modifier) {
-    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = modifier) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = CardBg,
+        border = BorderStroke(1.dp, BorderSubtle),
+        modifier = modifier
+    ) {
         Column(Modifier.padding(14.dp)) {
-            Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 0.5.sp)
+            Text(
+                label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                color = TextSecondary, letterSpacing = 0.5.sp
+            )
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold, lineHeight = 20.sp)
+                Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary, lineHeight = 20.sp)
                 if (unit.isNotEmpty()) {
                     Spacer(Modifier.width(3.dp))
-                    Text(unit, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(unit, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
                 }
             }
             Spacer(Modifier.height(4.dp))
-            Text(sub, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(sub, fontSize = 11.sp, color = TextSecondary)
         }
     }
 }
 
 @Composable
-private fun RefuelRow(r: Refuel, fuel: FuelStore) {
+private fun RefuelRow(r: Refuel, fuel: FuelStore, accent: Color) {
     val fmt = remember { SimpleDateFormat("d MMM", Locale.getDefault()) }
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = CardBg,
+        border = BorderStroke(1.dp, BorderSubtle),
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(36.dp).background(MaterialTheme.colorScheme.surface, CircleShape),
+                Modifier.size(36.dp).background(ElevatedBg, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.LocalGasStation, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.LocalGasStation, null, tint = accent, modifier = Modifier.size(18.dp))
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(fmt.format(Date(r.date)), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(fmt.format(Date(r.date)), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                 Text(
                     "${String.format(Locale.US, "%.1f", r.litres)} L · ${fuel.currency}${String.format(Locale.US, "%.2f", r.cost)}",
-                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontSize = 12.sp, color = TextSecondary
                 )
             }
             if (r.tankFull) {
@@ -1214,57 +1445,74 @@ private fun RefuelRow(r: Refuel, fuel: FuelStore) {
     }
 }
 
-// ============ Modals ============
+// ============================================================
+// Modals
+// ============================================================
 
 @Composable
 private fun SliderModal(
     currentLevel: Double,
     rangeFullKm: Double?,
+    accent: Color,
     onDismiss: () -> Unit,
     onSave: (Double) -> Unit,
 ) {
     var v by remember { mutableFloatStateOf(currentLevel.toFloat()) }
     val range = rangeFullKm?.let { it * v / 100 } ?: 0.0
 
-    ModalScaffold(onDismiss = onDismiss) {
-        Text("Adjust fuel level", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("Look at your car's gauge and match it below", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    ModalScaffold(accent = accent, onDismiss = onDismiss) {
+        Text("Adjust fuel level", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text("Look at your car's gauge and match it below", fontSize = 13.sp, color = TextSecondary)
         Spacer(Modifier.height(20.dp))
 
-        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Surface(shape = RoundedCornerShape(16.dp), color = ElevatedBg) {
             Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text(v.toInt().toString(), fontSize = 52.sp, fontWeight = FontWeight.Bold, lineHeight = 52.sp)
-                    Text("%", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 3.dp, bottom = 8.dp))
+                    Text(v.toInt().toString(), fontSize = 52.sp, fontWeight = FontWeight.Bold, color = TextPrimary, lineHeight = 52.sp)
+                    Text(
+                        "%", fontSize = 22.sp, fontWeight = FontWeight.Bold,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(start = 3.dp, bottom = 8.dp)
+                    )
                 }
                 if (range > 0) {
-                    Text("≈ ${range.toInt()} km range", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("≈ ${range.toInt()} km range", fontSize = 13.sp, color = TextSecondary)
                 }
                 Spacer(Modifier.height(20.dp))
                 Slider(
                     value = v, onValueChange = { v = it },
                     valueRange = 0f..100f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = accent,
+                        activeTrackColor = accent,
+                        inactiveTrackColor = ElevatedBg,
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Empty", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Half", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Full", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Empty", fontSize = 11.sp, color = TextSecondary)
+                    Text("Half", fontSize = 11.sp, color = TextSecondary)
+                    Text("Full", fontSize = 11.sp, color = TextSecondary)
                 }
             }
         }
 
         Spacer(Modifier.height(16.dp))
-        Button(onClick = { onSave(v.toDouble()) }, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(16.dp)) {
-            Text("Save", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Button(
+            onClick = { onSave(v.toDouble()) },
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) { Text("Save", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+            Text("Cancel", color = TextSecondary)
         }
-        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
     }
 }
 
 @Composable
 private fun RefuelModal(
     fuel: FuelStore,
+    accent: Color,
     onDismiss: () -> Unit,
     onSave: (Double, Double, Double, Boolean) -> Unit,
 ) {
@@ -1273,9 +1521,9 @@ private fun RefuelModal(
     var odo by remember { mutableStateOf(if (fuel.currentOdo > 0) String.format(Locale.US, "%.0f", fuel.currentOdo) else "") }
     var tankFull by remember { mutableStateOf(true) }
 
-    ModalScaffold(onDismiss = onDismiss) {
-        Text("Log refuel", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("Fill in what you see at the pump", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    ModalScaffold(accent = accent, onDismiss = onDismiss) {
+        Text("Log refuel", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text("Fill in what you see at the pump", fontSize = 13.sp, color = TextSecondary)
         Spacer(Modifier.height(16.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1307,14 +1555,18 @@ private fun RefuelModal(
         )
         Spacer(Modifier.height(12.dp))
         Surface(
-            shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(12.dp), color = ElevatedBg,
             modifier = Modifier.fillMaxWidth().clickable { tankFull = !tankFull }
         ) {
             Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = tankFull, onCheckedChange = { tankFull = it })
+                Checkbox(
+                    checked = tankFull,
+                    onCheckedChange = { tankFull = it },
+                    colors = CheckboxDefaults.colors(checkedColor = accent)
+                )
                 Column {
-                    Text("Tank is full", fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                    Text("Gives the most accurate readings", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Tank is full", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+                    Text("Gives the most accurate readings", fontSize = 12.sp, color = TextSecondary)
                 }
             }
         }
@@ -1331,19 +1583,21 @@ private fun RefuelModal(
             modifier = Modifier.fillMaxWidth().height(54.dp),
             shape = RoundedCornerShape(16.dp)
         ) { Text("Save", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
-        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+            Text("Cancel", color = TextSecondary)
+        }
     }
 }
 
 @Composable
-private fun FuelSettingsModal(fuel: FuelStore, onDismiss: () -> Unit) {
+private fun FuelSettingsModal(fuel: FuelStore, accent: Color, onDismiss: () -> Unit) {
     var tank by remember { mutableStateOf(if (fuel.tankCapacity > 0) String.format(Locale.US, "%.0f", fuel.tankCapacity) else "") }
     var odo by remember { mutableStateOf(if (fuel.baselineOdo > 0) String.format(Locale.US, "%.0f", fuel.baselineOdo) else "") }
     var cur by remember { mutableStateOf(fuel.currency) }
 
-    ModalScaffold(onDismiss = onDismiss) {
-        Text("Fuel settings", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("These values power the fuel estimate", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    ModalScaffold(accent = accent, onDismiss = onDismiss) {
+        Text("Fuel settings", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text("These values power the fuel estimate", fontSize = 13.sp, color = TextSecondary)
         Spacer(Modifier.height(16.dp))
 
         OutlinedTextField(
@@ -1381,26 +1635,45 @@ private fun FuelSettingsModal(fuel: FuelStore, onDismiss: () -> Unit) {
             modifier = Modifier.fillMaxWidth().height(54.dp),
             shape = RoundedCornerShape(16.dp)
         ) { Text("Save", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
-        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+            Text("Cancel", color = TextSecondary)
+        }
     }
 }
 
 @Composable
-private fun ModalScaffold(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+private fun ModalScaffold(
+    accent: Color,
+    onDismiss: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Box(
-        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).clickable { onDismiss() },
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable { onDismiss() },
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth().clickable(enabled = false) {},
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = CardBg,
             shadowElevation = 16.dp
         ) {
-            Column(
-                Modifier.fillMaxWidth().padding(20.dp),
-                content = content
-            )
+            Box {
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(accent.copy(alpha = 0.10f), Color.Transparent),
+                                start = Offset(0f, 0f),
+                                end = Offset(800f, 350f)
+                            )
+                        )
+                )
+                Column(
+                    Modifier.fillMaxWidth().padding(20.dp),
+                    content = content
+                )
+            }
         }
     }
 }
