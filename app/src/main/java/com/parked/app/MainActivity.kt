@@ -22,12 +22,16 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,7 +50,6 @@ import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.LocalParking
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.LocalGasStation
 import androidx.compose.material.icons.outlined.LocalParking
@@ -54,12 +57,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -88,13 +94,22 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.*
 
+// ============================================================
+// MainActivity
+// ============================================================
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         Configuration.getInstance().userAgentValue = packageName
         setContent { ParkedRoot() }
     }
 }
+
+// ============================================================
+// Colors & accents
+// ============================================================
 
 data class AccentDef(val name: String, val color: Color)
 
@@ -119,6 +134,10 @@ private val SuccessGreen = Color(0xFF34C759)
 private val WarningYellow= Color(0xFFFFCC00)
 private val DangerRed    = Color(0xFFFF453A)
 
+// ============================================================
+// Theme
+// ============================================================
+
 @Composable
 fun ParkedTheme(accent: Color, content: @Composable () -> Unit) {
     val scheme = darkColorScheme(
@@ -138,6 +157,10 @@ fun ParkedTheme(accent: Color, content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = scheme, content = content)
 }
 
+// ============================================================
+// Root
+// ============================================================
+
 @Composable
 fun ParkedRoot() {
     val context = LocalContext.current
@@ -154,34 +177,98 @@ fun ParkedRoot() {
 fun ParkedApp(fuel: FuelStore, accent: Color) {
     var showSplash by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
-        delay(1500)
+        delay(2400)
         showSplash = false
     }
-    Crossfade(targetState = showSplash, animationSpec = tween(450)) { splash ->
+    Crossfade(targetState = showSplash, animationSpec = tween(700)) { splash ->
         if (splash) SplashScreen(accent) else MainContent(fuel = fuel, accent = accent)
     }
 }
 
+// ============================================================
+// Splash — animated logo
+// ============================================================
+
 @Composable
 fun SplashScreen(accent: Color) {
+    val logoScale = remember { Animatable(0.6f) }
+    val logoAlpha = remember { Animatable(0f) }
+    val textAlpha = remember { Animatable(0f) }
+    val titleSlide = remember { Animatable(24f) }
+    val glowAlpha = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        // Glow fades in first
+        launch {
+            glowAlpha.animateTo(1f, tween(900, easing = FastOutSlowInEasing))
+        }
+        // Logo fades in + scales up
+        launch {
+            logoAlpha.animateTo(1f, tween(650, easing = FastOutSlowInEasing))
+        }
+        logoScale.animateTo(1f, tween(900, easing = FastOutSlowInEasing))
+        // Text slides up + fades in after a short delay
+        launch {
+            textAlpha.animateTo(1f, tween(550, delayMillis = 450, easing = FastOutSlowInEasing))
+        }
+        titleSlide.animateTo(0f, tween(700, delayMillis = 450, easing = FastOutSlowInEasing))
+    }
+
     Box(
         Modifier.fillMaxSize().background(AppBg),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                Modifier.size(96.dp).background(accent, RoundedCornerShape(24.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("P", fontSize = 56.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-            Spacer(Modifier.height(20.dp))
-            Text("Parked!", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            Spacer(Modifier.height(6.dp))
-            Text("Never lose your car again", fontSize = 14.sp, color = TextSecondary)
+        // Soft accent glow behind logo
+        Box(
+            Modifier
+                .size(280.dp)
+                .alpha(glowAlpha.value)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(accent.copy(alpha = 0.25f), Color.Transparent)
+                    ),
+                    CircleShape
+                )
+        )
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 32.dp)
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_parked_logo),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(160.dp)
+                    .alpha(logoAlpha.value)
+                    .scale(logoScale.value)
+            )
+            Spacer(Modifier.height(22.dp))
+            Text(
+                "Parked!",
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+                modifier = Modifier
+                    .alpha(textAlpha.value)
+                    .offset(y = titleSlide.value.dp)
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Never lose your car again",
+                fontSize = 14.sp,
+                color = TextSecondary,
+                modifier = Modifier
+                    .alpha(textAlpha.value * 0.9f)
+                    .offset(y = titleSlide.value.dp)
+            )
         }
     }
 }
+
+// ============================================================
+// Screens enum
+// ============================================================
 
 enum class AppScreen(
     val label: String,
@@ -192,6 +279,10 @@ enum class AppScreen(
     Fuel("Fuel", Icons.Filled.LocalGasStation, Icons.Outlined.LocalGasStation),
     Car("Car", Icons.Filled.DirectionsCar, Icons.Outlined.DirectionsCar),
 }
+
+// ============================================================
+// Helpers
+// ============================================================
 
 private fun ensureBluetoothOn(context: Context) {
     val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return
@@ -264,6 +355,10 @@ private fun makeCarMarker(ctx: Context, accent: Color): BitmapDrawable {
 
     return BitmapDrawable(ctx.resources, bmp)
 }
+
+// ============================================================
+// Main content — floating pill header over content
+// ============================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -347,88 +442,30 @@ fun MainContent(fuel: FuelStore, accent: Color) {
 
     Scaffold(
         containerColor = AppBg,
-        topBar = {
-            Column {
-                CompactHeader(
-                    title = screen.label,
-                    subtitle = if (screen == AppScreen.Fuel) fuelOdoSub else null
-                )
-                HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
-            }
-        },
         bottomBar = {
             BottomNav(screen = screen, accent = accent, onChange = { screen = it })
         }
     ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
-            Crossfade(
-                targetState = screen,
-                animationSpec = tween(220),
-                label = "screenFade"
-            ) { s ->
-                when (s) {
-                    AppScreen.Parking -> ParkingScreen(
-                        state = state,
-                        liveLat = liveLat,
-                        liveLng = liveLng,
-                        liveAccuracy = liveAccuracy,
-                        accent = accent,
-                        onEnableMonitoring = {
-                            requestPermissions()
-                            ensureBluetoothOn(context); ensureLocationOn(context)
-                            runCatching {
-                                ContextCompat.startForegroundService(
-                                    context, Intent(context, ParkingMonitorService::class.java)
-                                )
-                            }
-                            scope.launch { store.setMonitoring(true) }
-                        },
-                        onUpdateSpot = {
-                            requestPermissions(); ensureLocationOn(context)
-                            val granted = ContextCompat.checkSelfPermission(
-                                context, Manifest.permission.ACCESS_FINE_LOCATION
-                            ) == PackageManager.PERMISSION_GRANTED
-                            if (granted) {
-                                LocationServices.getFusedLocationProviderClient(context)
-                                    .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-                                    .addOnSuccessListener { loc ->
-                                        if (loc != null) scope.launch {
-                                            store.saveParking(loc.latitude, loc.longitude)
-                                        }
-                                    }
-                            }
-                        },
-                        onEndParking = {
-                            scope.launch { store.saveParking(0.0, 0.0) }
-                        },
-                        onDirections = {
-                            val lat = state.parkedLat; val lng = state.parkedLng
-                            if (lat != null && lng != null && !(lat == 0.0 && lng == 0.0)) {
-                                ensureLocationOn(context)
-                                val navIntent = Intent(
-                                    Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$lat,$lng&mode=d")
-                                ).apply {
-                                    setPackage("com.google.android.apps.maps")
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                val ok = runCatching { context.startActivity(navIntent) }.isSuccess
-                                if (!ok) runCatching {
-                                    context.startActivity(
-                                        Intent(Intent.ACTION_VIEW,
-                                            Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
-                                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    )
-                                }
-                            }
-                        }
-                    )
-                    AppScreen.Fuel -> FuelScreen(fuel = fuel, accent = accent)
-                    AppScreen.Car -> CarScreen(
-                        state = state,
-                        fuel = fuel,
-                        accent = accent,
-                        onMonitoringToggle = { on ->
-                            if (on) {
+        Box(Modifier.fillMaxSize()) {
+            // Content — padded only at bottom for nav
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(bottom = padding.calculateBottomPadding())
+            ) {
+                Crossfade(
+                    targetState = screen,
+                    animationSpec = tween(220),
+                    label = "screenFade"
+                ) { s ->
+                    when (s) {
+                        AppScreen.Parking -> ParkingScreen(
+                            state = state,
+                            liveLat = liveLat,
+                            liveLng = liveLng,
+                            liveAccuracy = liveAccuracy,
+                            accent = accent,
+                            onEnableMonitoring = {
                                 requestPermissions()
                                 ensureBluetoothOn(context); ensureLocationOn(context)
                                 runCatching {
@@ -437,39 +474,138 @@ fun MainContent(fuel: FuelStore, accent: Color) {
                                     )
                                 }
                                 scope.launch { store.setMonitoring(true) }
-                            } else {
-                                runCatching { context.stopService(Intent(context, ParkingMonitorService::class.java)) }
-                                scope.launch { store.setMonitoring(false) }
+                            },
+                            onUpdateSpot = {
+                                requestPermissions(); ensureLocationOn(context)
+                                val granted = ContextCompat.checkSelfPermission(
+                                    context, Manifest.permission.ACCESS_FINE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (granted) {
+                                    LocationServices.getFusedLocationProviderClient(context)
+                                        .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                                        .addOnSuccessListener { loc ->
+                                            if (loc != null) scope.launch {
+                                                store.saveParking(loc.latitude, loc.longitude)
+                                            }
+                                        }
+                                }
+                            },
+                            onEndParking = {
+                                scope.launch { store.saveParking(0.0, 0.0) }
+                            },
+                            onDirections = {
+                                val lat = state.parkedLat; val lng = state.parkedLng
+                                if (lat != null && lng != null && !(lat == 0.0 && lng == 0.0)) {
+                                    ensureLocationOn(context)
+                                    val navIntent = Intent(
+                                        Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$lat,$lng&mode=d")
+                                    ).apply {
+                                        setPackage("com.google.android.apps.maps")
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    val ok = runCatching { context.startActivity(navIntent) }.isSuccess
+                                    if (!ok) runCatching {
+                                        context.startActivity(
+                                            Intent(Intent.ACTION_VIEW,
+                                                Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
+                                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        )
+                                    }
+                                }
                             }
-                        },
-                        onSelectDevice = { name, address ->
-                            scope.launch { store.selectDevice(name, address) }
-                        }
+                        )
+                        AppScreen.Fuel -> FuelScreen(fuel = fuel, accent = accent)
+                        AppScreen.Car -> CarScreen(
+                            state = state,
+                            fuel = fuel,
+                            accent = accent,
+                            onMonitoringToggle = { on ->
+                                if (on) {
+                                    requestPermissions()
+                                    ensureBluetoothOn(context); ensureLocationOn(context)
+                                    runCatching {
+                                        ContextCompat.startForegroundService(
+                                            context, Intent(context, ParkingMonitorService::class.java)
+                                        )
+                                    }
+                                    scope.launch { store.setMonitoring(true) }
+                                } else {
+                                    runCatching { context.stopService(Intent(context, ParkingMonitorService::class.java)) }
+                                    scope.launch { store.setMonitoring(false) }
+                                }
+                            },
+                            onSelectDevice = { name, address ->
+                                scope.launch { store.selectDevice(name, address) }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Floating pill header — over the map, top-left
+            FloatingHeader(
+                title = screen.label,
+                subtitle = if (screen == AppScreen.Fuel) fuelOdoSub else null,
+                modifier = Modifier.align(Alignment.TopStart)
+            )
+        }
+    }
+}
+
+// ============================================================
+// Floating pill header
+// ============================================================
+
+@Composable
+fun FloatingHeader(
+    title: String,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier
+            .statusBarsPadding()
+            .padding(start = 14.dp, top = 10.dp, end = 14.dp)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = Color.White.copy(alpha = 0.07f),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+            shadowElevation = 10.dp
+        ) {
+            Row(
+                Modifier.padding(start = 8.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_parked_logo),
+                    contentDescription = null,
+                    modifier = Modifier.size(30.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        title,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
                     )
+                    if (subtitle != null) {
+                        Text(
+                            subtitle,
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-@Composable
-fun CompactHeader(title: String, subtitle: String? = null) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .height(60.dp)
-            .padding(horizontal = 20.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Column {
-            Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            if (subtitle != null) {
-                Text(subtitle, fontSize = 12.sp, color = TextSecondary)
-            }
-        }
-    }
-}
+// ============================================================
+// Bottom nav
+// ============================================================
 
 @Composable
 fun BottomNav(screen: AppScreen, accent: Color, onChange: (AppScreen) -> Unit) {
@@ -523,6 +659,10 @@ fun BottomNav(screen: AppScreen, accent: Color, onChange: (AppScreen) -> Unit) {
         }
     }
 }
+
+// ============================================================
+// Parking screen
+// ============================================================
 
 @Composable
 fun ParkingScreen(
@@ -579,7 +719,10 @@ fun ParkingScreen(
             )
 
             Column(
-                Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 16.dp),
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 70.dp, end = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (hasValidParking && parkedButtonVisible) {
@@ -725,7 +868,7 @@ fun FloatingControl(icon: ImageVector, label: String, accent: Color, onClick: ()
         onClick = onClick,
         modifier = Modifier.size(48.dp),
         shape = CircleShape,
-        color = ElevatedBg,
+        color = ElevatedBg.copy(alpha = 0.95f),
         shadowElevation = 6.dp,
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
     ) {
@@ -764,6 +907,10 @@ fun AmbientSheet(accent: Color, content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
+// ============================================================
+// Fuel screen
+// ============================================================
+
 @Composable
 fun FuelScreen(fuel: FuelStore, accent: Color) {
     var showSlider by remember { mutableStateOf(false) }
@@ -777,7 +924,13 @@ fun FuelScreen(fuel: FuelStore, accent: Color) {
     val hasAnyFill = fuel.refuels.isNotEmpty()
 
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .statusBarsPadding()
+                .padding(start = 20.dp, end = 20.dp, top = 90.dp, bottom = 20.dp)
+        ) {
 
             if (!fuel.isConfigured) {
                 Text("Set up your car", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
@@ -949,7 +1102,11 @@ fun FuelScreen(fuel: FuelStore, accent: Color) {
         if (hasAnyFill) {
             Surface(
                 onClick = { showRefuel = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp).size(56.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(24.dp)
+                    .size(56.dp),
                 shape = CircleShape,
                 color = accent,
                 shadowElevation = 10.dp
@@ -982,6 +1139,10 @@ fun FuelScreen(fuel: FuelStore, accent: Color) {
     }
 }
 
+// ============================================================
+// Car screen
+// ============================================================
+
 @Composable
 fun CarScreen(
     state: com.parked.app.data.ParkingState,
@@ -995,7 +1156,11 @@ fun CarScreen(
     var showAppearance by remember { mutableStateOf(false) }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .statusBarsPadding()
+            .padding(start = 20.dp, end = 20.dp, top = 90.dp, bottom = 20.dp)
     ) {
         SectionHeader("VEHICLE")
         SettingsRow(
@@ -1200,6 +1365,10 @@ private fun PreferenceRow(label: String, value: String) {
     }
 }
 
+// ============================================================
+// Appearance modal
+// ============================================================
+
 @Composable
 private fun AppearanceModal(fuel: FuelStore, accent: Color, onDismiss: () -> Unit) {
     ModalScaffold(accent = accent, onDismiss = onDismiss) {
@@ -1273,6 +1442,10 @@ private fun AccentSwatch(
     }
 }
 
+// ============================================================
+// Device picker dialog
+// ============================================================
+
 @Composable
 fun DevicePickerDialog(
     accent: Color,
@@ -1321,6 +1494,10 @@ fun DevicePickerDialog(
         }
     )
 }
+
+// ============================================================
+// Map
+// ============================================================
 
 private class RippleOverlay(
     private val point: GeoPoint,
@@ -1417,7 +1594,6 @@ fun ParkedMap(
                     parkedMarkerRef.value?.let { map.overlays.remove(it) }
                     rippleRef.value?.let { map.overlays.remove(it) }
 
-                    // Start with anchor way below → marker appears high above ground
                     val marker = Marker(map).apply {
                         position = newParked
                         title = "Parked car"
@@ -1431,7 +1607,6 @@ fun ParkedMap(
                     map.overlays.add(ripple)
                     rippleRef.value = ripple
 
-                    // Drop: animate anchor from 1.8 → 1.0
                     scope.launch {
                         val frames = 24
                         for (i in 0..frames) {
@@ -1488,6 +1663,10 @@ fun ParkedMap(
         }
     )
 }
+
+// ============================================================
+// Stat card + refuel row
+// ============================================================
 
 @Composable
 private fun StatCard(label: String, value: String, unit: String, sub: String, modifier: Modifier = Modifier) {
@@ -1546,6 +1725,10 @@ private fun RefuelRow(r: Refuel, fuel: FuelStore, accent: Color) {
         }
     }
 }
+
+// ============================================================
+// Modals
+// ============================================================
 
 @Composable
 private fun SliderModal(
