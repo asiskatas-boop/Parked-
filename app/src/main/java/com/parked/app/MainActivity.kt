@@ -23,6 +23,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -389,69 +390,19 @@ fun MainContent(fuel: FuelStore, accent: Color) {
         }
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            when (screen) {
-                AppScreen.Parking -> ParkingScreen(
-                    state = state,
-                    liveLat = liveLat,
-                    liveLng = liveLng,
-                    liveAccuracy = liveAccuracy,
-                    accent = accent,
-                    onEnableMonitoring = {
-                        requestPermissions()
-                        ensureBluetoothOn(context); ensureLocationOn(context)
-                        runCatching {
-                            ContextCompat.startForegroundService(
-                                context, Intent(context, ParkingMonitorService::class.java)
-                            )
-                        }
-                        scope.launch { store.setMonitoring(true) }
-                    },
-                    onUpdateSpot = {
-                        requestPermissions(); ensureLocationOn(context)
-                        val granted = ContextCompat.checkSelfPermission(
-                            context, Manifest.permission.ACCESS_FINE_LOCATION
-                        ) == PackageManager.PERMISSION_GRANTED
-                        if (granted) {
-                            LocationServices.getFusedLocationProviderClient(context)
-                                .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-                                .addOnSuccessListener { loc ->
-                                    if (loc != null) scope.launch {
-                                        store.saveParking(loc.latitude, loc.longitude)
-                                    }
-                                }
-                        }
-                    },
-                    onEndParking = {
-                        scope.launch { store.saveParking(0.0, 0.0) }
-                    },
-                    onDirections = {
-                        val lat = state.parkedLat; val lng = state.parkedLng
-                        if (lat != null && lng != null && !(lat == 0.0 && lng == 0.0)) {
-                            ensureLocationOn(context)
-                            val navIntent = Intent(
-                                Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$lat,$lng&mode=d")
-                            ).apply {
-                                setPackage("com.google.android.apps.maps")
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            val ok = runCatching { context.startActivity(navIntent) }.isSuccess
-                            if (!ok) runCatching {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW,
-                                        Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
-                                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                )
-                            }
-                        }
-                    }
-                )
-                AppScreen.Fuel -> FuelScreen(fuel = fuel, accent = accent)
-                AppScreen.Car -> CarScreen(
-                    state = state,
-                    fuel = fuel,
-                    accent = accent,
-                    onMonitoringToggle = { on ->
-                        if (on) {
+            Crossfade(
+                targetState = screen,
+                animationSpec = tween(220),
+                label = "screenFade"
+            ) { s ->
+                when (s) {
+                    AppScreen.Parking -> ParkingScreen(
+                        state = state,
+                        liveLat = liveLat,
+                        liveLng = liveLng,
+                        liveAccuracy = liveAccuracy,
+                        accent = accent,
+                        onEnableMonitoring = {
                             requestPermissions()
                             ensureBluetoothOn(context); ensureLocationOn(context)
                             runCatching {
@@ -460,15 +411,71 @@ fun MainContent(fuel: FuelStore, accent: Color) {
                                 )
                             }
                             scope.launch { store.setMonitoring(true) }
-                        } else {
-                            runCatching { context.stopService(Intent(context, ParkingMonitorService::class.java)) }
-                            scope.launch { store.setMonitoring(false) }
+                        },
+                        onUpdateSpot = {
+                            requestPermissions(); ensureLocationOn(context)
+                            val granted = ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.ACCESS_FINE_LOCATION
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (granted) {
+                                LocationServices.getFusedLocationProviderClient(context)
+                                    .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                                    .addOnSuccessListener { loc ->
+                                        if (loc != null) scope.launch {
+                                            store.saveParking(loc.latitude, loc.longitude)
+                                        }
+                                    }
+                            }
+                        },
+                        onEndParking = {
+                            scope.launch { store.saveParking(0.0, 0.0) }
+                        },
+                        onDirections = {
+                            val lat = state.parkedLat; val lng = state.parkedLng
+                            if (lat != null && lng != null && !(lat == 0.0 && lng == 0.0)) {
+                                ensureLocationOn(context)
+                                val navIntent = Intent(
+                                    Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$lat,$lng&mode=d")
+                                ).apply {
+                                    setPackage("com.google.android.apps.maps")
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                val ok = runCatching { context.startActivity(navIntent) }.isSuccess
+                                if (!ok) runCatching {
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_VIEW,
+                                            Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
+                                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                }
+                            }
                         }
-                    },
-                    onSelectDevice = { name, address ->
-                        scope.launch { store.selectDevice(name, address) }
-                    }
-                )
+                    )
+                    AppScreen.Fuel -> FuelScreen(fuel = fuel, accent = accent)
+                    AppScreen.Car -> CarScreen(
+                        state = state,
+                        fuel = fuel,
+                        accent = accent,
+                        onMonitoringToggle = { on ->
+                            if (on) {
+                                requestPermissions()
+                                ensureBluetoothOn(context); ensureLocationOn(context)
+                                runCatching {
+                                    ContextCompat.startForegroundService(
+                                        context, Intent(context, ParkingMonitorService::class.java)
+                                    )
+                                }
+                                scope.launch { store.setMonitoring(true) }
+                            } else {
+                                runCatching { context.stopService(Intent(context, ParkingMonitorService::class.java)) }
+                                scope.launch { store.setMonitoring(false) }
+                            }
+                        },
+                        onSelectDevice = { name, address ->
+                            scope.launch { store.selectDevice(name, address) }
+                        }
+                    )
+                }
             }
         }
     }
@@ -830,7 +837,16 @@ fun FuelScreen(fuel: FuelStore, accent: Color) {
                     Spacer(Modifier.height(14.dp))
 
                     val lowFuel = level < 20
-                    val barColor = if (lowFuel) WarningYellow else accent
+                    val barColor by animateColorAsState(
+                        targetValue = if (lowFuel) WarningYellow else accent,
+                        animationSpec = tween(400),
+                        label = "barColor"
+                    )
+                    val fraction by animateFloatAsState(
+                        targetValue = (level.toFloat() / 100f).coerceIn(0f, 1f),
+                        animationSpec = tween(700),
+                        label = "fuelFrac"
+                    )
                     Box(
                         Modifier
                             .fillMaxWidth()
@@ -841,7 +857,7 @@ fun FuelScreen(fuel: FuelStore, accent: Color) {
                         Box(
                             Modifier
                                 .fillMaxHeight()
-                                .fillMaxWidth((level.toFloat() / 100f).coerceIn(0f, 1f))
+                                .fillMaxWidth(fraction)
                                 .background(barColor, RoundedCornerShape(999.dp))
                         )
                     }
