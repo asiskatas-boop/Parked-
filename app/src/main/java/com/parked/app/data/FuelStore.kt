@@ -41,6 +41,9 @@ class FuelStore(context: Context) {
     var refuels: List<Refuel> by mutableStateOf(loadRefuels())
         private set
 
+    var accentName: String by mutableStateOf(prefs.getString("accentName", "Electric") ?: "Electric")
+        private set
+
     val currentOdo: Double get() = baselineOdo + gpsKm
 
     val isConfigured: Boolean get() = tankCapacity > 0 && baselineOdo > 0
@@ -73,6 +76,11 @@ class FuelStore(context: Context) {
     fun updateUnits(v: String) {
         units = v
         prefs.edit().putString("units", v).apply()
+    }
+
+    fun setAccent(name: String) {
+        accentName = name
+        prefs.edit().putString("accentName", name).apply()
     }
 
     fun setLevel(pct: Double) {
