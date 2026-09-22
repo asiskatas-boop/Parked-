@@ -51,10 +51,15 @@ class ParkingMonitorService : Service() {
             addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
         })
-        startForeground(1, notification("Watching your car connection"))
+        try {
+            startForeground(1, notification("Watching your car connection"))
+        } catch (_: Exception) {
+            stopSelf()
+            return
+        }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(receiver) }
@@ -121,12 +126,15 @@ class ParkingMonitorService : Service() {
             .addOnSuccessListener { loc ->
                 if (loc != null) {
                     scope.launch { store.saveParking(loc.latitude, loc.longitude) }
-                    getSystemService(NotificationManager::class.java).notify(2,
-                        NotificationCompat.Builder(this, CHANNEL)
-                            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-                            .setContentTitle("Parking location saved")
-                            .setContentText("$deviceName disconnected — Parked! saved this spot.")
-                            .setAutoCancel(true).build())
+
+                    if (fuel.notificationsEnabled) {
+                        getSystemService(NotificationManager::class.java).notify(2,
+                            NotificationCompat.Builder(this, CHANNEL)
+                                .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+                                .setContentTitle("Parking location saved")
+                                .setContentText("$deviceName disconnected — Parked! saved this spot.")
+                                .setAutoCancel(true).build())
+                    }
                     notifyStatus("Parking spot saved")
                 }
             }
