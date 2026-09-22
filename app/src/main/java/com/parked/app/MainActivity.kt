@@ -47,12 +47,11 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.LocalGasStation
-import androidx.compose.material.icons.filled.LocalParking
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.LocalGasStation
-import androidx.compose.material.icons.outlined.LocalParking
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -88,8 +87,8 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
-import java.text.DateFormat
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.*
@@ -108,7 +107,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // ============================================================
-// Colors & accents
+// Accents
 // ============================================================
 
 data class AccentDef(val name: String, val color: Color)
@@ -122,14 +121,18 @@ private val Accents = listOf(
     AccentDef("Mono",         Color(0xFFE5E7EB)),
 )
 
+// ---- Surfaces ----
 private val AppBg        = Color(0xFF0B0B0D)
 private val CardBg       = Color(0xFF16171A)
 private val ElevatedBg   = Color(0xFF1F2024)
-private val BorderSubtle = Color(0x14FFFFFF)
-private val TextPrimary  = Color(0xFFF5F5F7)
-private val TextSecondary= Color(0xFF9CA3AF)
-private val TextMuted    = Color(0xFF6B7280)
+private val BorderSubtle = Color(0x1AFFFFFF)
 
+// ---- Text (accessible contrast) ----
+private val TextPrimary   = Color(0xFFF7F7F7)   // main
+private val TextSecondary = Color(0xFFD0D0D3)   // secondary info
+private val TextMuted     = Color(0xFFB3B3BA)   // inactive nav / tertiary
+
+// ---- Semantic ----
 private val SuccessGreen = Color(0xFF34C759)
 private val WarningYellow= Color(0xFFFFCC00)
 private val DangerRed    = Color(0xFFFF453A)
@@ -186,7 +189,7 @@ fun ParkedApp(fuel: FuelStore, accent: Color) {
 }
 
 // ============================================================
-// Splash — animated logo
+// Splash — colorful logo
 // ============================================================
 
 @Composable
@@ -198,19 +201,10 @@ fun SplashScreen(accent: Color) {
     val glowAlpha = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
-        // Glow fades in first
-        launch {
-            glowAlpha.animateTo(1f, tween(900, easing = FastOutSlowInEasing))
-        }
-        // Logo fades in + scales up
-        launch {
-            logoAlpha.animateTo(1f, tween(650, easing = FastOutSlowInEasing))
-        }
+        launch { glowAlpha.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
+        launch { logoAlpha.animateTo(1f, tween(650, easing = FastOutSlowInEasing)) }
         logoScale.animateTo(1f, tween(900, easing = FastOutSlowInEasing))
-        // Text slides up + fades in after a short delay
-        launch {
-            textAlpha.animateTo(1f, tween(550, delayMillis = 450, easing = FastOutSlowInEasing))
-        }
+        launch { textAlpha.animateTo(1f, tween(550, delayMillis = 450, easing = FastOutSlowInEasing)) }
         titleSlide.animateTo(0f, tween(700, delayMillis = 450, easing = FastOutSlowInEasing))
     }
 
@@ -218,14 +212,13 @@ fun SplashScreen(accent: Color) {
         Modifier.fillMaxSize().background(AppBg),
         contentAlignment = Alignment.Center
     ) {
-        // Soft accent glow behind logo
         Box(
             Modifier
                 .size(280.dp)
                 .alpha(glowAlpha.value)
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(accent.copy(alpha = 0.25f), Color.Transparent)
+                        colors = listOf(accent.copy(alpha = 0.22f), Color.Transparent)
                     ),
                     CircleShape
                 )
@@ -259,7 +252,7 @@ fun SplashScreen(accent: Color) {
                 fontSize = 14.sp,
                 color = TextSecondary,
                 modifier = Modifier
-                    .alpha(textAlpha.value * 0.9f)
+                    .alpha(textAlpha.value * 0.95f)
                     .offset(y = titleSlide.value.dp)
             )
         }
@@ -275,7 +268,7 @@ enum class AppScreen(
     val filled: ImageVector,
     val outlined: ImageVector,
 ) {
-    Parking("Parking", Icons.Filled.LocalParking, Icons.Outlined.LocalParking),
+    Parking("Parking", Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
     Fuel("Fuel", Icons.Filled.LocalGasStation, Icons.Outlined.LocalGasStation),
     Car("Car", Icons.Filled.DirectionsCar, Icons.Outlined.DirectionsCar),
 }
@@ -312,20 +305,48 @@ private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): D
     return r * c
 }
 
+// Clean distance formatting — no decimals
 private fun distanceDisplay(meters: Double?, lowAccuracy: Boolean): String {
     if (meters == null) return "Finding your location…"
-    val r10 = (meters / 10.0).roundToInt() * 10
-    val r50 = (meters / 50.0).roundToInt() * 50
     return when {
         meters < 15 -> "You're at your car"
-        meters < 100 -> "About $r10 m away"
-        meters < 1000 && lowAccuracy -> "Approx. $r50 m away"
-        meters < 1000 -> "$r10 m away"
-        lowAccuracy -> "Approx. ${String.format(Locale.US, "%.1f", meters / 1000)} km away"
-        else -> "${String.format(Locale.US, "%.1f", meters / 1000)} km away"
+        meters < 100 -> {
+            val m = (meters / 10.0).roundToInt() * 10
+            if (lowAccuracy) "Approx. $m m away" else "About $m m away"
+        }
+        meters < 1000 -> {
+            val m = meters.roundToInt()
+            if (lowAccuracy) "Approx. $m m away" else "$m m away"
+        }
+        else -> {
+            val km = (meters / 1000.0).roundToInt()
+            if (lowAccuracy) "Approx. $km km away" else "$km km away"
+        }
     }
 }
 
+// Natural timestamp
+private fun naturalTimestamp(ts: Long): String {
+    val now = Calendar.getInstance()
+    val then = Calendar.getInstance().apply { timeInMillis = ts }
+    val timeFmt = SimpleDateFormat("h:mm a", Locale.getDefault())
+    val timeStr = timeFmt.format(Date(ts))
+
+    val sameYear = then.get(Calendar.YEAR) == now.get(Calendar.YEAR)
+    val sameDay = sameYear && then.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
+    val yesterday = sameYear && then.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR) - 1
+
+    return when {
+        sameDay -> "Parked today at $timeStr"
+        yesterday -> "Parked yesterday at $timeStr"
+        else -> {
+            val dateStr = SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(ts))
+            "Parked $dateStr at $timeStr"
+        }
+    }
+}
+
+// Custom car marker (accent-tinted circle + car silhouette + pointer)
 private fun makeCarMarker(ctx: Context, accent: Color): BitmapDrawable {
     val size = 120
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -357,7 +378,7 @@ private fun makeCarMarker(ctx: Context, accent: Color): BitmapDrawable {
 }
 
 // ============================================================
-// Main content — floating pill header over content
+// Main content
 // ============================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -447,7 +468,6 @@ fun MainContent(fuel: FuelStore, accent: Color) {
         }
     ) { padding ->
         Box(Modifier.fillMaxSize()) {
-            // Content — padded only at bottom for nav
             Box(
                 Modifier
                     .fillMaxSize()
@@ -542,10 +562,11 @@ fun MainContent(fuel: FuelStore, accent: Color) {
                 }
             }
 
-            // Floating pill header — over the map, top-left
+            // Floating pill header — accent-colored car icon + screen title
             FloatingHeader(
                 title = screen.label,
                 subtitle = if (screen == AppScreen.Fuel) fuelOdoSub else null,
+                accent = accent,
                 modifier = Modifier.align(Alignment.TopStart)
             )
         }
@@ -553,13 +574,14 @@ fun MainContent(fuel: FuelStore, accent: Color) {
 }
 
 // ============================================================
-// Floating pill header
+// Floating header pill
 // ============================================================
 
 @Composable
 fun FloatingHeader(
     title: String,
     subtitle: String? = null,
+    accent: Color,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -574,13 +596,14 @@ fun FloatingHeader(
             shadowElevation = 10.dp
         ) {
             Row(
-                Modifier.padding(start = 8.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+                Modifier.padding(start = 14.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_parked_logo),
+                Icon(
+                    Icons.Filled.DirectionsCar,
                     contentDescription = null,
-                    modifier = Modifier.size(30.dp)
+                    tint = accent,
+                    modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(10.dp))
                 Column {
@@ -615,7 +638,7 @@ fun BottomNav(screen: AppScreen, accent: Color, onChange: (AppScreen) -> Unit) {
             .background(CardBg)
             .navigationBarsPadding()
     ) {
-        HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+        HorizontalDivider(color = BorderSubtle)
         Row(
             Modifier.fillMaxWidth().height(64.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -651,7 +674,7 @@ fun BottomNav(screen: AppScreen, accent: Color, onChange: (AppScreen) -> Unit) {
                             s.label,
                             fontSize = 11.sp,
                             color = tint,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
                         )
                     }
                 }
@@ -776,11 +799,7 @@ fun ParkingScreen(
                 isAtCar -> {
                     Text("You're at your car", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                     Text(
-                        "Parked ${
-                            state.parkedAt?.let {
-                                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
-                            } ?: "recently"
-                        }",
+                        state.parkedAt?.let { naturalTimestamp(it) } ?: "Parked recently",
                         fontSize = 14.sp, color = TextSecondary
                     )
                     Spacer(Modifier.height(4.dp))
@@ -795,19 +814,15 @@ fun ParkingScreen(
                     TextButton(
                         onClick = { confirmMove = true },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Update parking spot", color = accent, fontSize = 14.sp) }
+                    ) { Text("Update parking spot", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
                 }
                 else -> {
                     Text(
                         distanceDisplay(distance, lowAcc),
-                        fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary
+                        fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary
                     )
                     Text(
-                        "Parked ${
-                            state.parkedAt?.let {
-                                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
-                            } ?: "recently"
-                        }",
+                        state.parkedAt?.let { naturalTimestamp(it) } ?: "Parked recently",
                         fontSize = 14.sp, color = TextSecondary
                     )
                     Spacer(Modifier.height(4.dp))
@@ -819,18 +834,27 @@ fun ParkingScreen(
                     TextButton(
                         onClick = { confirmMove = true },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Update parking spot", color = accent, fontSize = 14.sp) }
+                    ) { Text("Update parking spot", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
                 }
             }
 
             Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).background(
-                    if (state.monitoring) SuccessGreen else TextMuted, CircleShape))
-                Spacer(Modifier.width(8.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier.size(9.dp).background(
+                        if (state.monitoring) SuccessGreen else TextMuted,
+                        CircleShape
+                    )
+                )
+                Spacer(Modifier.width(10.dp))
                 Text(
                     if (state.monitoring) "Automatic parking on" else "Automatic parking off",
-                    fontSize = 13.sp, color = TextSecondary
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextSecondary
                 )
                 if (!state.monitoring) {
                     Spacer(Modifier.weight(1f))
@@ -870,7 +894,7 @@ fun FloatingControl(icon: ImageVector, label: String, accent: Color, onClick: ()
         shape = CircleShape,
         color = ElevatedBg.copy(alpha = 0.95f),
         shadowElevation = 6.dp,
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f))
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = label, tint = accent, modifier = Modifier.size(22.dp))
@@ -899,8 +923,8 @@ fun AmbientSheet(accent: Color, content: @Composable ColumnScope.() -> Unit) {
                     )
             )
             Column(
-                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
                 content = content
             )
         }
@@ -948,22 +972,22 @@ fun FuelScreen(fuel: FuelStore, accent: Color) {
                 border = BorderStroke(1.dp, BorderSubtle),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier.padding(20.dp)) {
+                Column(Modifier.padding(horizontal = 18.dp, vertical = 15.dp)) {
                     Text(
                         "FUEL LEVEL",
                         fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
                         color = TextSecondary, letterSpacing = 1.sp
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(level.toInt().toString(), fontSize = 42.sp, fontWeight = FontWeight.Bold, color = TextPrimary, lineHeight = 42.sp)
+                        Text(level.toInt().toString(), fontSize = 40.sp, fontWeight = FontWeight.Bold, color = TextPrimary, lineHeight = 40.sp)
                         Text(
-                            "%", fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                            "%", fontSize = 19.sp, fontWeight = FontWeight.Bold,
                             color = TextSecondary,
-                            modifier = Modifier.padding(start = 3.dp, bottom = 6.dp)
+                            modifier = Modifier.padding(start = 3.dp, bottom = 5.dp)
                         )
                     }
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(12.dp))
 
                     val lowFuel = level < 20
                     val barColor by animateColorAsState(
@@ -991,7 +1015,7 @@ fun FuelScreen(fuel: FuelStore, accent: Color) {
                         )
                     }
                     if (lowFuel) {
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(8.dp).background(WarningYellow, CircleShape))
                             Spacer(Modifier.width(8.dp))
@@ -999,27 +1023,27 @@ fun FuelScreen(fuel: FuelStore, accent: Color) {
                         }
                     }
 
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(12.dp))
                     HorizontalDivider(color = BorderSubtle)
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(10.dp))
 
                     if (rangeRemaining != null) {
                         Text(
                             "≈ ${rangeRemaining!!.toInt()} km estimated range",
-                            fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary
+                            fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary
                         )
                     } else {
-                        Text("Range unavailable", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                        Text("Range unavailable", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            "Log your first fill to start estimating range.",
+                            "Log your first fill to estimate range.",
                             fontSize = 13.sp, color = TextSecondary
                         )
                     }
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
 
             if (!hasAnyFill) {
                 Surface(
@@ -1028,14 +1052,14 @@ fun FuelScreen(fuel: FuelStore, accent: Color) {
                     border = BorderStroke(1.dp, BorderSubtle),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(Modifier.padding(20.dp)) {
+                    Column(Modifier.padding(horizontal = 18.dp, vertical = 15.dp)) {
                         Text("Track your fuel usage", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Log your first fill to see consumption, costs and estimated range.",
+                            "See consumption, costs and estimated range after your first fill.",
                             fontSize = 14.sp, color = TextSecondary, lineHeight = 20.sp
                         )
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(14.dp))
                         Button(
                             onClick = { showRefuel = true },
                             modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -1140,7 +1164,7 @@ fun FuelScreen(fuel: FuelStore, accent: Color) {
 }
 
 // ============================================================
-// Car screen
+// Car screen — grouped, chevron-driven
 // ============================================================
 
 @Composable
@@ -1155,39 +1179,78 @@ fun CarScreen(
     var showFuelSettings by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
 
+    val accentLabel = Accents.firstOrNull { it.color.value == accent.value }?.name ?: "Accent"
+
     Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .statusBarsPadding()
-            .padding(start = 20.dp, end = 20.dp, top = 90.dp, bottom = 20.dp)
+            .padding(start = 20.dp, end = 20.dp, top = 90.dp, bottom = 24.dp)
     ) {
+
+        // ---------- VEHICLE ----------
         SectionHeader("VEHICLE")
-        SettingsRow(
-            title = state.deviceName ?: "Not set",
-            subtitle = "Your car",
-            accent = accent,
-            onClick = { showDevicePicker = true }
-        )
-
-        Spacer(Modifier.height(20.dp))
-
-        SectionHeader("APPEARANCE")
-        SettingsRow(
-            title = Accents.firstOrNull { it.color.value == accent.value }?.name ?: "Accent",
-            subtitle = "Accent color",
-            accent = accent,
-            onClick = { showAppearance = true },
-            leading = {
-                Box(
-                    Modifier.size(28.dp).background(accent, CircleShape)
-                        .border(2.dp, Color.White.copy(alpha = 0.15f), CircleShape)
-                )
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = CardBg,
+            border = BorderStroke(1.dp, BorderSubtle),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { showDevicePicker = true }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.DirectionsCar, null, tint = accent, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        state.deviceName ?: "Not set",
+                        fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary
+                    )
+                    Text("Your car", fontSize = 12.sp, color = TextSecondary)
+                }
+                Text("›", fontSize = 22.sp, color = TextMuted)
             }
-        )
+        }
 
         Spacer(Modifier.height(20.dp))
 
+        // ---------- APPEARANCE ----------
+        SectionHeader("APPEARANCE")
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = CardBg,
+            border = BorderStroke(1.dp, BorderSubtle),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { showAppearance = true }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier.size(20.dp).background(accent, CircleShape)
+                        .border(1.5.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    accentLabel,
+                    fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
+                    modifier = Modifier.weight(1f)
+                )
+                Text("›", fontSize = 22.sp, color = TextMuted)
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // ---------- AUTOMATIC PARKING ----------
         SectionHeader("AUTOMATIC PARKING")
         Surface(
             shape = RoundedCornerShape(14.dp),
@@ -1195,28 +1258,29 @@ fun CarScreen(
             border = BorderStroke(1.dp, BorderSubtle),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier.size(9.dp).background(
+                            if (state.monitoring) SuccessGreen else TextMuted,
+                            CircleShape
+                        )
+                    )
+                    Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier.size(8.dp).background(
-                                    if (state.monitoring) SuccessGreen else TextMuted, CircleShape
-                                )
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                if (state.monitoring) "On" else "Off",
-                                fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary
-                            )
-                        }
-                        if (state.monitoring && state.deviceName != null) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "Connected to ${state.deviceName}",
-                                fontSize = 13.sp, color = TextSecondary
-                            )
-                        }
+                        Text(
+                            "Automatic parking",
+                            fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary
+                        )
+                        Text(
+                            if (state.monitoring) "On" else "Off",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (state.monitoring) TextPrimary else TextSecondary
+                        )
                     }
                     Switch(
                         checked = state.monitoring,
@@ -1224,19 +1288,20 @@ fun CarScreen(
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
                             checkedTrackColor = accent,
-                            uncheckedThumbColor = TextSecondary,
+                            uncheckedThumbColor = Color(0xFF8E8E93),
                             uncheckedTrackColor = ElevatedBg,
                         )
                     )
                 }
-                Spacer(Modifier.height(12.dp))
                 HorizontalDivider(color = BorderSubtle)
-                Spacer(Modifier.height(12.dp))
                 Row(
-                    Modifier.fillMaxWidth().clickable { showDevicePicker = true },
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { showDevicePicker = true }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Filled.DirectionsCar, null, tint = accent, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.DirectionsCar, null, tint = accent, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text("Bluetooth device", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
@@ -1245,33 +1310,45 @@ fun CarScreen(
                             fontSize = 13.sp, color = TextSecondary
                         )
                     }
-                    Text("Change", fontSize = 13.sp, color = accent, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Change",
+                        fontSize = 13.sp, color = accent, fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
 
         Spacer(Modifier.height(20.dp))
 
-        SectionHeader("ODOMETER")
-        SettingsRow(
-            title = if (fuel.isConfigured) String.format(Locale.US, "%,.0f km", fuel.currentOdo) else "Not set",
-            subtitle = "Tracked via GPS while connected",
-            accent = accent,
-            onClick = { showFuelSettings = true }
-        )
+        // ---------- VEHICLE DATA ----------
+        SectionHeader("VEHICLE DATA")
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = CardBg,
+            border = BorderStroke(1.dp, BorderSubtle),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column {
+                GroupedRow(
+                    label = "Odometer",
+                    value = if (fuel.isConfigured) String.format(Locale.US, "%,.0f km", fuel.currentOdo) else "Not set"
+                ) { showFuelSettings = true }
+                HorizontalDivider(color = BorderSubtle)
+                GroupedRow(
+                    label = "Fuel tank",
+                    value = if (fuel.tankCapacity > 0) "${fuel.tankCapacity.toInt()} L" else "Not set"
+                ) { showFuelSettings = true }
+                HorizontalDivider(color = BorderSubtle)
+                GroupedRow(
+                    label = "Currency",
+                    value = fuel.currency
+                ) { showFuelSettings = true }
+            }
+        }
 
         Spacer(Modifier.height(20.dp))
 
-        SectionHeader("FUEL")
-        SettingsRow(
-            title = if (fuel.tankCapacity > 0) "Tank · ${fuel.tankCapacity.toInt()} L" else "Tank size not set",
-            subtitle = "Currency · ${fuel.currency}",
-            accent = accent,
-            onClick = { showFuelSettings = true }
-        )
-
-        Spacer(Modifier.height(20.dp))
-
+        // ---------- PREFERENCES ----------
         SectionHeader("PREFERENCES")
         Surface(
             shape = RoundedCornerShape(14.dp),
@@ -1280,9 +1357,9 @@ fun CarScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column {
-                PreferenceRow("Units", "L/100 km")
+                GroupedRow(label = "Units", value = "L/100 km") { }
                 HorizontalDivider(color = BorderSubtle)
-                PreferenceRow("Notifications", "On")
+                GroupedRow(label = "Notifications", value = "On") { }
             }
         }
 
@@ -1326,42 +1403,22 @@ private fun SectionHeader(text: String) {
 }
 
 @Composable
-private fun SettingsRow(
-    title: String,
-    subtitle: String,
-    accent: Color,
-    onClick: () -> Unit,
-    leading: (@Composable () -> Unit)? = null,
+private fun GroupedRow(
+    label: String,
+    value: String,
+    onClick: () -> Unit = {},
 ) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
-        color = CardBg,
-        border = BorderStroke(1.dp, BorderSubtle),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (leading != null) {
-                leading()
-                Spacer(Modifier.width(12.dp))
-            }
-            Column(Modifier.weight(1f)) {
-                Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                Text(subtitle, fontSize = 12.sp, color = TextSecondary)
-            }
-            Text("Edit", fontSize = 13.sp, color = accent, fontWeight = FontWeight.SemiBold)
-        }
-    }
-}
-
-@Composable
-private fun PreferenceRow(label: String, value: String) {
     Row(
-        Modifier.fillMaxWidth().padding(16.dp),
+        Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, fontSize = 15.sp, color = TextPrimary, modifier = Modifier.weight(1f))
-        Text(value, fontSize = 13.sp, color = TextSecondary)
+        Text(value, fontSize = 14.sp, color = TextSecondary)
+        Spacer(Modifier.width(6.dp))
+        Text("›", fontSize = 22.sp, color = TextMuted)
     }
 }
 
@@ -1424,7 +1481,7 @@ private fun AccentSwatch(
                 .background(def.color, CircleShape)
                 .border(
                     width = if (selected) 2.dp else 1.dp,
-                    color = if (selected) Color.White else Color.White.copy(alpha = 0.12f),
+                    color = if (selected) Color.White else Color.White.copy(alpha = 0.15f),
                     shape = CircleShape
                 ),
             contentAlignment = Alignment.Center
@@ -1877,7 +1934,7 @@ private fun FuelSettingsModal(fuel: FuelStore, accent: Color, onDismiss: () -> U
     var cur by remember { mutableStateOf(fuel.currency) }
 
     ModalScaffold(accent = accent, onDismiss = onDismiss) {
-        Text("Fuel settings", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text("Vehicle data", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         Text("These values power the fuel estimate", fontSize = 13.sp, color = TextSecondary)
         Spacer(Modifier.height(16.dp))
 
@@ -1933,7 +1990,10 @@ private fun ModalScaffold(
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth().clickable(enabled = false) {},
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = false) {}
+                .navigationBarsPadding(),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             color = CardBg,
             shadowElevation = 16.dp
