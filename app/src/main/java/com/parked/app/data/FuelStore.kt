@@ -41,7 +41,15 @@ class FuelStore(context: Context) {
     var refuels: List<Refuel> by mutableStateOf(loadRefuels())
         private set
 
-    var accentName: String by mutableStateOf(prefs.getString("accentName", "Electric") ?: "Electric")
+    var accentName: String by mutableStateOf(prefs.getString("accentName", "Racing Green") ?: "Racing Green")
+        private set
+
+    var notificationsEnabled: Boolean by mutableStateOf(prefs.getBoolean("notificationsEnabled", true))
+        private set
+
+    var customAccentStart: Int by mutableStateOf(prefs.getInt("customAccentStart", 0))
+        private set
+    var customAccentEnd: Int by mutableStateOf(prefs.getInt("customAccentEnd", 0))
         private set
 
     val currentOdo: Double get() = baselineOdo + gpsKm
@@ -59,6 +67,17 @@ class FuelStore(context: Context) {
         gpsKm = 0.0
         prefs.edit()
             .putFloat("baselineOdo", value.toFloat())
+            .putFloat("gpsKm", 0f)
+            .apply()
+    }
+
+    /** Fold the GPS-accumulated km into the baseline and restart tracking. */
+    fun resetOdometerTracker() {
+        val newBaseline = currentOdo
+        baselineOdo = newBaseline
+        gpsKm = 0.0
+        prefs.edit()
+            .putFloat("baselineOdo", newBaseline.toFloat())
             .putFloat("gpsKm", 0f)
             .apply()
     }
@@ -81,6 +100,22 @@ class FuelStore(context: Context) {
     fun setAccent(name: String) {
         accentName = name
         prefs.edit().putString("accentName", name).apply()
+    }
+
+    fun setNotificationsEnabled(v: Boolean) {
+        notificationsEnabled = v
+        prefs.edit().putBoolean("notificationsEnabled", v).apply()
+    }
+
+    fun setCustomAccent(startArgb: Int, endArgb: Int) {
+        customAccentStart = startArgb
+        customAccentEnd = endArgb
+        accentName = "Match my car"
+        prefs.edit()
+            .putInt("customAccentStart", startArgb)
+            .putInt("customAccentEnd", endArgb)
+            .putString("accentName", "Match my car")
+            .apply()
     }
 
     fun setLevel(pct: Double) {
@@ -110,7 +145,6 @@ class FuelStore(context: Context) {
         }
     }
 
-    /** Average L/100km from the last few full-tank fills. Null if not enough data. */
     fun averageL100km(): Double? {
         val full = refuels.filter { it.tankFull }.take(6)
         if (full.size < 2) return null
@@ -128,7 +162,6 @@ class FuelStore(context: Context) {
         return tankCapacity / avg * 100.0
     }
 
-    /** Live estimate of current fuel level (0-100) */
     fun estimateLevelPct(): Double {
         val range = estimatedRangeKm() ?: return levelPct
         val driven = currentOdo - odoForLevel
