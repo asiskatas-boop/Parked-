@@ -71,7 +71,6 @@ class FuelStore(context: Context) {
             .apply()
     }
 
-    /** Fold the GPS-accumulated km into the baseline and restart tracking. */
     fun resetOdometerTracker() {
         val newBaseline = currentOdo
         baselineOdo = newBaseline
@@ -102,7 +101,7 @@ class FuelStore(context: Context) {
         prefs.edit().putString("accentName", name).apply()
     }
 
-    fun setNotificationsEnabled(v: Boolean) {
+    fun updateNotificationsEnabled(v: Boolean) {
         notificationsEnabled = v
         prefs.edit().putBoolean("notificationsEnabled", v).apply()
     }
