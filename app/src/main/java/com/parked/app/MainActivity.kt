@@ -113,7 +113,7 @@ private val Accents = listOf(
 private val AppBg        = Color(0xFF0B0B0D)
 private val CardBg       = Color(0xFF16171A)
 private val ElevatedBg   = Color(0xFF1F2024)
-private val BorderSubtle = Color(0x14FFFFFF)   // ~0.08 alpha
+private val BorderSubtle = Color(0x14FFFFFF)
 private val TextPrimary  = Color(0xFFF5F5F7)
 private val TextSecondary= Color(0xFF9CA3AF)
 private val TextMuted    = Color(0xFF6B7280)
@@ -256,7 +256,7 @@ private fun distanceDisplay(meters: Double?, lowAccuracy: Boolean): String {
 }
 
 // ============================================================
-// Custom car marker (drawn at runtime with accent color)
+// Custom car marker
 // ============================================================
 
 private fun makeCarMarker(ctx: Context, accent: Color): BitmapDrawable {
@@ -290,7 +290,7 @@ private fun makeCarMarker(ctx: Context, accent: Color): BitmapDrawable {
 }
 
 // ============================================================
-// Main content — Scaffold with compact header + bottom nav
+// Main content
 // ============================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -481,7 +481,11 @@ fun MainContent(fuel: FuelStore, accent: Color) {
 @Composable
 fun CompactHeader(title: String, subtitle: String? = null) {
     Box(
-        Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 20.dp),
+        Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .height(60.dp)
+            .padding(horizontal = 20.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         Column {
@@ -495,7 +499,12 @@ fun CompactHeader(title: String, subtitle: String? = null) {
 
 @Composable
 fun BottomNav(screen: AppScreen, accent: Color, onChange: (AppScreen) -> Unit) {
-    Column(Modifier.fillMaxWidth().background(CardBg)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(CardBg)
+            .navigationBarsPadding()
+    ) {
         HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
         Row(
             Modifier.fillMaxWidth().height(64.dp),
@@ -512,7 +521,6 @@ fun BottomNav(screen: AppScreen, accent: Color, onChange: (AppScreen) -> Unit) {
                     Modifier.weight(1f).fillMaxHeight().clickable { onChange(s) },
                     contentAlignment = Alignment.Center
                 ) {
-                    // Top indicator
                     Box(
                         Modifier
                             .align(Alignment.TopCenter)
@@ -740,7 +748,6 @@ fun FloatingControl(icon: ImageVector, label: String, accent: Color, onClick: ()
     }
 }
 
-// Ambient gradient bottom sheet
 @Composable
 fun AmbientSheet(accent: Color, content: @Composable ColumnScope.() -> Unit) {
     Surface(
@@ -799,7 +806,6 @@ fun FuelScreen(fuel: FuelStore, accent: Color) {
                 return@Column
             }
 
-            // Fuel level card
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = CardBg,
@@ -1354,6 +1360,7 @@ fun ParkedMap(
             MapView(ctx).apply {
                 setTileSource(TileSourceFactory.MAPNIK)
                 setMultiTouchControls(true)
+                setBuiltInZoomControls(false)
                 controller.setZoom(16.0)
                 val sLat = liveLat ?: parkedLat ?: 37.9838
                 val sLng = liveLng ?: parkedLng ?: 23.7275
