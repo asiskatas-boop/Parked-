@@ -136,7 +136,6 @@ private val Accents = listOf(
     AccentDef("Mono",         Color(0xFF6B7280), Color(0xFFE5E7EB)),
 )
 
-// ---- Surfaces ----
 private val AppBg         = Color(0xFF08090B)
 private val GlassBg       = Color(0xCC121316)
 private val GlassStroke   = Color(0x1AFFFFFF)
@@ -144,12 +143,10 @@ private val GlassHighlight= Color(0x0DFFFFFF)
 private val ElevatedBg    = Color(0xFF1A1B1F)
 private val BorderSubtle  = Color(0x1AFFFFFF)
 
-// ---- Text ----
 private val TextPrimary   = Color(0xFFF7F7F7)
 private val TextSecondary = Color(0xFFD0D0D3)
 private val TextMuted     = Color(0xFFB3B3BA)
 
-// ---- Semantic ----
 private val SuccessGreen  = Color(0xFF34C759)
 private val WarningYellow = Color(0xFFFFCC00)
 private val DangerRed     = Color(0xFFFF453A)
@@ -250,7 +247,7 @@ private fun GlassCard(
 }
 
 // ============================================================
-// Root — resolves accent (including custom)
+// Root
 // ============================================================
 
 @Composable
@@ -487,12 +484,12 @@ private fun makeCarMarker(ctx: Context, accent: AccentDef): BitmapDrawable {
 private fun extractAccentFromUri(context: Context, uri: Uri): Pair<Color, Color> {
     val fallback = Color(0xFF059669) to Color(0xFF84CC16)
     return try {
-        // Decode downsampled
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use {
             BitmapFactory.decodeStream(it, null, opts)
         }
-        val (w, h) = opts.outWidth to opts.outHeight
+        val w = opts.outWidth
+        val h = opts.outHeight
         if (w <= 0 || h <= 0) return fallback
 
         var sample = 1
@@ -1387,7 +1384,6 @@ fun CarScreen(
 
     val accentLabel = accent.name
 
-    // Gallery picker for "Match my car"
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -1429,7 +1425,6 @@ fun CarScreen(
 
         SectionHeader("APPEARANCE")
         GlassCard(accent = accent) {
-            // Accent row
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -1455,7 +1450,6 @@ fun CarScreen(
             Spacer(Modifier.height(6.dp))
             HorizontalDivider(color = BorderSubtle)
             Spacer(Modifier.height(6.dp))
-            // Match my car
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -1573,7 +1567,6 @@ fun CarScreen(
 
         SectionHeader("PREFERENCES")
         GlassCard(accent = accent) {
-            // Notifications toggle
             Row(
                 Modifier.fillMaxWidth().padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1588,7 +1581,7 @@ fun CarScreen(
                 }
                 Switch(
                     checked = fuel.notificationsEnabled,
-                    onCheckedChange = { fuel.updateNotificationsEnabled(it) },,
+                    onCheckedChange = { fuel.updateNotificationsEnabled(it) },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
                         checkedTrackColor = accent.solid,
@@ -1600,7 +1593,6 @@ fun CarScreen(
             Spacer(Modifier.height(6.dp))
             HorizontalDivider(color = BorderSubtle)
             Spacer(Modifier.height(6.dp))
-            // Reset odometer tracker
             Row(
                 Modifier
                     .fillMaxWidth()
