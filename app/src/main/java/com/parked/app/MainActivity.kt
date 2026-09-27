@@ -444,7 +444,6 @@ private fun makeCarMarker(ctx: Context, accent: AccentDef): BitmapDrawable {
     return BitmapDrawable(ctx.resources, bmp)
 }
 
-// Custom live-location dot (replaces the osmdroid hand pin)
 private fun makeLiveMarker(ctx: Context, accent: AccentDef): BitmapDrawable {
     val size = 100
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -453,21 +452,17 @@ private fun makeLiveMarker(ctx: Context, accent: AccentDef): BitmapDrawable {
     val cx = size / 2f
     val cy = size / 2f
 
-    // soft halo
     paint.color = accent.gradEnd.copy(alpha = 0.18f).toArgb()
     c.drawCircle(cx, cy, 34f, paint)
     paint.color = accent.gradEnd.copy(alpha = 0.08f).toArgb()
     c.drawCircle(cx, cy, 44f, paint)
 
-    // white ring
     paint.color = android.graphics.Color.WHITE
     c.drawCircle(cx, cy, 16f, paint)
 
-    // accent core
     paint.color = accent.solid.toArgb()
     c.drawCircle(cx, cy, 12f, paint)
 
-    // shine
     paint.color = android.graphics.Color.argb(200, 255, 255, 255)
     c.drawCircle(cx - 4f, cy - 4f, 3.5f, paint)
 
@@ -610,7 +605,6 @@ fun MainContent(fuel: FuelStore, accent: AccentDef) {
         }
     }
 
-    // Re-subscribe to location after phone calls / app switches
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, hasLocationPermission) {
         val observer = LifecycleEventObserver { _, event ->
@@ -1959,6 +1953,7 @@ fun ParkedMap(
                 )
                 setMultiTouchControls(true)
                 setBuiltInZoomControls(false)
+                setUseDataConnection(true)
                 controller.setZoom(16.0)
                 val sLat = liveLat ?: parkedLat ?: 37.9838
                 val sLng = liveLng ?: parkedLng ?: 23.7275
