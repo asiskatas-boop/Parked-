@@ -12,6 +12,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
 import com.parked.app.MainActivity
+import com.parked.app.R
 import com.parked.app.data.FuelStore
 import com.parked.app.data.ParkingStore
 import kotlinx.coroutines.*
@@ -52,14 +53,22 @@ class ParkingMonitorService : Service() {
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
         })
         try {
-            startForeground(1, notification("Watching your car connection"))
+            startForeground(1, buildNotification("Automatic parking on"))
         } catch (_: Exception) {
             stopSelf()
             return
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            try { getSystemService(NotificationManager::class.java).cancelAll() } catch (_: Exception) {}
+            stopLocationTracking()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        return START_NOT_STICKY
+    }
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(receiver) }
@@ -84,7 +93,7 @@ class ParkingMonitorService : Service() {
 
                 when (intent?.action) {
                     BluetoothDevice.ACTION_ACL_CONNECTED -> {
-                        notifyStatus("Connected to ${selected.deviceName ?: "car"}")
+                        notifyStatus("Automatic parking on")
                         startLocationTracking()
                     }
                     BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
@@ -130,10 +139,12 @@ class ParkingMonitorService : Service() {
                     if (fuel.notificationsEnabled) {
                         getSystemService(NotificationManager::class.java).notify(2,
                             NotificationCompat.Builder(this, CHANNEL)
-                                .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-                                .setContentTitle("Parking location saved")
-                                .setContentText("$deviceName disconnected — Parked! saved this spot.")
-                                .setAutoCancel(true).build())
+                                .setSmallIcon(R.drawable.ic_notification)
+                                .setContentTitle("Parking saved")
+                                .setContentText("Your parking spot has been saved.")
+                                .setAutoCancel(true)
+                                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                                .build())
                     }
                     notifyStatus("Parking spot saved")
                 }
@@ -141,27 +152,48 @@ class ParkingMonitorService : Service() {
     }
 
     private fun createChannel() {
-        getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "Parked! monitoring", NotificationManager.IMPORTANCE_LOW)
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL, "Automatic parking", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Keeps Parked! ready to save your spot"
+                setShowBadge(false)
+            }
         )
     }
 
-    private fun notification(text: String): Notification {
+    private fun buildNotification(text: String): Notification {
         val pending = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+
+        val stopIntent = Intent(this, ParkingMonitorService::class.java).apply {
+            action = ACTION_STOP
+        }
+        val stopPending = PendingIntent.getService(
+            this, 1, stopIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         return NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Parked!")
             .setContentText(text)
             .setContentIntent(pending)
-            .setOngoing(true).build()
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .addAction(R.drawable.ic_notification, "Stop", stopPending)
+            .build()
     }
 
     private fun notifyStatus(text: String) {
-        getSystemService(NotificationManager::class.java).notify(1, notification(text))
+        getSystemService(NotificationManager::class.java).notify(1, buildNotification(text))
     }
 
-    companion object { const val CHANNEL = "parked_monitor" }
+    companion object {
+        const val CHANNEL = "parked_monitor"
+        const val ACTION_STOP = "com.parked.app.STOP_MONITOR"
+    }
 }
