@@ -104,7 +104,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        Configuration.getInstance().userAgentValue = packageName
+        Configuration.getInstance().userAgentValue = "Parked/1.0 (Android; contact: local)"
         setContent { ParkedRoot() }
     }
 }
