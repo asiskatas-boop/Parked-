@@ -73,6 +73,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.gms.location.*
 import com.parked.app.data.FuelStore
 import com.parked.app.data.ParkingStore
@@ -85,7 +88,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
@@ -97,10 +100,6 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.*
 
-// ============================================================
-// MainActivity
-// ============================================================
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -109,10 +108,6 @@ class MainActivity : ComponentActivity() {
         setContent { ParkedRoot() }
     }
 }
-
-// ============================================================
-// Accent themes — gradients
-// ============================================================
 
 data class AccentDef(
     val name: String,
@@ -128,6 +123,7 @@ data class AccentDef(
 }
 
 private val Accents = listOf(
+    AccentDef("Teal",         Color(0xFF00C7BE), Color(0xFF00C7BE)),
     AccentDef("Racing Green", Color(0xFF059669), Color(0xFF84CC16)),
     AccentDef("Electric",     Color(0xFF06B6D4), Color(0xFF3B82F6)),
     AccentDef("Iris",         Color(0xFF8B5CF6), Color(0xFFEC4899)),
@@ -136,24 +132,20 @@ private val Accents = listOf(
     AccentDef("Mono",         Color(0xFF6B7280), Color(0xFFE5E7EB)),
 )
 
-private val AppBg         = Color(0xFF08090B)
-private val GlassBg       = Color(0xCC121316)
-private val GlassStroke   = Color(0x1AFFFFFF)
-private val GlassHighlight= Color(0x0DFFFFFF)
-private val ElevatedBg    = Color(0xFF1A1B1F)
-private val BorderSubtle  = Color(0x1AFFFFFF)
+private val AppBg         = Color(0xFF121214)
+private val GlassBg       = Color(0xFF1C1C1F)
+private val GlassStroke   = Color(0x14FFFFFF)
+private val GlassHighlight= Color(0x0AFFFFFF)
+private val ElevatedBg    = Color(0xFF242428)
+private val BorderSubtle  = Color(0x14FFFFFF)
 
-private val TextPrimary   = Color(0xFFF7F7F7)
-private val TextSecondary = Color(0xFFD0D0D3)
-private val TextMuted     = Color(0xFFB3B3BA)
+private val TextPrimary   = Color(0xFFFFFFFF)
+private val TextSecondary = Color(0xFF8E8E93)
+private val TextMuted     = Color(0xFF636366)
 
 private val SuccessGreen  = Color(0xFF34C759)
 private val WarningYellow = Color(0xFFFFCC00)
 private val DangerRed     = Color(0xFFFF453A)
-
-// ============================================================
-// Reduce Motion
-// ============================================================
 
 @Composable
 private fun reduceMotionEnabled(): Boolean {
@@ -171,10 +163,6 @@ private fun reduceMotionEnabled(): Boolean {
 
 private fun animOrZero(reduce: Boolean, durationMs: Int): Int =
     if (reduce) 0 else durationMs
-
-// ============================================================
-// Theme
-// ============================================================
 
 @Composable
 fun ParkedTheme(accent: AccentDef, content: @Composable () -> Unit) {
@@ -194,10 +182,6 @@ fun ParkedTheme(accent: AccentDef, content: @Composable () -> Unit) {
     )
     MaterialTheme(colorScheme = scheme, content = content)
 }
-
-// ============================================================
-// Glass surface
-// ============================================================
 
 @Composable
 private fun GlassCard(
@@ -246,10 +230,6 @@ private fun GlassCard(
     }
 }
 
-// ============================================================
-// Root
-// ============================================================
-
 @Composable
 fun ParkedRoot() {
     val context = LocalContext.current
@@ -291,10 +271,6 @@ fun ParkedApp(fuel: FuelStore, accent: AccentDef) {
         if (splash) SplashScreen(accent, reduce) else MainContent(fuel = fuel, accent = accent)
     }
 }
-
-// ============================================================
-// Splash
-// ============================================================
 
 @Composable
 fun SplashScreen(accent: AccentDef, reduce: Boolean) {
@@ -359,10 +335,6 @@ fun SplashScreen(accent: AccentDef, reduce: Boolean) {
     }
 }
 
-// ============================================================
-// Screens enum
-// ============================================================
-
 enum class AppScreen(
     val label: String,
     val filled: ImageVector,
@@ -372,10 +344,6 @@ enum class AppScreen(
     Fuel("Fuel", Icons.Filled.LocalGasStation, Icons.Outlined.LocalGasStation),
     Car("Car", Icons.Filled.DirectionsCar, Icons.Outlined.DirectionsCar),
 }
-
-// ============================================================
-// Helpers
-// ============================================================
 
 private fun ensureBluetoothOn(context: Context) {
     val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return
@@ -462,7 +430,6 @@ private fun makeCarMarker(ctx: Context, accent: AccentDef): BitmapDrawable {
         close()
     }
     c.drawPath(path, paint)
-
     c.drawCircle(cx, cy, 30f, paint)
 
     paint.color = android.graphics.Color.WHITE
@@ -477,9 +444,35 @@ private fun makeCarMarker(ctx: Context, accent: AccentDef): BitmapDrawable {
     return BitmapDrawable(ctx.resources, bmp)
 }
 
-// ============================================================
-// Color extraction from a car photo
-// ============================================================
+// Custom live-location dot (replaces the osmdroid hand pin)
+private fun makeLiveMarker(ctx: Context, accent: AccentDef): BitmapDrawable {
+    val size = 100
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val c = Canvas(bmp)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    val cx = size / 2f
+    val cy = size / 2f
+
+    // soft halo
+    paint.color = accent.gradEnd.copy(alpha = 0.18f).toArgb()
+    c.drawCircle(cx, cy, 34f, paint)
+    paint.color = accent.gradEnd.copy(alpha = 0.08f).toArgb()
+    c.drawCircle(cx, cy, 44f, paint)
+
+    // white ring
+    paint.color = android.graphics.Color.WHITE
+    c.drawCircle(cx, cy, 16f, paint)
+
+    // accent core
+    paint.color = accent.solid.toArgb()
+    c.drawCircle(cx, cy, 12f, paint)
+
+    // shine
+    paint.color = android.graphics.Color.argb(200, 255, 255, 255)
+    c.drawCircle(cx - 4f, cy - 4f, 3.5f, paint)
+
+    return BitmapDrawable(ctx.resources, bmp)
+}
 
 private fun extractAccentFromUri(context: Context, uri: Uri): Pair<Color, Color> {
     val fallback = Color(0xFF059669) to Color(0xFF84CC16)
@@ -544,10 +537,6 @@ private fun extractAccentFromUri(context: Context, uri: Uri): Pair<Color, Color>
         fallback
     }
 }
-
-// ============================================================
-// Main content
-// ============================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -621,8 +610,33 @@ fun MainContent(fuel: FuelStore, accent: AccentDef) {
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose { try { fusedClient.removeLocationUpdates(locationCallback) } catch (_: Exception) {} }
+    // Re-subscribe to location after phone calls / app switches
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, hasLocationPermission) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && hasLocationPermission) {
+                try {
+                    fusedClient.lastLocation.addOnSuccessListener { loc ->
+                        if (loc != null && liveLat == null) {
+                            liveLat = loc.latitude
+                            liveLng = loc.longitude
+                            liveAccuracy = loc.accuracy
+                        }
+                    }
+                } catch (_: SecurityException) {}
+
+                val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
+                    .setMinUpdateIntervalMillis(1000L)
+                    .setMaxUpdateDelayMillis(2000L).build()
+                try {
+                    fusedClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
+                } catch (_: SecurityException) {}
+            } else if (event == Lifecycle.Event.ON_DESTROY) {
+                try { fusedClient.removeLocationUpdates(locationCallback) } catch (_: Exception) {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val fuelOdoSub = if (fuel.isConfigured)
@@ -740,10 +754,6 @@ fun MainContent(fuel: FuelStore, accent: AccentDef) {
     }
 }
 
-// ============================================================
-// Floating header pill
-// ============================================================
-
 @Composable
 fun FloatingHeader(
     title: String,
@@ -799,10 +809,6 @@ fun FloatingHeader(
         }
     }
 }
-
-// ============================================================
-// Bottom nav
-// ============================================================
 
 @Composable
 fun BottomNav(screen: AppScreen, accent: AccentDef, onChange: (AppScreen) -> Unit) {
@@ -862,10 +868,6 @@ fun BottomNav(screen: AppScreen, accent: AccentDef, onChange: (AppScreen) -> Uni
     }
 }
 
-// ============================================================
-// Parking screen
-// ============================================================
-
 @Composable
 fun ParkingScreen(
     state: com.parked.app.data.ParkingState,
@@ -881,8 +883,10 @@ fun ParkingScreen(
     val context = LocalContext.current
     val mapRef = remember { mutableStateOf<MapView?>(null) }
     var confirmMove by remember { mutableStateOf(false) }
+    var confirmEnd by remember { mutableStateOf(false) }
 
     val carMarkerIcon = remember(accent) { makeCarMarker(context, accent) }
+    val liveMarkerIcon = remember(accent) { makeLiveMarker(context, accent) }
 
     val hasValidParking = state.parkedLat != null && state.parkedLng != null &&
         !(state.parkedLat == 0.0 && state.parkedLng == 0.0)
@@ -915,6 +919,7 @@ fun ParkingScreen(
                 liveLat = liveLat,
                 liveLng = liveLng,
                 carMarkerIcon = carMarkerIcon,
+                liveMarkerIcon = liveMarkerIcon,
                 accent = accent,
                 onMapReady = { mapRef.value = it },
                 onUserTap = { parkedButtonVisible = true }
@@ -995,12 +1000,14 @@ fun ParkingScreen(
                     )
                     Spacer(Modifier.height(4.dp))
                     GradientButton(
-                        text = "End parking",
+                        text = "Get directions",
                         accent = accent,
-                        onClick = onEndParking,
-                        overrideStart = SuccessGreen,
-                        overrideEnd = SuccessGreen
+                        onClick = onDirections
                     )
+                    TextButton(
+                        onClick = { confirmEnd = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("End parking", color = SuccessGreen, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
                     TextButton(
                         onClick = { confirmMove = true },
                         modifier = Modifier.fillMaxWidth()
@@ -1055,6 +1062,25 @@ fun ParkingScreen(
         }
     }
 
+    if (confirmEnd) {
+        AlertDialog(
+            onDismissRequest = { confirmEnd = false },
+            containerColor = GlassBg,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary,
+            title = { Text("End parking?") },
+            text = { Text("This will clear your saved spot. You can save a new one anytime.") },
+            confirmButton = {
+                TextButton(onClick = { confirmEnd = false; onEndParking() }) {
+                    Text("End parking", color = SuccessGreen, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmEnd = false }) { Text("Keep spot", color = TextSecondary) }
+            }
+        )
+    }
+
     if (confirmMove) {
         AlertDialog(
             onDismissRequest = { confirmMove = false },
@@ -1073,6 +1099,13 @@ fun ParkingScreen(
             }
         )
     }
+}
+
+private fun accentTextColor(accent: AccentDef): Color {
+    val lum = 0.299f * accent.gradStart.red +
+              0.587f * accent.gradStart.green +
+              0.114f * accent.gradStart.blue
+    return if (lum > 0.55f) Color(0xFF003734) else Color.White
 }
 
 @Composable
@@ -1094,7 +1127,7 @@ private fun GradientButton(
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Text(text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = accentTextColor(accent))
     }
 }
 
@@ -1142,10 +1175,6 @@ fun AmbientGlassSheet(accent: AccentDef, content: @Composable ColumnScope.() -> 
         }
     }
 }
-
-// ============================================================
-// Fuel screen
-// ============================================================
 
 @Composable
 fun FuelScreen(fuel: FuelStore, accent: AccentDef) {
@@ -1361,10 +1390,6 @@ fun FuelScreen(fuel: FuelStore, accent: AccentDef) {
         )
     }
 }
-
-// ============================================================
-// Car screen
-// ============================================================
 
 @Composable
 fun CarScreen(
@@ -1694,10 +1719,6 @@ private fun GroupedRow(
     }
 }
 
-// ============================================================
-// Appearance modal
-// ============================================================
-
 @Composable
 private fun AppearanceModal(
     fuel: FuelStore,
@@ -1810,10 +1831,6 @@ private fun AccentOrb(
     }
 }
 
-// ============================================================
-// Device picker dialog
-// ============================================================
-
 @Composable
 fun DevicePickerDialog(
     accent: AccentDef,
@@ -1863,10 +1880,6 @@ fun DevicePickerDialog(
     )
 }
 
-// ============================================================
-// Map
-// ============================================================
-
 private class RippleOverlay(
     private val point: GeoPoint,
     private val color: Int,
@@ -1913,6 +1926,7 @@ fun ParkedMap(
     parkedLat: Double?, parkedLng: Double?,
     liveLat: Double?, liveLng: Double?,
     carMarkerIcon: BitmapDrawable,
+    liveMarkerIcon: BitmapDrawable,
     accent: AccentDef,
     onMapReady: (MapView) -> Unit,
     onUserTap: () -> Unit = {},
@@ -1930,7 +1944,19 @@ fun ParkedMap(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
             MapView(ctx).apply {
-                setTileSource(TileSourceFactory.MAPNIK)
+                // CartoDB Dark Matter — clean dark map that matches the app
+                setTileSource(
+                    XYTileSource(
+                        "CartoDarkMatter",
+                        0, 20, 256, ".png",
+                        arrayOf(
+                            "https://a.basemaps.cartocdn.com/dark_all",
+                            "https://b.basemaps.cartocdn.com/dark_all",
+                            "https://c.basemaps.cartocdn.com/dark_all",
+                            "https://d.basemaps.cartocdn.com/dark_all"
+                        )
+                    )
+                )
                 setMultiTouchControls(true)
                 setBuiltInZoomControls(false)
                 controller.setZoom(16.0)
@@ -2023,7 +2049,8 @@ fun ParkedMap(
                         val marker = Marker(map).apply {
                             position = newLive
                             title = "You are here"
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            icon = liveMarkerIcon
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         }
                         map.overlays.add(marker)
                         liveMarkerRef.value = marker
@@ -2038,10 +2065,6 @@ fun ParkedMap(
         }
     )
 }
-
-// ============================================================
-// Stat card + refuel row
-// ============================================================
 
 @Composable
 private fun StatCard(
@@ -2097,10 +2120,6 @@ private fun RefuelRow(r: Refuel, fuel: FuelStore, accent: AccentDef) {
         }
     }
 }
-
-// ============================================================
-// Modals
-// ============================================================
 
 @Composable
 private fun SliderModal(
