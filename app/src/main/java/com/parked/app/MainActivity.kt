@@ -30,8 +30,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
@@ -67,9 +67,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -228,22 +226,15 @@ fun ParkedApp(fuel: FuelStore) {
 }
 
 // ============================================================
-// Onboarding — uses your PNG backgrounds
+// Onboarding
 // ============================================================
 
 @Composable
 fun OnboardingFlow(page: Int, onNext: () -> Unit) {
-    val bgRes = if (page == 0) R.drawable.splash_dark else R.drawable.splash_lime
+    val bg = if (page == 0) OliveDark else LimeBright
     val fg = if (page == 0) White else OliveDark
 
-    Box(Modifier.fillMaxSize().clickable { onNext() }) {
-        Image(
-            painter = painterResource(bgRes),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-
+    Box(Modifier.fillMaxSize().background(bg).clickable { onNext() }) {
         Column(
             Modifier.fillMaxSize().padding(horizontal = 36.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -267,7 +258,6 @@ fun OnboardingFlow(page: Int, onNext: () -> Unit) {
                 modifier = Modifier.widthIn(max = 300.dp)
             )
         }
-
         Text(
             if (page == 0) "Tap to continue" else "Tap to start",
             Modifier.align(Alignment.BottomCenter).padding(bottom = 60.dp),
@@ -831,33 +821,42 @@ fun FuelScreen(fuel: FuelStore) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("Fuel Volume", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = White)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
 
+            // Centered row — side labels use weight(1f) so the capsule sits dead center
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(Modifier.width(92.dp), contentAlignment = Alignment.CenterEnd) {
+                Box(
+                    Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
                     Text(
                         "${fuel.currency}$costText",
                         fontSize = 20.sp, fontWeight = FontWeight.Bold, color = White,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { showPriceEdit = true }
-                            .padding(2.dp)
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
                     )
                 }
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(4.dp))
                 TrianglePointer(pointingRight = true)
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(8.dp))
 
-                FuelCapsule(fraction = sliderFraction, onFractionChange = { sliderFraction = it })
+                FuelCapsule(
+                    fraction = sliderFraction,
+                    onFractionChange = { sliderFraction = it }
+                )
 
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(8.dp))
                 TrianglePointer(pointingRight = false)
-                Spacer(Modifier.width(6.dp))
-                Box(Modifier.width(92.dp), contentAlignment = Alignment.CenterStart) {
+                Spacer(Modifier.width(4.dp))
+                Box(
+                    Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterStart
+                ) {
                     Text(
                         "${liters.toInt()}L",
                         fontSize = 20.sp, fontWeight = FontWeight.Bold, color = White
@@ -865,18 +864,20 @@ fun FuelScreen(fuel: FuelStore) {
                 }
             }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(10.dp))
             Text(
                 "Tap price to edit · ${fuel.currency}${String.format(Locale.US, "%.2f", effectivePrice)}/L",
                 fontSize = 11.sp, color = White.copy(alpha = 0.72f)
             )
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(18.dp))
 
+            // Save button — visible against the dark green
             Box(
                 Modifier
                     .clip(RoundedCornerShape(999.dp))
-                    .background(OliveDark)
+                    .background(White.copy(alpha = 0.18f))
+                    .border(1.dp, White.copy(alpha = 0.40f), RoundedCornerShape(999.dp))
                     .clickable {
                         val now = System.currentTimeMillis()
                         if (now - lastSaveTime < 1500) return@clickable
@@ -894,9 +895,9 @@ fun FuelScreen(fuel: FuelStore) {
                             sliderFraction = (fuel.estimateLevelPct() / 100.0).toFloat()
                         }
                     }
-                    .padding(horizontal = 32.dp, vertical = 12.dp)
+                    .padding(horizontal = 40.dp, vertical = 14.dp)
             ) {
-                Text("Save", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = White)
+                Text("Save", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = White)
             }
         }
 
@@ -930,10 +931,7 @@ fun FuelScreen(fuel: FuelStore) {
     }
 
     if (showPriceEdit) {
-        FuelPriceModal(
-            fuel = fuel,
-            onDismiss = { showPriceEdit = false }
-        )
+        FuelPriceModal(fuel = fuel, onDismiss = { showPriceEdit = false })
     }
 }
 
@@ -949,19 +947,21 @@ private fun FuelCapsule(fraction: Float, onFractionChange: (Float) -> Unit) {
     var dragStart by remember { mutableFloatStateOf(fraction) }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
+        // Left tick marks (2 marks only)
         Column(
-            Modifier.height(capsuleHeight).width(12.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
+            Modifier.height(capsuleHeight).width(10.dp),
+            verticalArrangement = Arrangement.SpaceEvenly,
             horizontalAlignment = Alignment.End
         ) {
-            Box(Modifier.width(6.dp).height(2.dp).background(White.copy(alpha = 0.35f)))
-            Box(Modifier.width(8.dp).height(2.dp).background(White.copy(alpha = 0.55f)))
-            Box(Modifier.width(14.dp).height(2.dp).background(White.copy(alpha = 0.85f)))
-            Box(Modifier.width(8.dp).height(2.dp).background(White.copy(alpha = 0.55f)))
-            Box(Modifier.width(6.dp).height(2.dp).background(White.copy(alpha = 0.35f)))
+            Spacer(Modifier.height(1.dp))
+            Box(Modifier.width(10.dp).height(3.dp).background(White.copy(alpha = 0.60f)))
+            Spacer(Modifier.height(1.dp))
+            Box(Modifier.width(10.dp).height(3.dp).background(White.copy(alpha = 0.60f)))
+            Spacer(Modifier.height(1.dp))
         }
         Spacer(Modifier.width(6.dp))
 
+        // Capsule — true oval + mesh fill
         Box(
             Modifier
                 .size(width = capsuleWidth, height = capsuleHeight)
@@ -983,48 +983,85 @@ private fun FuelCapsule(fraction: Float, onFractionChange: (Float) -> Unit) {
                     )
                 }
         ) {
-            Box(
-                Modifier
+            CapsuleFill(
+                fraction = fraction,
+                modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .fillMaxHeight(fraction.coerceIn(0f, 1f))
-                    .background(meshBrush(fraction))
             )
         }
 
         Spacer(Modifier.width(6.dp))
+        // Right tick marks (2 marks only)
         Column(
-            Modifier.height(capsuleHeight).width(12.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
+            Modifier.height(capsuleHeight).width(10.dp),
+            verticalArrangement = Arrangement.SpaceEvenly,
             horizontalAlignment = Alignment.Start
         ) {
-            Box(Modifier.width(6.dp).height(2.dp).background(White.copy(alpha = 0.35f)))
-            Box(Modifier.width(8.dp).height(2.dp).background(White.copy(alpha = 0.55f)))
-            Box(Modifier.width(14.dp).height(2.dp).background(White.copy(alpha = 0.85f)))
-            Box(Modifier.width(8.dp).height(2.dp).background(White.copy(alpha = 0.55f)))
-            Box(Modifier.width(6.dp).height(2.dp).background(White.copy(alpha = 0.35f)))
+            Spacer(Modifier.height(1.dp))
+            Box(Modifier.width(10.dp).height(3.dp).background(White.copy(alpha = 0.60f)))
+            Spacer(Modifier.height(1.dp))
+            Box(Modifier.width(10.dp).height(3.dp).background(White.copy(alpha = 0.60f)))
+            Spacer(Modifier.height(1.dp))
         }
     }
 }
 
+/**
+ * Mesh gradient fill — layered radial + linear.
+ * Green at high level, orange mid, red low. Highlights and shadow give it depth.
+ */
 @Composable
-private fun meshBrush(fraction: Float): Brush {
-    val colors = when {
-        fraction < 0.30f -> listOf(
-            Color(0xFFE84848), Color(0xFFFF6B4A), Color(0xFFFF8A5B), Color(0xFFFFB88A)
+private fun CapsuleFill(fraction: Float, modifier: Modifier = Modifier) {
+    val (baseStart, baseEnd) = when {
+        fraction < 0.30f -> Color(0xFFB91C1C) to Color(0xFFFF6B4A)
+        fraction < 0.60f -> Color(0xFFD97706) to Color(0xFFFFB347)
+        else -> Color(0xFF166534) to Color(0xFF6EC436)
+    }
+
+    Box(modifier) {
+        // 1. Base linear gradient
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.linearGradient(
+                    colors = listOf(baseStart, baseEnd),
+                    start = Offset(0f, 0f),
+                    end = Offset(300f, 900f)
+                )
+            )
         )
-        fraction < 0.60f -> listOf(
-            Color(0xFFE86B1C), Color(0xFFFF8A3B), Color(0xFFFFB347), Color(0xFFFFD98A)
+        // 2. Top-left highlight (soft white bloom)
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.radialGradient(
+                    colors = listOf(Color.White.copy(alpha = 0.30f), Color.Transparent),
+                    center = Offset(30f, 80f),
+                    radius = 220f
+                )
+            )
         )
-        else -> listOf(
-            Color(0xFF2D6B1E), Color(0xFF3E8A2E), Color(0xFF6EC436), Color(0xFFB0E56B)
+        // 3. Bottom-right shadow (gives depth)
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.radialGradient(
+                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.25f)),
+                    center = Offset(180f, 700f),
+                    radius = 400f
+                )
+            )
+        )
+        // 4. Middle accent glow
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.radialGradient(
+                    colors = listOf(baseEnd.copy(alpha = 0.40f), Color.Transparent),
+                    center = Offset(120f, 400f),
+                    radius = 250f
+                )
+            )
         )
     }
-    return Brush.linearGradient(
-        colors = colors,
-        start = Offset(0f, 0f),
-        end = Offset(600f, 1200f)
-    )
 }
 
 @Composable
