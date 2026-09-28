@@ -47,6 +47,9 @@ class FuelStore(context: Context) {
     var notificationsEnabled: Boolean by mutableStateOf(prefs.getBoolean("notificationsEnabled", true))
         private set
 
+    var customFuelPrice: Double by mutableStateOf(prefs.getFloat("customFuelPrice", 0f).toDouble())
+        private set
+
     var customAccentStart: Int by mutableStateOf(prefs.getInt("customAccentStart", 0))
         private set
     var customAccentEnd: Int by mutableStateOf(prefs.getInt("customAccentEnd", 0))
@@ -104,6 +107,11 @@ class FuelStore(context: Context) {
     fun updateNotificationsEnabled(v: Boolean) {
         notificationsEnabled = v
         prefs.edit().putBoolean("notificationsEnabled", v).apply()
+    }
+
+    fun updateCustomFuelPrice(v: Double) {
+        customFuelPrice = v
+        prefs.edit().putFloat("customFuelPrice", v.toFloat()).apply()
     }
 
     fun setCustomAccent(startArgb: Int, endArgb: Int) {
