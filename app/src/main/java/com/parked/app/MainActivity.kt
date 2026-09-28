@@ -451,10 +451,13 @@ fun HomeScreen(fuel: FuelStore) {
         }
     }
 
-    val hasValid = state.parkedLat != null && state.parkedLng != null && !(state.parkedLat == 0.0 && state.parkedLng == 0.0)
-    val distance: Double? = remember(liveLat, liveLng, state.parkedLat, state.parkedLng, hasValid) {
-        if (liveLat != null && liveLng != null && hasValid)
-            haversine(liveLat, liveLng, state.parkedLat!!, state.parkedLng!!)
+    val liveLatLocal = liveLat
+    val liveLngLocal = liveLng
+    val parkedLatLocal = state.parkedLat
+    val parkedLngLocal = state.parkedLng
+    val distance: Double? = remember(liveLatLocal, liveLngLocal, parkedLatLocal, parkedLngLocal, hasValid) {
+        if (liveLatLocal != null && liveLngLocal != null && parkedLatLocal != null && parkedLngLocal != null && hasValid)
+            haversine(liveLatLocal, liveLngLocal, parkedLatLocal, parkedLngLocal)
         else null
     }
     val isAtCar = distance != null && distance < 15
