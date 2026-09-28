@@ -276,11 +276,11 @@ fun MainContent(fuel: FuelStore) {
     val context = LocalContext.current
     var tab by remember { mutableStateOf(AppTab.Home) }
 
-    fun hasLocationPermission(ctx: Context): Boolean =
-        ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION)
-            == PackageManager.PERMISSION_GRANTED ||
-        ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION)
-            == PackageManager.PERMISSION_GRANTED
+fun hasLocationPermission(ctx: Context): Boolean {
+        val fine = ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        return fine || coarse
+    }
 
     var liveLat by remember { mutableStateOf<Double?>(null) }
     var liveLng by remember { mutableStateOf<Double?>(null) }
