@@ -19,6 +19,28 @@ class FuelStore(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("parked_fuel", Context.MODE_PRIVATE)
 
+    // The Activity and foreground service each hold a FuelStore instance. Keep
+    // them in sync when either side updates SharedPreferences so odometer/fuel
+    // state and notification preferences do not stay stale until a restart.
+    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        when (key) {
+            "tankCapacity" -> tankCapacity = prefs.getFloat("tankCapacity", 0f).toDouble()
+            "currency" -> currency = prefs.getString("currency", "€") ?: "€"
+            "units" -> units = prefs.getString("units", "L/100km") ?: "L/100km"
+            "baselineOdo" -> baselineOdo = prefs.getFloat("baselineOdo", 0f).toDouble()
+            "gpsKm" -> gpsKm = prefs.getFloat("gpsKm", 0f).toDouble()
+            "levelPct" -> levelPct = prefs.getFloat("levelPct", 100f).toDouble()
+            "odoForLevel" -> odoForLevel = prefs.getFloat("odoForLevel", 0f).toDouble()
+            "promptDismissedAtOdo" -> promptDismissedAtOdo = prefs.getFloat("promptDismissedAtOdo", 0f).toDouble()
+            "refuels" -> refuels = loadRefuels()
+            "accentName" -> accentName = prefs.getString("accentName", "Ocean Blue") ?: "Ocean Blue"
+            "notificationsEnabled" -> notificationsEnabled = prefs.getBoolean("notificationsEnabled", true)
+            "customFuelPrice" -> customFuelPrice = prefs.getFloat("customFuelPrice", 0f).toDouble()
+            "customAccentStart" -> customAccentStart = prefs.getInt("customAccentStart", 0)
+            "customAccentEnd" -> customAccentEnd = prefs.getInt("customAccentEnd", 0)
+        }
+    }
+
     var tankCapacity: Double by mutableStateOf(prefs.getFloat("tankCapacity", 0f).toDouble())
         private set
     var currency: String by mutableStateOf(prefs.getString("currency", "€") ?: "€")
@@ -41,7 +63,7 @@ class FuelStore(context: Context) {
     var refuels: List<Refuel> by mutableStateOf(loadRefuels())
         private set
 
-    var accentName: String by mutableStateOf(prefs.getString("accentName", "Racing Green") ?: "Racing Green")
+    var accentName: String by mutableStateOf(prefs.getString("accentName", "Ocean Blue") ?: "Ocean Blue")
         private set
 
     var notificationsEnabled: Boolean by mutableStateOf(prefs.getBoolean("notificationsEnabled", true))
@@ -54,6 +76,14 @@ class FuelStore(context: Context) {
         private set
     var customAccentEnd: Int by mutableStateOf(prefs.getInt("customAccentEnd", 0))
         private set
+
+    init {
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+    }
+
+    fun close() {
+        prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
+    }
 
     val currentOdo: Double get() = baselineOdo + gpsKm
 
@@ -135,6 +165,7 @@ class FuelStore(context: Context) {
     }
 
     fun logRefuel(litres: Double, cost: Double, odometer: Double, tankFull: Boolean) {
+        val levelBeforeRefuel = estimateLevelPct()
         val entry = Refuel(System.currentTimeMillis(), litres, cost, odometer, tankFull)
         val newList = (listOf(entry) + refuels).take(200)
         refuels = newList
@@ -149,18 +180,34 @@ class FuelStore(context: Context) {
                 .putFloat("levelPct", 100f)
                 .putFloat("odoForLevel", odometer.toFloat())
                 .apply()
+        } else if (tankCapacity > 0) {
+            // The fuel screen records the volume added, not the current tank
+            // contents. Partial refuels therefore need to raise the estimated
+            // level instead of leaving it unchanged.
+            setLevel(levelBeforeRefuel + litres / tankCapacity * 100.0)
         }
     }
 
     fun averageL100km(): Double? {
-        val full = refuels.filter { it.tankFull }.take(6)
-        if (full.size < 2) return null
-        val newest = full.first()
-        val oldest = full.last()
-        val dist = newest.odometer - oldest.odometer
-        if (dist <= 50) return null
-        val litres = full.dropLast(1).sumOf { it.litres }
-        return litres / dist * 100.0
+        // Work between full-tank anchor points, but include every partial refuel
+        // that happened between them. The previous implementation filtered to
+        // full-tank rows first, which silently under-counted fuel whenever a
+        // partial top-up occurred. Refuels are stored newest-first.
+        val fullIndices = refuels.indices.filter { refuels[it].tankFull }.take(6)
+        if (fullIndices.size < 2) return null
+
+        val newestFullIndex = fullIndices.first()
+        val oldestFullIndex = fullIndices.last()
+        val newestFull = refuels[newestFullIndex]
+        val oldestFull = refuels[oldestFullIndex]
+        val distanceKm = newestFull.odometer - oldestFull.odometer
+        if (distanceKm <= 50.0) return null
+
+        val litresUsed = refuels
+            .subList(newestFullIndex, oldestFullIndex)
+            .sumOf { it.litres }
+        if (litresUsed <= 0.0) return null
+        return litresUsed / distanceKm * 100.0
     }
 
     fun estimatedRangeKm(): Double? {

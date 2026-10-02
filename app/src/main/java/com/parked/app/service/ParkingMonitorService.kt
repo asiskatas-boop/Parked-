@@ -5,11 +5,14 @@ import android.app.*
 import android.bluetooth.BluetoothDevice
 import android.content.*
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.location.Location
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import com.google.android.gms.location.*
 import com.parked.app.MainActivity
 import com.parked.app.R
@@ -47,33 +50,63 @@ class ParkingMonitorService : Service() {
         super.onCreate()
         store = ParkingStore(this)
         fuel = FuelStore(this)
-        createChannel()
-        registerReceiver(receiver, IntentFilter().apply {
-            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
-            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
-        })
+        createChannels()
+
         try {
-            startForeground(1, buildNotification("Automatic parking on"))
+            ServiceCompat.startForeground(
+                this,
+                1,
+                buildNotification("Automatic parking on"),
+                if (android.os.Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
+            )
         } catch (_: Exception) {
+            CoroutineScope(Dispatchers.IO).launch { store.setMonitoring(false) }
             stopSelf()
             return
         }
+
+        if (android.os.Build.VERSION.SDK_INT >= 31 &&
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+        ) {
+            CoroutineScope(Dispatchers.IO).launch { store.setMonitoring(false) }
+            stopSelf()
+            return
+        }
+
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+        }
+        // Bluetooth connection broadcasts originate outside our process, so the
+        // receiver must explicitly allow system/privileged senders on modern Android.
+        ContextCompat.registerReceiver(
+            this,
+            receiver,
+            filter,
+            ContextCompat.RECEIVER_EXPORTED
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             try { getSystemService(NotificationManager::class.java).cancelAll() } catch (_: Exception) {}
             stopLocationTracking()
-            stopSelf()
+            scope.launch {
+                store.setMonitoring(false)
+                stopSelf()
+            }
             return START_NOT_STICKY
         }
-        return START_NOT_STICKY
+        // If Android reclaims the process while monitoring is enabled, ask it to
+        // recreate the service. The selected device/monitoring state is persisted.
+        return START_STICKY
     }
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(receiver) }
         stopLocationTracking()
         scope.cancel()
+        fuel.close()
         super.onDestroy()
     }
 
@@ -89,7 +122,8 @@ class ParkingMonitorService : Service() {
 
             scope.launch {
                 val selected = store.state.first()
-                if (device.address != selected.deviceAddress) return@launch
+                val address = runCatching { device.address }.getOrNull() ?: return@launch
+                if (address != selected.deviceAddress) return@launch
 
                 when (intent?.action) {
                     BluetoothDevice.ACTION_ACL_CONNECTED -> {
@@ -97,8 +131,11 @@ class ParkingMonitorService : Service() {
                         startLocationTracking()
                     }
                     BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
-                        stopLocationTracking()
-                        captureLocation(selected.deviceName ?: "car")
+                        // Keep the final in-car GPS sample as a fallback. Requesting a
+                        // fresh fix can fail in garages exactly when it matters most.
+                        val fallback = lastLocation
+                        stopLocationTracking(clearLast = false)
+                        captureLocation(selected.deviceName ?: "car", fallback)
                     }
                 }
             }
@@ -119,44 +156,77 @@ class ParkingMonitorService : Service() {
         } catch (_: SecurityException) {}
     }
 
-    private fun stopLocationTracking() {
-        if (!trackingLocation) return
-        try { fused.removeLocationUpdates(locationCallback) } catch (_: Exception) {}
+    private fun stopLocationTracking(clearLast: Boolean = true) {
+        if (trackingLocation) {
+            try { fused.removeLocationUpdates(locationCallback) } catch (_: Exception) {}
+        }
         trackingLocation = false
-        lastLocation = null
+        if (clearLast) lastLocation = null
     }
 
-    private suspend fun captureLocation(deviceName: String) {
+    private suspend fun captureLocation(deviceName: String, fallback: Location? = null) {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
             ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
         ) return
 
-        fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-            .addOnSuccessListener { loc ->
-                if (loc != null) {
-                    scope.launch { store.saveParking(loc.latitude, loc.longitude) }
+        val priority = if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+            Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY
 
-                    if (fuel.notificationsEnabled) {
-                        getSystemService(NotificationManager::class.java).notify(2,
-                            NotificationCompat.Builder(this, CHANNEL)
-                                .setSmallIcon(R.drawable.ic_notification)
-                                .setContentTitle("Parking saved")
-                                .setContentText("Your parking spot has been saved.")
-                                .setAutoCancel(true)
-                                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                                .build())
-                    }
-                    notifyStatus("Parking spot saved")
+        fused.getCurrentLocation(priority, null).addOnCompleteListener { task ->
+            val fresh = if (task.isSuccessful) task.result else null
+            val chosen = fresh ?: fallback
+            if (chosen != null) {
+                persistParking(deviceName, chosen)
+            } else {
+                // One final inexpensive fallback to the fused provider cache.
+                fused.lastLocation.addOnSuccessListener { cached ->
+                    val recent = cached != null && System.currentTimeMillis() - cached.time <= 10 * 60 * 1000L
+                    if (recent && cached != null) persistParking(deviceName, cached)
+                    else notifyStatus("Couldn't save parking location")
                 }
             }
+        }
     }
 
-    private fun createChannel() {
+    private fun persistParking(deviceName: String, loc: Location) {
+        scope.launch { store.saveParking(loc.latitude, loc.longitude) }
+        lastLocation = null
+
+        val canNotify = android.os.Build.VERSION.SDK_INT < 33 ||
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (fuel.notificationsEnabled && canNotify) {
+            val pending = PendingIntent.getActivity(
+                this,
+                2,
+                Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            getSystemService(NotificationManager::class.java).notify(
+                2,
+                NotificationCompat.Builder(this, ALERT_CHANNEL)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setContentTitle("Parking saved")
+                    .setContentText("$deviceName disconnected — your spot is saved.")
+                    .setContentIntent(pending)
+                    .setAutoCancel(true)
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .build()
+            )
+        }
+        notifyStatus("Parking spot saved")
+    }
+
+    private fun createChannels() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Automatic parking", NotificationManager.IMPORTANCE_LOW).apply {
+            NotificationChannel(MONITOR_CHANNEL, "Automatic parking", NotificationManager.IMPORTANCE_LOW).apply {
                 description = "Keeps Parked! ready to save your spot"
                 setShowBadge(false)
+            }
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(ALERT_CHANNEL, "Parking alerts", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Confirms when Parked! saves your car location"
             }
         )
     }
@@ -175,7 +245,7 @@ class ParkingMonitorService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        return NotificationCompat.Builder(this, CHANNEL)
+        return NotificationCompat.Builder(this, MONITOR_CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Parked!")
             .setContentText(text)
@@ -193,7 +263,8 @@ class ParkingMonitorService : Service() {
     }
 
     companion object {
-        const val CHANNEL = "parked_monitor"
+        const val MONITOR_CHANNEL = "parked_monitor"
+        const val ALERT_CHANNEL = "parked_alerts"
         const val ACTION_STOP = "com.parked.app.STOP_MONITOR"
     }
 }

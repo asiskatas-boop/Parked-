@@ -12,10 +12,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:icon="@drawable/ic_parked_logo"
+        android:roundIcon="@drawable/ic_parked_logo"
         android:label="Parked!"
-        android:theme="@style/Theme.Parked"
-        android:usesCleartextTraffic="true">
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Parked">
 
         <activity
             android:name=".MainActivity"

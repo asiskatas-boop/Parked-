@@ -18,6 +18,7 @@ import android.os.Looper
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,17 +31,15 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.DirectionsCar
@@ -68,6 +67,13 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -77,7 +83,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.gms.location.*
 import com.parked.app.data.FuelStore
 import com.parked.app.data.ParkingStore
@@ -107,7 +117,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         WindowCompat.getInsetsController(window, window.decorView)
             .isAppearanceLightStatusBars = false
-        Configuration.getInstance().userAgentValue = packageName
+        Configuration.getInstance().apply {
+            load(applicationContext, getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
+            userAgentValue = "Parked/${BuildConfig.VERSION_NAME} (${BuildConfig.APPLICATION_ID})"
+        }
         setContent { ParkedRoot() }
     }
 }
@@ -117,7 +130,6 @@ class MainActivity : ComponentActivity() {
 // ============================================================
 
 private val OliveDark      = Color(0xFF2B4A23)
-private val OliveDeeper    = Color(0xFF314C1C)
 private val LimeBright     = Color(0xFF6EC436)
 private val White          = Color(0xFFFFFFFF)
 private val NearBlack      = Color(0xFF08090B)
@@ -191,12 +203,39 @@ fun ParkedTheme(content: @Composable () -> Unit) {
 fun ParkedRoot() {
     val context = LocalContext.current
     val fuel = remember { FuelStore(context) }
+    val parkingStore = remember { ParkingStore(context) }
+
+    DisposableEffect(fuel) {
+        onDispose { fuel.close() }
+    }
+
+    // Recover AutoPark after the app process was reclaimed. Starting it while the
+    // activity is visible is allowed and avoids a stale "on" switch with no service.
+    LaunchedEffect(Unit) {
+        val state = parkingStore.state.first()
+        if (state.monitoring && state.deviceAddress != null) {
+            val hasLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val hasBluetooth = android.os.Build.VERSION.SDK_INT < 31 ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+            if (hasLocation && hasBluetooth && isLocationServicesEnabled(context) && isBluetoothEnabled(context)) {
+                runCatching {
+                    ContextCompat.startForegroundService(
+                        context,
+                        Intent(context, ParkingMonitorService::class.java)
+                    )
+                }
+            }
+        }
+    }
     ParkedTheme { ParkedApp(fuel = fuel) }
 }
 
 @Composable
 fun ParkedApp(fuel: FuelStore) {
-    var showOnboarding by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+    val uiPrefs = remember { context.getSharedPreferences("parked_ui", Context.MODE_PRIVATE) }
+    var showOnboarding by remember { mutableStateOf(!uiPrefs.getBoolean("onboarding_done", false)) }
     var onboardingPage by remember { mutableStateOf(0) }
 
     AnimatedContent(
@@ -215,7 +254,10 @@ fun ParkedApp(fuel: FuelStore) {
                     page = page,
                     onNext = {
                         if (page == 0) onboardingPage = 1
-                        else showOnboarding = false
+                        else {
+                            uiPrefs.edit().putBoolean("onboarding_done", true).apply()
+                            showOnboarding = false
+                        }
                     }
                 )
             }
@@ -235,10 +277,18 @@ fun OnboardingFlow(page: Int, onNext: () -> Unit) {
     val fg = if (page == 0) White else OliveDark
 
     Box(Modifier.fillMaxSize().background(bg).clickable { onNext() }) {
+        Image(
+            painter = painterResource(if (page == 0) R.drawable.splash_dark else R.drawable.splash_lime),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.FillBounds
+        )
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 36.dp),
+            Modifier
+                .align(Alignment.Center)
+                .offset(y = 70.dp)
+                .padding(horizontal = 36.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
         ) {
             Text(
                 "Parked!",
@@ -258,11 +308,6 @@ fun OnboardingFlow(page: Int, onNext: () -> Unit) {
                 modifier = Modifier.widthIn(max = 300.dp)
             )
         }
-        Text(
-            if (page == 0) "Tap to continue" else "Tap to start",
-            Modifier.align(Alignment.BottomCenter).padding(bottom = 60.dp),
-            fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = fg.copy(alpha = 0.7f)
-        )
     }
 }
 
@@ -294,6 +339,7 @@ fun MainContent(fuel: FuelStore) {
     var liveLat by remember { mutableStateOf<Double?>(null) }
     var liveLng by remember { mutableStateOf<Double?>(null) }
     var hasPerm by remember { mutableStateOf(hasLocationPermission(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
     val locCallback = remember {
@@ -326,11 +372,25 @@ fun MainContent(fuel: FuelStore) {
             try {
                 fused.requestLocationUpdates(req, locCallback, Looper.getMainLooper())
             } catch (_: SecurityException) {}
+        } else {
+            try { fused.removeLocationUpdates(locCallback) } catch (_: Exception) {}
+            liveLat = null
+            liveLng = null
         }
     }
 
     DisposableEffect(Unit) {
         onDispose { try { fused.removeLocationUpdates(locCallback) } catch (_: Exception) {} }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasPerm = hasLocationPermission(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val permLauncher = rememberLauncherForActivityResult(
@@ -354,10 +414,6 @@ fun MainContent(fuel: FuelStore) {
                 ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
                 != PackageManager.PERMISSION_GRANTED
             ) add(Manifest.permission.BLUETOOTH_CONNECT)
-            if (android.os.Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED
-            ) add(Manifest.permission.POST_NOTIFICATIONS)
         }
         if (toRequest.isEmpty()) {
             ensureBluetoothOn(context)
@@ -402,22 +458,25 @@ fun MainContent(fuel: FuelStore) {
 fun BottomNav(tab: AppTab, onChange: (AppTab) -> Unit) {
     Surface(color = White, shadowElevation = 8.dp) {
         Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().height(72.dp).padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            Modifier.fillMaxWidth().navigationBarsPadding().height(72.dp),
+            verticalAlignment = Alignment.Bottom
         ) {
             AppTab.values().forEach { t ->
                 val selected = tab == t
                 Box(
                     Modifier
                         .weight(1f).fillMaxHeight()
-                        .clickable { onChange(t) }
-                        .padding(vertical = 8.dp, horizontal = 6.dp),
-                    contentAlignment = Alignment.Center
+                        .clickable { onChange(t) },
+                    contentAlignment = Alignment.BottomCenter
                 ) {
                     Box(
                         Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(22.dp))
+                            .fillMaxWidth()
+                            .height(if (selected) 64.dp else 58.dp)
+                            .clip(
+                                if (selected) RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)
+                                else RoundedCornerShape(0.dp)
+                            )
                             .background(if (selected) OliveDark else Color.Transparent),
                         contentAlignment = Alignment.Center
                     ) {
@@ -425,7 +484,7 @@ fun BottomNav(tab: AppTab, onChange: (AppTab) -> Unit) {
                             if (selected) t.filled else t.outlined,
                             contentDescription = t.label,
                             tint = if (selected) LimeBright else GrayIcon,
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(25.dp)
                         )
                     }
                 }
@@ -459,7 +518,12 @@ fun HomeScreen(
     LaunchedEffect(hasPerm) {
         if (hasPerm && pendingParkingSave) {
             pendingParkingSave = false
-            saveCurrentParkingSpot(context, store, scope) { msg -> saveErrorMessage = msg }
+            if (!isLocationServicesEnabled(context)) {
+                ensureLocationOn(context)
+                saveErrorMessage = "Turn on Location, then try again"
+            } else {
+                saveCurrentParkingSpot(context, store, scope) { msg -> saveErrorMessage = msg }
+            }
         }
     }
 
@@ -504,6 +568,9 @@ fun HomeScreen(
         if (!hasPerm) {
             pendingParkingSave = true
             requestPerm()
+        } else if (!isLocationServicesEnabled(context)) {
+            ensureLocationOn(context)
+            saveErrorMessage = "Turn on Location, then try again"
         } else {
             saveCurrentParkingSpot(context, store, scope) { msg -> saveErrorMessage = msg }
         }
@@ -555,6 +622,26 @@ fun HomeScreen(
             liveMarkerIcon = liveMarkerIcon
         )
 
+        Text(
+            "© OpenStreetMap contributors",
+            fontSize = 9.sp,
+            color = NearBlack.copy(alpha = 0.75f),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(top = 6.dp, end = 8.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(White.copy(alpha = 0.82f))
+                .clickable {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.openstreetmap.org/copyright"))
+                        )
+                    }
+                }
+                .padding(horizontal = 6.dp, vertical = 3.dp)
+        )
+
         Surface(
             color = White,
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -578,6 +665,21 @@ fun HomeScreen(
                         )
                         Spacer(Modifier.height(18.dp))
                         PrimaryButton(text = "Save parking spot", onClick = onSaveSpot)
+                    }
+
+                    !hasPerm -> {
+                        Text(
+                            "Location access needed",
+                            fontSize = 26.sp, fontWeight = FontWeight.ExtraBold,
+                            color = NearBlack, letterSpacing = (-0.5).sp
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Allow location so Parked! can show you the way back to your car.",
+                            fontSize = 14.sp, lineHeight = 20.sp, color = GrayMid, fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.height(18.dp))
+                        PrimaryButton(text = "Allow location", onClick = requestPerm)
                     }
 
                     liveLat == null -> {
@@ -605,7 +707,7 @@ fun HomeScreen(
                             right = autoParkLabel
                         )
                         Spacer(Modifier.height(18.dp))
-                        PrimaryButton(text = "Get directions", onClick = onDirections)
+                        PrimaryButton(text = "Get directions", showDirectionIcon = true, onClick = onDirections)
                         Spacer(Modifier.height(10.dp))
                         SecondaryRow(onSave = onSaveSpot, onShare = onShare)
                     }
@@ -622,7 +724,7 @@ fun HomeScreen(
                             right = autoParkLabel
                         )
                         Spacer(Modifier.height(18.dp))
-                        PrimaryButton(text = "Get directions", onClick = onDirections)
+                        PrimaryButton(text = "Get directions", showDirectionIcon = true, onClick = onDirections)
                         Spacer(Modifier.height(10.dp))
                         SecondaryRow(onSave = onSaveSpot, onShare = onShare)
                     }
@@ -686,7 +788,16 @@ private fun saveCurrentParkingSpot(
             if (loc != null) {
                 scope.launch { store.saveParking(loc.latitude, loc.longitude) }
             } else {
-                onFailure("Couldn't determine your location")
+                // Cached location is preferable to silently failing in a garage or
+                // other GPS-hostile place.
+                LocationServices.getFusedLocationProviderClient(context)
+                    .lastLocation
+                    .addOnSuccessListener { cached ->
+                        val recent = cached != null && System.currentTimeMillis() - cached.time <= 2 * 60 * 1000L
+                        if (recent && cached != null) scope.launch { store.saveParking(cached.latitude, cached.longitude) }
+                        else onFailure("Couldn't determine your location")
+                    }
+                    .addOnFailureListener { onFailure("Couldn't determine your location") }
             }
         }
         .addOnFailureListener { e ->
@@ -703,7 +814,7 @@ private fun MetaRow(left: String, right: String) {
 }
 
 @Composable
-private fun PrimaryButton(text: String, onClick: () -> Unit) {
+private fun PrimaryButton(text: String, showDirectionIcon: Boolean = false, onClick: () -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
@@ -715,12 +826,14 @@ private fun PrimaryButton(text: String, onClick: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Filled.Navigation, null,
-                tint = NearBlack,
-                modifier = Modifier.size(20.dp).rotate(35f)
-            )
-            Spacer(Modifier.width(10.dp))
+            if (showDirectionIcon) {
+                Icon(
+                    Icons.Filled.Navigation, null,
+                    tint = NearBlack,
+                    modifier = Modifier.size(20.dp).rotate(35f)
+                )
+                Spacer(Modifier.width(10.dp))
+            }
             Text(text, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = NearBlack)
         }
     }
@@ -794,34 +907,78 @@ private fun HourglassIcon() {
 
 @Composable
 fun FuelScreen(fuel: FuelStore) {
-    var sliderFraction by remember { mutableFloatStateOf(fuel.estimateLevelPct().toFloat() / 100f) }
+    val tank = if (fuel.tankCapacity > 0) fuel.tankCapacity else 50.0
+    val defaultFuelFraction = (20.0 / tank).coerceIn(0.05, 1.0).toFloat()
+    var sliderFraction by remember(tank) { mutableFloatStateOf(defaultFuelFraction) }
     var showAllLogs by remember { mutableStateOf(false) }
     var lastSaveTime by remember { mutableLongStateOf(0L) }
     var showPriceEdit by remember { mutableStateOf(false) }
 
-    val tank = if (fuel.tankCapacity > 0) fuel.tankCapacity else 50.0
     val liters = sliderFraction * tank
 
     val recent = fuel.refuels.take(5)
     val totalL = recent.sumOf { it.litres }
     val totalC = recent.sumOf { it.cost }
-    val derivedPrice = if (totalL > 0.5 && totalC > 0) totalC / totalL else 2.00
+    val derivedPrice = if (totalL > 0.5 && totalC > 0) totalC / totalL else 2.25
     val effectivePrice = if (fuel.customFuelPrice > 0) fuel.customFuelPrice else derivedPrice
 
     val computedCost = liters * effectivePrice
     val costText = String.format(Locale.US, "%.2f", computedCost)
 
+    if (showAllLogs) {
+        BackHandler { showAllLogs = false }
+        Column(Modifier.fillMaxSize().background(White)) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(OliveDark, Color(0xFF4E8F27), LimeBright),
+                            start = Offset.Zero,
+                            end = Offset(900f, 260f)
+                        )
+                    )
+                    .statusBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = 22.dp)
+            ) {
+                Text(
+                    "All last logs",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = White
+                )
+            }
+            if (fuel.refuels.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No fuel logs yet", color = GrayMid, fontWeight = FontWeight.Medium)
+                }
+            } else {
+                LazyColumn(Modifier.fillMaxWidth()) {
+                    itemsIndexed(fuel.refuels) { idx, r -> LogRow(r, fuel, idx) }
+                }
+            }
+        }
+        return
+    }
+
     Column(Modifier.fillMaxSize().background(White)) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(OliveDark, OliveDeeper)))
+                .clip(RoundedCornerShape(bottomStart = 72.dp, bottomEnd = 72.dp))
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(OliveDark, Color(0xFF4E8F27), LimeBright),
+                        start = Offset.Zero,
+                        end = Offset(850f, 1000f)
+                    )
+                )
                 .statusBarsPadding()
-                .padding(top = 16.dp, bottom = 28.dp),
+                .padding(top = 12.dp, bottom = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("Fuel Volume", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = White)
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(12.dp))
 
             // Centered row — side labels use weight(1f) so the capsule sits dead center
             Row(
@@ -864,20 +1021,13 @@ fun FuelScreen(fuel: FuelStore) {
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "Tap price to edit · ${fuel.currency}${String.format(Locale.US, "%.2f", effectivePrice)}/L",
-                fontSize = 11.sp, color = White.copy(alpha = 0.72f)
-            )
-
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(12.dp))
 
             // Save button — visible against the dark green
             Box(
                 Modifier
                     .clip(RoundedCornerShape(999.dp))
-                    .background(White.copy(alpha = 0.18f))
-                    .border(1.dp, White.copy(alpha = 0.40f), RoundedCornerShape(999.dp))
+                    .background(Color(0xFF555158))
                     .clickable {
                         val now = System.currentTimeMillis()
                         if (now - lastSaveTime < 1500) return@clickable
@@ -890,14 +1040,14 @@ fun FuelScreen(fuel: FuelStore) {
                                 litres = liters,
                                 cost = computedCost,
                                 odometer = odo,
-                                tankFull = sliderFraction > 0.95f
+                                tankFull = fuel.estimateLevelPct() + (liters / tank * 100.0) >= 95.0
                             )
-                            sliderFraction = (fuel.estimateLevelPct() / 100.0).toFloat()
+                            sliderFraction = defaultFuelFraction
                         }
                     }
-                    .padding(horizontal = 40.dp, vertical = 14.dp)
+                    .padding(horizontal = 32.dp, vertical = 8.dp)
             ) {
-                Text("Save", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = White)
+                Text("Save", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = White)
             }
         }
 
@@ -910,14 +1060,14 @@ fun FuelScreen(fuel: FuelStore) {
                 Text("Last logs", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
                 if (fuel.refuels.isNotEmpty()) {
                     Text(
-                        if (showAllLogs) "Show less" else "View all",
+                        "View all",
                         fontSize = 13.sp, fontWeight = FontWeight.Bold, color = OliveDark,
-                        modifier = Modifier.clickable { showAllLogs = !showAllLogs }
+                        modifier = Modifier.clickable { showAllLogs = true }
                     )
                 }
             }
 
-            val logs = if (showAllLogs) fuel.refuels else fuel.refuels.take(4)
+            val logs = fuel.refuels.take(4)
             if (logs.isEmpty()) {
                 Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.GasMeter, null, tint = RedFuel, modifier = Modifier.size(100.dp))
@@ -937,8 +1087,8 @@ fun FuelScreen(fuel: FuelStore) {
 
 @Composable
 private fun FuelCapsule(fraction: Float, onFractionChange: (Float) -> Unit) {
-    val capsuleWidth = 120.dp
-    val capsuleHeight = 220.dp
+    val capsuleWidth = 96.dp
+    val capsuleHeight = 184.dp
     val capsuleShape = RoundedCornerShape(capsuleWidth / 2)
 
     val currentFraction by rememberUpdatedState(fraction)
@@ -967,6 +1117,14 @@ private fun FuelCapsule(fraction: Float, onFractionChange: (Float) -> Unit) {
                 .size(width = capsuleWidth, height = capsuleHeight)
                 .clip(capsuleShape)
                 .background(White)
+                .semantics {
+                    contentDescription = "Fuel volume"
+                    progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
+                    setProgress { value ->
+                        onChange(value.coerceIn(0f, 1f))
+                        true
+                    }
+                }
                 .pointerInput(Unit) {
                     detectVerticalDragGestures(
                         onDragStart = {
@@ -1108,88 +1266,207 @@ fun SettingsScreen(fuel: FuelStore) {
     val state by store.state.collectAsState(initial = com.parked.app.data.ParkingState())
 
     var showOdoModal by remember { mutableStateOf(false) }
-    var showFuelPriceModal by remember { mutableStateOf(false) }
     var showDevicePicker by remember { mutableStateOf(false) }
+    var showAppearanceModal by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
+    var pendingAutoStart by remember { mutableStateOf(false) }
+    var systemNotificationsAllowed by remember { mutableStateOf(areNotificationsAllowed(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    fun hasLocation(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    fun hasBluetooth(): Boolean = android.os.Build.VERSION.SDK_INT < 31 ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+
+    fun startMonitor() {
+        if (!isLocationServicesEnabled(context)) {
+            ensureLocationOn(context)
+            statusMessage = "Turn on Location, then enable AutoPark again"
+            return
+        }
+        if (!isBluetoothEnabled(context)) {
+            ensureBluetoothOn(context)
+            statusMessage = "Turn on Bluetooth, then enable AutoPark again"
+            return
+        }
+        val started = runCatching {
+            ContextCompat.startForegroundService(
+                context, Intent(context, ParkingMonitorService::class.java)
+            )
+        }.isSuccess
+        if (started) {
+            scope.launch { store.setMonitoring(true) }
+            statusMessage = "AutoPark is on"
+        } else {
+            scope.launch { store.setMonitoring(false) }
+            statusMessage = "Couldn't start AutoPark"
+        }
+    }
+
+    val autoPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        if (!pendingAutoStart) return@rememberLauncherForActivityResult
+        pendingAutoStart = false
+        if (hasLocation() && hasBluetooth()) startMonitor()
+        else statusMessage = "Location and Bluetooth permission are required"
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        fuel.updateNotificationsEnabled(granted)
+        systemNotificationsAllowed = areNotificationsAllowed(context)
+        statusMessage = if (granted) "Parking alerts are on" else "Notifications weren't enabled"
+    }
+
+    val bluetoothPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) showDevicePicker = true
+        else statusMessage = "Bluetooth permission is required to choose your car"
+    }
+
+    LaunchedEffect(statusMessage) {
+        if (statusMessage != null) {
+            delay(3000)
+            statusMessage = null
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                systemNotificationsAllowed = areNotificationsAllowed(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val notificationsChecked = fuel.notificationsEnabled && systemNotificationsAllowed
 
     Column(Modifier.fillMaxSize().background(White)) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .background(OliveDark)
-                .statusBarsPadding()
-                .padding(top = 20.dp, bottom = 36.dp, start = 24.dp, end = 24.dp)
-        ) {
-            Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = White, letterSpacing = (-0.5).sp)
-        }
-
         Column(
             Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(start = 20.dp, end = 20.dp, bottom = 120.dp)
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(OliveDark, Color(0xFF4D8D26), LimeBright),
+                        start = Offset.Zero,
+                        end = Offset(900f, 850f)
+                    )
+                )
+                .statusBarsPadding()
+                .padding(top = 18.dp, bottom = 24.dp, start = 20.dp, end = 20.dp)
         ) {
-            Spacer(Modifier.height(22.dp))
-
-            SectionTitle("Vehicle")
+            Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = White, letterSpacing = (-0.5).sp)
+            Spacer(Modifier.height(20.dp))
+            Text("Vehicle", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = White, modifier = Modifier.padding(start = 4.dp, bottom = 10.dp))
             Card {
                 ToggleRow(
                     "AutoPark",
                     state.monitoring,
                     onToggle = { on ->
                         if (on) {
-                            val started = runCatching {
-                                ContextCompat.startForegroundService(
-                                    context, Intent(context, ParkingMonitorService::class.java)
-                                )
-                            }.isSuccess
-                            if (started) scope.launch { store.setMonitoring(true) }
+                            if (state.deviceAddress == null) {
+                                statusMessage = "Choose your car Bluetooth device first"
+                                showDevicePicker = true
+                            } else if (!hasLocation() || !hasBluetooth()) {
+                                pendingAutoStart = true
+                                val required = buildList {
+                                    if (!hasLocation()) {
+                                        add(Manifest.permission.ACCESS_FINE_LOCATION)
+                                        add(Manifest.permission.ACCESS_COARSE_LOCATION)
+                                    }
+                                    if (!hasBluetooth() && android.os.Build.VERSION.SDK_INT >= 31) {
+                                        add(Manifest.permission.BLUETOOTH_CONNECT)
+                                    }
+                                }
+                                autoPermissionLauncher.launch(required.toTypedArray())
+                            } else {
+                                startMonitor()
+                            }
                         } else {
                             runCatching {
                                 context.stopService(Intent(context, ParkingMonitorService::class.java))
                             }
                             scope.launch { store.setMonitoring(false) }
+                            statusMessage = "AutoPark is off"
                         }
                     }
                 )
                 DividerRow()
-                TextRow("BT Device", state.deviceName ?: "Not set") { showDevicePicker = true }
+                TextRow("BT Device", state.deviceName ?: "Not set") {
+                    if (android.os.Build.VERSION.SDK_INT >= 31 && !hasBluetooth()) {
+                        bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                    } else showDevicePicker = true
+                }
                 DividerRow()
                 TextRow("Odometer", formatOdometer(fuel.currentOdo)) { showOdoModal = true }
             }
 
-            SectionTitle("Preferences")
+            Text("Preferences", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = White, modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 10.dp))
             Card {
                 ToggleRow(
                     "Notifications",
-                    fuel.notificationsEnabled,
-                    onToggle = { fuel.updateNotificationsEnabled(it) }
+                    notificationsChecked,
+                    onToggle = { enabled ->
+                        if (!enabled) {
+                            fuel.updateNotificationsEnabled(false)
+                        } else if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+                            statusMessage = "Enable Parked! notifications in Android settings"
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                )
+                            }
+                        } else {
+                            fuel.updateNotificationsEnabled(true)
+                            statusMessage = "Parking alerts are on"
+                        }
+                    }
                 )
                 DividerRow()
-                TextRow(
-                    "Fuel price",
-                    if (fuel.customFuelPrice > 0) "${fuel.currency}${String.format(Locale.US, "%.2f", fuel.customFuelPrice)}/L"
-                    else "Auto"
-                ) { showFuelPriceModal = true }
+                TextRow("Appearance", "Change") { showAppearanceModal = true }
+                DividerRow()
+                TextRow("Match my car", "+") { showAppearanceModal = true }
             }
 
-            Spacer(Modifier.height(12.dp))
+        }
 
-            Box(
-                Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center
+        Box(
+            Modifier.fillMaxSize().background(White),
+            contentAlignment = Alignment.Center
+        ) {
+            CarIllustration(fuel.accentName)
+
+            AnimatedVisibility(
+                visible = statusMessage != null,
+                enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { -it / 2 },
+                exit = fadeOut(tween(150)),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp)
             ) {
-                GreenCarIllustration()
+                Surface(color = NearBlack, shape = RoundedCornerShape(999.dp), shadowElevation = 8.dp) {
+                    Text(
+                        statusMessage.orEmpty(),
+                        Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                        color = White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
-
-            Spacer(Modifier.height(24.dp))
         }
     }
 
     if (showOdoModal) {
         OdometerModal(fuel = fuel, onDismiss = { showOdoModal = false })
-    }
-    if (showFuelPriceModal) {
-        FuelPriceModal(fuel = fuel, onDismiss = { showFuelPriceModal = false })
     }
     if (showDevicePicker) {
         DevicePickerDialog(
@@ -1199,6 +1476,9 @@ fun SettingsScreen(fuel: FuelStore) {
                 showDevicePicker = false
             }
         )
+    }
+    if (showAppearanceModal) {
+        AppearanceModal(fuel = fuel, onDismiss = { showAppearanceModal = false })
     }
 }
 
@@ -1253,15 +1533,6 @@ private fun DevicePickerDialog(
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text,
-        fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack,
-        modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 12.dp)
-    )
-}
-
-@Composable
 private fun Card(content: @Composable ColumnScope.() -> Unit) {
     Surface(
         color = White,
@@ -1300,7 +1571,12 @@ private fun TextRow(label: String, value: String, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NearBlack)
-        Text(value, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = GrayMid)
+        Text(
+            value,
+            fontSize = if (value == "+") 26.sp else 14.sp,
+            fontWeight = if (value == "+") FontWeight.Normal else FontWeight.Medium,
+            color = OliveDark.copy(alpha = 0.88f)
+        )
     }
 }
 
@@ -1310,48 +1586,54 @@ private fun DividerRow() {
 }
 
 @Composable
-private fun GreenCarIllustration() {
-    Canvas(Modifier.size(96.dp, 58.dp)) {
-        drawOval(
-            Color(0x14000000),
-            topLeft = Offset(size.width * 0.15f, size.height * 0.85f),
-            size = Size(size.width * 0.7f, size.height * 0.08f)
-        )
-        val body = Path().apply {
-            moveTo(size.width * 0.20f, size.height * 0.65f)
-            lineTo(size.width * 0.23f, size.height * 0.48f)
-            quadraticBezierTo(size.width * 0.26f, size.height * 0.38f, size.width * 0.32f, size.height * 0.36f)
-            lineTo(size.width * 0.68f, size.height * 0.36f)
-            quadraticBezierTo(size.width * 0.74f, size.height * 0.38f, size.width * 0.77f, size.height * 0.48f)
-            lineTo(size.width * 0.80f, size.height * 0.65f)
-            lineTo(size.width * 0.80f, size.height * 0.78f)
-            quadraticBezierTo(size.width * 0.80f, size.height * 0.82f, size.width * 0.76f, size.height * 0.82f)
-            lineTo(size.width * 0.24f, size.height * 0.82f)
-            quadraticBezierTo(size.width * 0.20f, size.height * 0.82f, size.width * 0.20f, size.height * 0.78f)
-            close()
-        }
-        drawPath(body, LimeBright)
-
-        val win = Path().apply {
-            moveTo(size.width * 0.32f, size.height * 0.46f)
-            lineTo(size.width * 0.42f, size.height * 0.46f)
-            lineTo(size.width * 0.42f, size.height * 0.60f)
-            lineTo(size.width * 0.28f, size.height * 0.60f)
-            close()
-        }
-        drawPath(win, OliveDark)
-        val win2 = Path().apply {
-            moveTo(size.width * 0.46f, size.height * 0.46f)
-            lineTo(size.width * 0.68f, size.height * 0.46f)
-            lineTo(size.width * 0.72f, size.height * 0.60f)
-            lineTo(size.width * 0.46f, size.height * 0.60f)
-            close()
-        }
-        drawPath(win2, OliveDark)
-
-        drawCircle(OliveDeeper, radius = size.height * 0.08f, center = Offset(size.width * 0.32f, size.height * 0.82f))
-        drawCircle(OliveDeeper, radius = size.height * 0.08f, center = Offset(size.width * 0.68f, size.height * 0.82f))
+private fun CarIllustration(accentName: String) {
+    val drawable = when (accentName) {
+        "Racing Green", "Forest Green" -> R.drawable.design_car_green
+        "Midnight" -> R.drawable.design_car_midnight
+        "Sunset" -> R.drawable.design_car_sunset
+        else -> R.drawable.design_car
     }
+    Image(
+        painter = painterResource(drawable),
+        contentDescription = "Car appearance preview",
+        modifier = Modifier.width(220.dp).height(183.dp),
+        contentScale = ContentScale.Fit
+    )
+}
+
+@Composable
+private fun AppearanceModal(fuel: FuelStore, onDismiss: () -> Unit) {
+    val options = listOf("Ocean Blue", "Forest Green", "Midnight", "Sunset")
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = White,
+        title = { Text("Appearance", fontWeight = FontWeight.ExtraBold, color = NearBlack) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Choose the car accent shown in Parked!", fontSize = 13.sp, color = GrayMid)
+                Spacer(Modifier.height(4.dp))
+                options.forEach { name ->
+                    val selected = fuel.accentName == name
+                    Surface(
+                        onClick = { fuel.setAccent(name); onDismiss() },
+                        color = if (selected) Color(0xFFE8F3E0) else Color(0xFFF7F7F7),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = NearBlack)
+                            if (selected) Text("✓", color = OliveDark, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = OliveDark) } }
+    )
 }
 
 // ============================================================
@@ -1479,6 +1761,31 @@ fun ParkedMap(
 ) {
     var hasCenteredOnParked by remember { mutableStateOf(false) }
     var hasCenteredOnLive by remember { mutableStateOf(false) }
+    var mapView by remember { mutableStateOf<MapView?>(null) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    LaunchedEffect(parkedLat, parkedLng) {
+        // A newly saved spot should immediately become the map focus instead of
+        // leaving the camera on the previous parking location.
+        hasCenteredOnParked = false
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> mapView?.onResume()
+                Lifecycle.Event.ON_PAUSE -> mapView?.onPause()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            mapView?.onPause()
+            mapView?.onDetach()
+            mapView = null
+        }
+    }
 
     AndroidView(
         modifier = Modifier.fillMaxSize(),
@@ -1488,6 +1795,10 @@ fun ParkedMap(
                 setMultiTouchControls(true)
                 setBuiltInZoomControls(false)
                 controller.setZoom(16.0)
+                mapView = this
+                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                    onResume()
+                }
             }
         },
         update = { map ->
@@ -1591,14 +1902,40 @@ private fun ensureBluetoothOn(context: Context) {
     }
 }
 
+private fun isBluetoothEnabled(context: Context): Boolean {
+    if (android.os.Build.VERSION.SDK_INT >= 31 &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+    ) return false
+    return runCatching {
+        context.getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled == true
+    }.getOrDefault(false)
+}
+
 private fun ensureLocationOn(context: Context) {
-    val lm = context.getSystemService(LocationManager::class.java) ?: return
-    if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) return
+    if (isLocationServicesEnabled(context)) return
     runCatching {
         context.startActivity(
             Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     }
+}
+
+private fun isLocationServicesEnabled(context: Context): Boolean {
+    val lm = context.getSystemService(LocationManager::class.java) ?: return false
+    return if (android.os.Build.VERSION.SDK_INT >= 28) {
+        lm.isLocationEnabled
+    } else {
+        runCatching {
+            lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        }.getOrDefault(false)
+    }
+}
+
+private fun areNotificationsAllowed(context: Context): Boolean {
+    val runtimePermission = android.os.Build.VERSION.SDK_INT < 33 ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    return runtimePermission && NotificationManagerCompat.from(context).areNotificationsEnabled()
 }
 
 private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {

@@ -11,6 +11,14 @@ Parked! remembers where you parked by watching a selected paired Bluetooth devic
 - Open turn-by-turn navigation in Google Maps using an Android intent (no Maps API key)
 - GitHub Actions build that uploads a debug APK artifact
 
+## First run / setup
+1. Finish the two intro screens. They are only shown once.
+2. Open **Settings → BT Device** and choose the paired Bluetooth device used by your car.
+3. Turn on **AutoPark**. Location and Bluetooth must both be enabled; Parked! keeps a foreground service running while AutoPark is on.
+4. Turn on **Notifications** in Settings if you want a confirmation alert after a parking location is saved.
+
+The Android APK is implemented in `app/` with Jetpack Compose. The root `src/` folder is a separate web/Figma prototype and is not used by the Android APK build.
+
 ## Build on GitHub
 1. Create a new GitHub repository, e.g. `parked-android`.
 2. Upload/push this project to the `main` branch.
@@ -32,13 +40,11 @@ APK output:
 For reliable disconnect detection, Parked! runs a foreground service with a persistent notification while monitoring is enabled. This is intentional: modern Android restricts invisible long-running background work.
 
 ## Before production
-This is an MVP scaffold. Before Play Store release, add:
-- Proper app icon and branding
-- Better permission education / denied-permission states
-- Boot/restart handling if desired
-- More robust Bluetooth profile handling for specific car systems
-- Location accuracy / failure states
+Before Play Store release, still consider:
+- Testing Bluetooth disconnect behavior against the specific car/head unit models you support (some cars keep an ACL connection alive after ignition-off)
+- A signed release build and Play App Signing
+- A privacy policy explaining foreground location and Bluetooth use
+- Device/instrumented tests on Android 12 through Android 15+
+- A production map-tile provider if usage grows beyond light personal/MVP traffic
 - Human-readable reverse-geocoded address
 - Unit tests + instrumented tests
-- Signed release build and Play App Signing
-- Privacy policy and clear explanation of foreground location use
