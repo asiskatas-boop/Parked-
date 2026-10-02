@@ -352,8 +352,8 @@ fun MainContent(fuel: FuelStore) {
         }
     }
 
-    LaunchedEffect(hasPerm) {
-        if (!hasPerm) return@LaunchedEffect
+    LaunchedEffect(hasPerm, tab) {
+        if (!hasPerm || tab != AppTab.Home) return@LaunchedEffect
         try {
             fused.lastLocation.addOnSuccessListener { loc ->
                 if (loc != null && liveLat == null) {
@@ -364,8 +364,8 @@ fun MainContent(fuel: FuelStore) {
         } catch (_: SecurityException) {}
     }
 
-    LaunchedEffect(hasPerm) {
-        if (hasPerm) {
+    LaunchedEffect(hasPerm, tab) {
+        if (hasPerm && tab == AppTab.Home) {
             val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
                 .setMinUpdateIntervalMillis(1000L)
                 .setMaxUpdateDelayMillis(2000L).build()
@@ -399,7 +399,6 @@ fun MainContent(fuel: FuelStore) {
         val granted = hasLocationPermission(context)
         hasPerm = granted
         if (granted) {
-            ensureBluetoothOn(context)
             ensureLocationOn(context)
         }
     }
@@ -410,13 +409,8 @@ fun MainContent(fuel: FuelStore) {
                 add(Manifest.permission.ACCESS_FINE_LOCATION)
                 add(Manifest.permission.ACCESS_COARSE_LOCATION)
             }
-            if (android.os.Build.VERSION.SDK_INT >= 31 &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
-                != PackageManager.PERMISSION_GRANTED
-            ) add(Manifest.permission.BLUETOOTH_CONNECT)
         }
         if (toRequest.isEmpty()) {
-            ensureBluetoothOn(context)
             ensureLocationOn(context)
         } else {
             permLauncher.launch(toRequest.toTypedArray())
@@ -1291,17 +1285,21 @@ fun SettingsScreen(fuel: FuelStore) {
             statusMessage = "Turn on Bluetooth, then enable AutoPark again"
             return
         }
-        val started = runCatching {
-            ContextCompat.startForegroundService(
-                context, Intent(context, ParkingMonitorService::class.java)
-            )
-        }.isSuccess
-        if (started) {
-            scope.launch { store.setMonitoring(true) }
-            statusMessage = "AutoPark is on"
-        } else {
-            scope.launch { store.setMonitoring(false) }
-            statusMessage = "Couldn't start AutoPark"
+        scope.launch {
+            // Persist first so the service cannot receive a Bluetooth event while
+            // DataStore still says monitoring is off.
+            store.setMonitoring(true)
+            val started = runCatching {
+                ContextCompat.startForegroundService(
+                    context, Intent(context, ParkingMonitorService::class.java)
+                )
+            }.isSuccess
+            if (started) {
+                statusMessage = "AutoPark is on"
+            } else {
+                store.setMonitoring(false)
+                statusMessage = "Couldn't start AutoPark"
+            }
         }
     }
 
@@ -1448,20 +1446,10 @@ fun SettingsScreen(fuel: FuelStore) {
         ) {
             CarIllustration(fuel.accentName)
 
-            AnimatedVisibility(
-                visible = statusMessage != null,
-                enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { -it / 2 },
-                exit = fadeOut(tween(150)),
+            SettingsStatusToast(
+                message = statusMessage,
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp)
-            ) {
-                Surface(color = NearBlack, shape = RoundedCornerShape(999.dp), shadowElevation = 8.dp) {
-                    Text(
-                        statusMessage.orEmpty(),
-                        Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                        color = White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
+            )
         }
     }
 
@@ -1479,6 +1467,26 @@ fun SettingsScreen(fuel: FuelStore) {
     }
     if (showAppearanceModal) {
         AppearanceModal(fuel = fuel, onDismiss = { showAppearanceModal = false })
+    }
+}
+
+
+@Composable
+private fun SettingsStatusToast(message: String?, modifier: Modifier = Modifier) {
+    if (message == null) return
+    Surface(
+        color = NearBlack,
+        shape = RoundedCornerShape(999.dp),
+        shadowElevation = 8.dp,
+        modifier = modifier
+    ) {
+        Text(
+            message,
+            Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+            color = White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
@@ -1651,7 +1659,7 @@ private fun OdometerModal(fuel: FuelStore, onDismiss: () -> Unit) {
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(
-            Modifier.fillMaxWidth().clickable(enabled = false) {}.navigationBarsPadding(),
+            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding(),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             color = White
         ) {
@@ -1703,7 +1711,7 @@ private fun FuelPriceModal(fuel: FuelStore, onDismiss: () -> Unit) {
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(
-            Modifier.fillMaxWidth().clickable(enabled = false) {}.navigationBarsPadding(),
+            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding(),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             color = White
         ) {

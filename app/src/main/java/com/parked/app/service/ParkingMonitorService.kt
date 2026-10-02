@@ -89,7 +89,7 @@ class ParkingMonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            try { getSystemService(NotificationManager::class.java).cancelAll() } catch (_: Exception) {}
+            try { getSystemService(NotificationManager::class.java).cancel(1) } catch (_: Exception) {}
             stopLocationTracking()
             scope.launch {
                 store.setMonitoring(false)
@@ -122,6 +122,7 @@ class ParkingMonitorService : Service() {
 
             scope.launch {
                 val selected = store.state.first()
+                if (!selected.monitoring) return@launch
                 val address = runCatching { device.address }.getOrNull() ?: return@launch
                 if (address != selected.deviceAddress) return@launch
 
@@ -144,8 +145,11 @@ class ParkingMonitorService : Service() {
 
     private fun startLocationTracking() {
         if (trackingLocation) return
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
-        val request = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 30_000L)
+        val hasFine = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val hasCoarse = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!hasFine && !hasCoarse) return
+        val priority = if (hasFine) Priority.PRIORITY_BALANCED_POWER_ACCURACY else Priority.PRIORITY_LOW_POWER
+        val request = LocationRequest.Builder(priority, 30_000L)
             .setMinUpdateIntervalMillis(20_000L)
             .setMinUpdateDistanceMeters(10f)
             .build()
@@ -174,7 +178,10 @@ class ParkingMonitorService : Service() {
 
         fused.getCurrentLocation(priority, null).addOnCompleteListener { task ->
             val fresh = if (task.isSuccessful) task.result else null
-            val chosen = fresh ?: fallback
+            val fallbackRecent = fallback?.takeIf {
+                System.currentTimeMillis() - it.time <= 5 * 60 * 1000L && it.accuracy <= 100f
+            }
+            val chosen = fresh ?: fallbackRecent
             if (chosen != null) {
                 persistParking(deviceName, chosen)
             } else {
