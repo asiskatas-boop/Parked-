@@ -40,7 +40,7 @@ class FuelStore(context: Context) {
             "promptDismissedAtOdo" -> promptDismissedAtOdo = prefs.getFloat("promptDismissedAtOdo", 0f).toDouble()
             "fuelLevelLogs" -> fuelLogs = loadFuelLogs()
             "refuels" -> refuels = loadRefuels()
-            "accentName" -> accentName = prefs.getString("accentName", "Ocean Blue") ?: "Ocean Blue"
+            "accentName" -> accentName = canonicalAccentName(prefs.getString("accentName", "Blue") ?: "Blue")
             "notificationsEnabled" -> notificationsEnabled = prefs.getBoolean("notificationsEnabled", true)
             "customFuelPrice" -> customFuelPrice = prefs.getFloat("customFuelPrice", 0f).toDouble()
             "customAccentStart" -> customAccentStart = prefs.getInt("customAccentStart", 0)
@@ -76,7 +76,7 @@ class FuelStore(context: Context) {
     var refuels: List<Refuel> by mutableStateOf(loadRefuels())
         private set
 
-    var accentName: String by mutableStateOf(prefs.getString("accentName", "Ocean Blue") ?: "Ocean Blue")
+    var accentName: String by mutableStateOf(canonicalAccentName(prefs.getString("accentName", "Blue") ?: "Blue"))
         private set
 
     var notificationsEnabled: Boolean by mutableStateOf(prefs.getBoolean("notificationsEnabled", true))
@@ -92,11 +92,42 @@ class FuelStore(context: Context) {
 
     init {
         migrateLegacyFuelMeterEntriesIfNeeded()
+        normalizeSavedAccentIfNeeded()
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
     }
 
     companion object {
         private val legacyMigrationLock = Any()
+        private val supportedAccentNames = setOf(
+            "White", "Silver", "Gray", "Black", "Blue", "Red",
+            "Green", "Yellow", "Orange", "Brown", "Purple"
+        )
+    }
+
+    private fun canonicalAccentName(raw: String): String = when (raw.trim()) {
+        "Ocean Blue" -> "Blue"
+        "Forest Green", "Racing Green" -> "Green"
+        "Midnight" -> "Black"
+        "Sunset" -> "Orange"
+        // Older builds could persist the label itself instead of a real colour,
+        // which left the selector with no selected item and a blue fallback car.
+        "Match my car", "" -> "Blue"
+        else -> raw.trim().takeIf { it in supportedAccentNames } ?: "Blue"
+    }
+
+    private fun normalizeSavedAccentIfNeeded() {
+        val raw = prefs.getString("accentName", "Blue") ?: "Blue"
+        val canonical = canonicalAccentName(raw)
+        accentName = canonical
+        if (raw != canonical || customAccentStart != 0 || customAccentEnd != 0) {
+            customAccentStart = 0
+            customAccentEnd = 0
+            prefs.edit()
+                .putString("accentName", canonical)
+                .putInt("customAccentStart", 0)
+                .putInt("customAccentEnd", 0)
+                .apply()
+        }
     }
 
     fun close() {
@@ -150,8 +181,15 @@ class FuelStore(context: Context) {
     }
 
     fun setAccent(name: String) {
-        accentName = name
-        prefs.edit().putString("accentName", name).apply()
+        val canonical = canonicalAccentName(name)
+        accentName = canonical
+        customAccentStart = 0
+        customAccentEnd = 0
+        prefs.edit()
+            .putString("accentName", canonical)
+            .putInt("customAccentStart", 0)
+            .putInt("customAccentEnd", 0)
+            .apply()
     }
 
     fun updateNotificationsEnabled(v: Boolean) {
@@ -165,15 +203,11 @@ class FuelStore(context: Context) {
         prefs.edit().putFloat("customFuelPrice", v.toFloat()).apply()
     }
 
+    @Deprecated("Custom accent gradients are no longer used by the native car colour picker")
     fun setCustomAccent(startArgb: Int, endArgb: Int) {
-        customAccentStart = startArgb
-        customAccentEnd = endArgb
-        accentName = "Match my car"
-        prefs.edit()
-            .putInt("customAccentStart", startArgb)
-            .putInt("customAccentEnd", endArgb)
-            .putString("accentName", "Match my car")
-            .apply()
+        // Keep binary/source compatibility with older callers without persisting
+        // the invalid "Match my car" pseudo-colour again.
+        setAccent("Blue")
     }
 
     /** Update the current fuel estimate without creating a history row. */
@@ -205,6 +239,13 @@ class FuelStore(context: Context) {
     fun deleteFuelLog(date: Long) {
         val updated = fuelLogs.filterNot { it.date == date }
         if (updated.size == fuelLogs.size) return
+        fuelLogs = updated
+        saveFuelLogs(updated)
+    }
+
+    fun restoreFuelLog(log: FuelLevelLog) {
+        if (fuelLogs.any { it.date == log.date }) return
+        val updated = (fuelLogs + log).sortedByDescending { it.date }.take(300)
         fuelLogs = updated
         saveFuelLogs(updated)
     }

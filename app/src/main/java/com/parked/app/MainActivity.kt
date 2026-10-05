@@ -34,15 +34,16 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GasMeter
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocalGasStation
@@ -65,20 +66,17 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -930,35 +928,48 @@ fun FuelScreen(fuel: FuelStore) {
     var showAllLogs by remember { mutableStateOf(false) }
     var showRefuelHistory by remember { mutableStateOf(false) }
     var showRefuelModal by remember { mutableStateOf(false) }
+    var showTripCostModal by remember { mutableStateOf(false) }
     var lastSaveTime by remember { mutableLongStateOf(0L) }
-    var pendingFuelDelete by remember { mutableStateOf<com.parked.app.data.FuelLevelLog?>(null) }
     var pendingRefuelDelete by remember { mutableStateOf<Refuel?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
-    val pct = (sliderFraction * 100f).roundToInt().coerceIn(0, 100)
     val litersInTank = tank * sliderFraction
+    val lastSavedText = fuel.fuelLogs.firstOrNull()?.let { log ->
+        val fmt = SimpleDateFormat("d MMM · HH:mm", Locale.getDefault())
+        "Last saved ${fmt.format(Date(log.date))}"
+    }
+
+    fun deleteFuelLogWithUndo(log: com.parked.app.data.FuelLevelLog) {
+        fuel.deleteFuelLog(log.date)
+        scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = "Fuel log deleted",
+                actionLabel = "Undo",
+                withDismissAction = true
+            )
+            if (result == SnackbarResult.ActionPerformed) fuel.restoreFuelLog(log)
+        }
+    }
 
     if (showAllLogs) {
         BackHandler { showAllLogs = false }
-        FuelHistoryPage(
-            title = "Fuel level logs",
-            emptyText = "No fuel level logs yet",
-            isEmpty = fuel.fuelLogs.isEmpty(),
-            onBack = { showAllLogs = false },
-        ) {
-            itemsIndexed(fuel.fuelLogs, key = { _, log -> log.date }) { idx, log ->
-                FuelLevelLogRow(log = log, index = idx, onDelete = { pendingFuelDelete = log })
+        Box(Modifier.fillMaxSize()) {
+            FuelHistoryPage(
+                title = "Fuel logs",
+                emptyText = "No fuel logs yet",
+                isEmpty = fuel.fuelLogs.isEmpty(),
+                onBack = { showAllLogs = false },
+            ) {
+                itemsIndexed(fuel.fuelLogs, key = { _, log -> log.date }) { idx, log ->
+                    FuelLevelLogRow(log = log, index = idx, onDelete = { deleteFuelLogWithUndo(log) })
+                }
             }
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp)
+            )
         }
-        DeleteConfirmDialog(
-            visible = pendingFuelDelete != null,
-            title = "Delete fuel log?",
-            message = "This fuel-level entry will be removed.",
-            onDismiss = { pendingFuelDelete = null },
-            onConfirm = {
-                pendingFuelDelete?.let { fuel.deleteFuelLog(it.date) }
-                pendingFuelDelete = null
-            }
-        )
         return
     }
 
@@ -1004,79 +1015,109 @@ fun FuelScreen(fuel: FuelStore) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("Fuel level", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = White)
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("$pct%", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = White)
-                        Text("tank level", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = White.copy(alpha = 0.78f))
-                    }
-                }
-                Spacer(Modifier.width(12.dp))
-                FuelCapsule(
-                    fraction = sliderFraction,
-                    onFractionChange = { sliderFraction = it }
-                )
-                Spacer(Modifier.width(12.dp))
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    Column {
-                        Text(
-                            "${String.format(Locale.US, "%.0f", litersInTank)} L",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = White
-                        )
-                        Text("approx.", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = White.copy(alpha = 0.78f))
-                    }
-                }
-            }
+            NativeFuelGauge(
+                fraction = sliderFraction,
+                litersInTank = litersInTank,
+                lastUpdatedText = lastSavedText,
+                onFractionChange = { sliderFraction = it }
+            )
 
             Spacer(Modifier.height(14.dp))
 
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(Color(0xFF555158))
-                    .clickable {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = {
                         val now = System.currentTimeMillis()
-                        if (now - lastSaveTime < 1200) return@clickable
+                        if (now - lastSaveTime < 1200) return@Button
                         lastSaveTime = now
                         fuel.logFuelLevel(sliderFraction * 100.0)
-                    }
-                    .padding(horizontal = 34.dp, vertical = 10.dp)
-            ) {
-                Text("Save fuel level", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = White)
-            }
+                        scope.launch { snackbarHostState.showSnackbar("Fuel level saved") }
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF3C3A3F),
+                        contentColor = White
+                    )
+                ) {
+                    Text("Save level", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
 
-            TextButton(onClick = { showRefuelModal = true }) {
-                Icon(Icons.Filled.LocalGasStation, contentDescription = null, tint = White, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(7.dp))
-                Text("Refuel", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = White)
+                Button(
+                    onClick = { showRefuelModal = true },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = White,
+                        contentColor = OliveDark
+                    )
+                ) {
+                    Icon(Icons.Filled.LocalGasStation, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text("Refuel", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
 
-        Column(Modifier.fillMaxSize()) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 18.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Last logs", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if (fuel.refuels.isNotEmpty()) {
-                        Text(
-                            "Refuels (${fuel.refuels.size})",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = OliveDark,
-                            modifier = Modifier.clickable { showRefuelHistory = true }
-                        )
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 24.dp, top = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        onClick = { showTripCostModal = true },
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFFF5F7F3),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.DirectionsCar, contentDescription = null, tint = OliveDark)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Trip cost", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
+                                Text("Estimate fuel cost for a drive", fontSize = 12.sp, color = GrayMid)
+                            }
+                            Text("›", fontSize = 24.sp, color = OliveDark)
+                        }
                     }
+                    Surface(
+                        onClick = { showRefuelHistory = true },
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFFF5F7F3),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.LocalGasStation, contentDescription = null, tint = OliveDark)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Refuel history", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
+                                Text(
+                                    if (fuel.refuels.isEmpty()) "No refuels yet" else "${fuel.refuels.size} saved refuel${if (fuel.refuels.size == 1) "" else "s"}",
+                                    fontSize = 12.sp,
+                                    color = GrayMid
+                                )
+                            }
+                            Text("›", fontSize = 24.sp, color = OliveDark)
+                        }
+                    }
+                }
+
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Fuel logs", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
                     if (fuel.fuelLogs.size > 4) {
                         Text(
                             "View all",
@@ -1087,9 +1128,8 @@ fun FuelScreen(fuel: FuelStore) {
                         )
                     }
                 }
-            }
 
-            val logs = fuel.fuelLogs.take(4)
+                val logs = fuel.fuelLogs.take(4)
             if (logs.isEmpty()) {
                 Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1099,12 +1139,17 @@ fun FuelScreen(fuel: FuelStore) {
                     }
                 }
             } else {
-                LazyColumn(Modifier.fillMaxWidth()) {
+                LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
                     itemsIndexed(logs, key = { _, log -> log.date }) { idx, log ->
-                        FuelLevelLogRow(log = log, index = idx, onDelete = { pendingFuelDelete = log })
+                        FuelLevelLogRow(log = log, index = idx, onDelete = { deleteFuelLogWithUndo(log) })
                     }
                 }
             }
+            }
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp)
+            )
         }
     }
 
@@ -1115,20 +1160,14 @@ fun FuelScreen(fuel: FuelStore) {
             onSaved = {
                 sliderFraction = (fuel.estimateLevelPct() / 100.0).coerceIn(0.0, 1.0).toFloat()
                 showRefuelModal = false
+                scope.launch { snackbarHostState.showSnackbar("Refuel saved") }
             }
         )
     }
 
-    DeleteConfirmDialog(
-        visible = pendingFuelDelete != null,
-        title = "Delete fuel log?",
-        message = "This fuel-level entry will be removed.",
-        onDismiss = { pendingFuelDelete = null },
-        onConfirm = {
-            pendingFuelDelete?.let { fuel.deleteFuelLog(it.date) }
-            pendingFuelDelete = null
-        }
-    )
+    if (showTripCostModal) {
+        TripCostModal(fuel = fuel, onDismiss = { showTripCostModal = false })
+    }
 }
 
 @Composable
@@ -1177,115 +1216,109 @@ private fun FuelHistoryPage(
 }
 
 @Composable
-private fun FuelCapsule(fraction: Float, onFractionChange: (Float) -> Unit) {
-    val capsuleWidth = 78.dp
-    val capsuleHeight = 178.dp
-    val capsuleShape = RoundedCornerShape(capsuleWidth / 2)
+private fun NativeFuelGauge(
+    fraction: Float,
+    litersInTank: Double,
+    lastUpdatedText: String?,
+    onFractionChange: (Float) -> Unit,
+) {
+    val normalized = fraction.coerceIn(0f, 1f)
+    val pct = (normalized * 100f).roundToInt()
 
-    val currentFraction by rememberUpdatedState(fraction)
-    val onChange by rememberUpdatedState(onFractionChange)
-    var dragAccum by remember { mutableFloatStateOf(0f) }
-    var dragStart by remember { mutableFloatStateOf(fraction) }
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(
-            Modifier.height(capsuleHeight),
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.End
-        ) {
-            listOf("F", "¾", "½", "¼", "E").forEach { label ->
-                Text(label, color = White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = White.copy(alpha = 0.97f),
+        tonalElevation = 1.dp
+    ) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        "$pct%",
+                        fontSize = 30.sp,
+                        lineHeight = 32.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = NearBlack
+                    )
+                    Text("tank level", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = GrayMid)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${String.format(Locale.US, "%.0f", litersInTank)} L",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NearBlack
+                    )
+                    Text("approx.", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = GrayMid)
+                }
             }
-        }
-        Spacer(Modifier.width(6.dp))
 
-        Column(
-            Modifier.height(capsuleHeight).width(9.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.End
-        ) {
-            repeat(9) { i ->
-                val major = i % 2 == 0
-                Box(
-                    Modifier
-                        .width(if (major) 9.dp else 5.dp)
-                        .height(if (major) 2.dp else 1.dp)
-                        .background(White.copy(alpha = if (major) 0.78f else 0.48f))
-                )
-            }
-        }
-        Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.height(4.dp))
 
-        Box(
-            Modifier
-                .size(width = capsuleWidth, height = capsuleHeight)
-                .clip(capsuleShape)
-                .background(White.copy(alpha = 0.96f))
-                .semantics {
+            Slider(
+                value = normalized,
+                onValueChange = { onFractionChange(it.coerceIn(0f, 1f)) },
+                valueRange = 0f..1f,
+                colors = SliderDefaults.colors(
+                    thumbColor = OliveDark,
+                    activeTrackColor = LimeBright,
+                    inactiveTrackColor = Color(0xFFDDE2D9),
+                    activeTickColor = OliveDark,
+                    inactiveTickColor = Color(0xFF8A9185)
+                ),
+                modifier = Modifier.semantics {
                     contentDescription = "Fuel level"
-                    progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
-                    setProgress { value ->
-                        onChange(value.coerceIn(0f, 1f))
-                        true
+                }
+            )
+
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxWidth().height(24.dp)
+            ) {
+                Text(
+                    "E",
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = GrayMid
+                )
+                Text(
+                    "F",
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = GrayMid
+                )
+
+                val markerWidth = 28.dp
+                listOf(0.25f to "¼", 0.50f to "½", 0.75f to "¾").forEach { (position, label) ->
+                    Column(
+                        modifier = Modifier
+                            .offset(x = (maxWidth * position) - (markerWidth / 2f))
+                            .width(markerWidth),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(Modifier.width(1.dp).height(5.dp).background(Color(0xFF8A9185)))
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            label,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = NearBlack
+                        )
                     }
                 }
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragStart = {
-                            dragStart = currentFraction
-                            dragAccum = 0f
-                        },
-                        onVerticalDrag = { change, dragAmount ->
-                            change.consume()
-                            dragAccum += -dragAmount
-                            val delta = dragAccum / size.height.toFloat()
-                            onChange((dragStart + delta).coerceIn(0f, 1f))
-                        }
-                    )
-                }
-        ) {
-            CapsuleFill(
-                fraction = fraction,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .fillMaxHeight(fraction.coerceIn(0f, 1f))
-            )
-        }
-
-        Spacer(Modifier.width(6.dp))
-        Column(
-            Modifier.height(capsuleHeight).width(9.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.Start
-        ) {
-            repeat(9) { i ->
-                val major = i % 2 == 0
-                Box(
-                    Modifier
-                        .width(if (major) 9.dp else 5.dp)
-                        .height(if (major) 2.dp else 1.dp)
-                        .background(White.copy(alpha = if (major) 0.78f else 0.48f))
-                )
+            }
+            if (lastUpdatedText != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(lastUpdatedText, fontSize = 11.sp, color = GrayMid)
             }
         }
     }
-}
-
-@Composable
-private fun CapsuleFill(fraction: Float, modifier: Modifier = Modifier) {
-    val fuelColor = when {
-        fraction < 0.25f -> Color(0xFFE84848)
-        fraction < 0.50f -> Color(0xFFF2A33A)
-        else -> LimeBright
-    }
-    Box(
-        modifier.background(
-            Brush.verticalGradient(
-                colors = listOf(fuelColor.copy(alpha = 0.82f), fuelColor)
-            )
-        )
-    )
 }
 
 @Composable
@@ -1315,8 +1348,13 @@ private fun FuelLevelLogRow(
             fontWeight = FontWeight.ExtraBold,
             color = NearBlack
         )
-        TextButton(onClick = onDelete) {
-            Text("Delete", fontSize = 12.sp, color = ErrorRed, fontWeight = FontWeight.SemiBold)
+        IconButton(onClick = onDelete) {
+            Icon(
+                Icons.Filled.Delete,
+                contentDescription = "Delete fuel log",
+                tint = GrayIcon,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -1406,6 +1444,7 @@ private fun RefuelModal(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
                     onValueChange = { litres = it; errorText = null },
                     label = { Text("Litres added") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(10.dp))
@@ -1414,6 +1453,7 @@ private fun RefuelModal(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
                     onValueChange = { totalPaid = it; errorText = null },
                     label = { Text("Total paid (${fuel.currency})") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth()
                 )
                 if (pricePerLitre != null && pricePerLitre.isFinite()) {
@@ -1431,6 +1471,7 @@ private fun RefuelModal(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
                     onValueChange = { odometer = it; errorText = null },
                     label = { Text("Odometer (optional)") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
@@ -1475,6 +1516,117 @@ private fun RefuelModal(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
     }
 }
 
+@Composable
+private fun TripCostModal(fuel: FuelStore, onDismiss: () -> Unit) {
+    val learnedConsumption = fuel.averageL100km()
+    val learnedPrice = fuel.customFuelPrice.takeIf { it > 0 }
+        ?: fuel.refuels.firstOrNull { it.litres > 0 && it.cost > 0 }?.let { it.cost / it.litres }
+
+    var distance by remember { mutableStateOf("") }
+    var consumption by remember(learnedConsumption) {
+        mutableStateOf(learnedConsumption?.let { String.format(Locale.US, "%.1f", it) } ?: "")
+    }
+    var price by remember(learnedPrice) {
+        mutableStateOf(learnedPrice?.let { String.format(Locale.US, "%.3f", it) } ?: "")
+    }
+    var roundTrip by remember { mutableStateOf(false) }
+
+    fun number(text: String): Double? = text.replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 }
+
+    val distanceValue = number(distance)
+    val consumptionValue = number(consumption)
+    val priceValue = number(price)
+    val tripDistance = distanceValue?.times(if (roundTrip) 2.0 else 1.0)
+    val litresNeeded = if (tripDistance != null && consumptionValue != null) tripDistance * consumptionValue / 100.0 else null
+    val tripCost = if (litresNeeded != null && priceValue != null) litresNeeded * priceValue else null
+
+    Box(
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { onDismiss() },
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Surface(
+            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding(),
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            color = White
+        ) {
+            Column(Modifier.padding(24.dp)) {
+                Text("Trip cost", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
+                Spacer(Modifier.height(4.dp))
+                Text("Quick estimate only — this does not create a fuel log or refuel.", fontSize = 13.sp, color = GrayMid)
+                Spacer(Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = distance,
+                    onValueChange = { distance = it },
+                    label = { Text("Distance (km)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = consumption,
+                    onValueChange = { consumption = it },
+                    label = { Text("Consumption (L/100 km)") },
+                    supportingText = {
+                        if (learnedConsumption != null) Text("Pre-filled from your refuel history")
+                        else Text("Enter your car's average consumption")
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = price,
+                    onValueChange = { price = it },
+                    label = { Text("Fuel price (${fuel.currency}/L)") },
+                    supportingText = {
+                        if (learnedPrice != null) Text("Pre-filled from your latest known fuel price")
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Round trip", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = NearBlack)
+                    Switch(checked = roundTrip, onCheckedChange = { roundTrip = it })
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Surface(shape = RoundedCornerShape(18.dp), color = Color(0xFFF5F7F3), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Estimated cost", fontSize = 12.sp, color = GrayMid)
+                        Text(
+                            tripCost?.let { "${fuel.currency}${String.format(Locale.US, "%.2f", it)}" } ?: "—",
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = NearBlack
+                        )
+                        if (litresNeeded != null && tripDistance != null) {
+                            Text(
+                                "${String.format(Locale.US, "%.0f", tripDistance)} km · ~${String.format(Locale.US, "%.1f", litresNeeded)} L",
+                                fontSize = 12.sp,
+                                color = GrayMid
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+                Box(Modifier.fillMaxWidth().clickable { onDismiss() }.padding(12.dp), contentAlignment = Alignment.Center) {
+                    Text("Done", fontSize = 15.sp, color = OliveDark, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
 // ============================================================
 // Settings screen
 // ============================================================
@@ -1488,6 +1640,7 @@ fun SettingsScreen(fuel: FuelStore) {
     val latestParkingState by rememberUpdatedState(state)
 
     var showOdoModal by remember { mutableStateOf(false) }
+    var showTankModal by remember { mutableStateOf(false) }
     var showDevicePicker by remember { mutableStateOf(false) }
     var showAppearanceModal by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
@@ -1534,18 +1687,18 @@ fun SettingsScreen(fuel: FuelStore) {
             val wasAutoPark = pendingAutoStart
             pendingAutoStart = false
             pendingDevicePickerOnly = false
-            statusMessage = if (wasAutoPark) "Bluetooth is needed for AutoPark" else "Turn on Bluetooth to choose your car"
+            statusMessage = if (wasAutoPark) "Bluetooth needed" else "Turn on Bluetooth"
         } else if (pendingDevicePickerOnly) {
             pendingDevicePickerOnly = false
             showDevicePicker = true
         } else if (latestParkingState.deviceAddress == null) {
-            statusMessage = "Choose your car Bluetooth device"
+            statusMessage = "Choose car Bluetooth"
             showDevicePicker = true
         } else if (!isLocationServicesEnabled(context)) {
             // Location settings are opened only because the user explicitly chose
             // AutoPark; Parked! no longer pushes this prompt on normal app launch.
             ensureLocationOn(context)
-            statusMessage = "Turn on Location to finish AutoPark"
+            statusMessage = "Location needed"
         } else {
             pendingAutoStart = false
             startMonitorReady()
@@ -1567,15 +1720,15 @@ fun SettingsScreen(fuel: FuelStore) {
         }
         if (!hasLocation() || !hasBluetooth()) {
             pendingAutoStart = false
-            statusMessage = "Location and Bluetooth permission are required"
+            statusMessage = "Location + Bluetooth needed"
         } else if (!isBluetoothEnabled(context)) {
             bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
         } else if (latestParkingState.deviceAddress == null) {
-            statusMessage = "Choose your car Bluetooth device"
+            statusMessage = "Choose car Bluetooth"
             showDevicePicker = true
         } else if (!isLocationServicesEnabled(context)) {
             ensureLocationOn(context)
-            statusMessage = "Turn on Location to finish AutoPark"
+            statusMessage = "Location needed"
         } else {
             pendingAutoStart = false
             startMonitorReady()
@@ -1603,11 +1756,11 @@ fun SettingsScreen(fuel: FuelStore) {
             // continues automatically; no second AutoPark toggle is required.
             bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
         } else if (!deviceReady) {
-            statusMessage = "Choose your car Bluetooth device"
+            statusMessage = "Choose car Bluetooth"
             showDevicePicker = true
         } else if (!isLocationServicesEnabled(context)) {
             ensureLocationOn(context)
-            statusMessage = "Turn on Location to finish AutoPark"
+            statusMessage = "Location needed"
         } else {
             pendingAutoStart = false
             startMonitorReady()
@@ -1627,7 +1780,7 @@ fun SettingsScreen(fuel: FuelStore) {
     ) { granted ->
         if (!granted) {
             pendingDevicePickerOnly = false
-            statusMessage = "Bluetooth permission is required to choose your car"
+            statusMessage = "Bluetooth permission needed"
         } else if (!isBluetoothEnabled(context)) {
             pendingDevicePickerOnly = true
             bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
@@ -1696,7 +1849,7 @@ fun SettingsScreen(fuel: FuelStore) {
                     }
                 )
                 DividerRow()
-                TextRow("BT Device", state.deviceName ?: "Not set") {
+                TextRow("Car Bluetooth", state.deviceName ?: "Not set") {
                     pendingDevicePickerOnly = true
                     if (android.os.Build.VERSION.SDK_INT >= 31 && !hasBluetooth()) {
                         bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
@@ -1709,6 +1862,11 @@ fun SettingsScreen(fuel: FuelStore) {
                 }
                 DividerRow()
                 TextRow("Odometer", formatOdometer(fuel.currentOdo)) { showOdoModal = true }
+                DividerRow()
+                TextRow(
+                    "Tank capacity",
+                    if (fuel.tankCapacity > 0) "${String.format(Locale.US, "%.0f", fuel.tankCapacity)} L" else "Not set"
+                ) { showTankModal = true }
             }
 
             Text("Preferences", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = White, modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 10.dp))
@@ -1743,7 +1901,7 @@ fun SettingsScreen(fuel: FuelStore) {
                     }
                 )
                 DividerRow()
-                TextRow("Match my car", fuel.accentName) { showAppearanceModal = true }
+                TextRow("Car appearance", fuel.accentName) { showAppearanceModal = true }
             }
 
         }
@@ -1752,7 +1910,9 @@ fun SettingsScreen(fuel: FuelStore) {
             Modifier.fillMaxSize().background(White),
             contentAlignment = Alignment.Center
         ) {
-            CarIllustration(fuel.accentName)
+            Box(Modifier.clickable { showAppearanceModal = true }) {
+                CarIllustration(fuel.accentName)
+            }
 
             SettingsStatusToast(
                 message = statusMessage,
@@ -1763,6 +1923,9 @@ fun SettingsScreen(fuel: FuelStore) {
 
     if (showOdoModal) {
         OdometerModal(fuel = fuel, onDismiss = { showOdoModal = false })
+    }
+    if (showTankModal) {
+        TankCapacityModal(fuel = fuel, onDismiss = { showTankModal = false })
     }
     if (showDevicePicker) {
         DevicePickerDialog(
@@ -1789,7 +1952,7 @@ fun SettingsScreen(fuel: FuelStore) {
                         pendingAutoStart = true
                         beginAutoPark(deviceReady = true)
                     } else {
-                        statusMessage = "Car Bluetooth selected"
+                        statusMessage = "Car Bluetooth saved"
                     }
                 }
             }
@@ -1935,10 +2098,9 @@ private fun CarIllustration(accentName: String) {
         "Orange" -> R.drawable.design_car_orange
         "Brown" -> R.drawable.design_car_brown
         "Purple" -> R.drawable.design_car_purple
-        "Green", "Racing Green", "Forest Green" -> R.drawable.design_car_green
-        "Midnight" -> R.drawable.design_car_midnight
-        "Sunset" -> R.drawable.design_car_sunset
-        else -> R.drawable.design_car // Blue / Ocean Blue and older saved values
+        "Green" -> R.drawable.design_car_green
+        "Blue" -> R.drawable.design_car
+        else -> R.drawable.design_car
     }
     Image(
         painter = painterResource(drawable),
@@ -1964,24 +2126,18 @@ private fun AppearanceModal(fuel: FuelStore, onDismiss: () -> Unit) {
         "Purple" to Color(0xFF7E57C2),
     )
 
-    fun isSelected(name: String): Boolean = when (name) {
-        "Blue" -> fuel.accentName == "Blue" || fuel.accentName == "Ocean Blue"
-        "Green" -> fuel.accentName in listOf("Green", "Forest Green", "Racing Green")
-        "Black" -> fuel.accentName == "Black" || fuel.accentName == "Midnight"
-        "Orange" -> fuel.accentName == "Orange" || fuel.accentName == "Sunset"
-        else -> fuel.accentName == name
-    }
+    fun isSelected(name: String): Boolean = fuel.accentName == name
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = White,
-        title = { Text("Match my car", fontWeight = FontWeight.ExtraBold, color = NearBlack) },
+        title = { Text("Car appearance", fontWeight = FontWeight.ExtraBold, color = NearBlack) },
         text = {
             Column {
                 Text("Choose the closest colour.", fontSize = 13.sp, color = GrayMid)
                 Spacer(Modifier.height(10.dp))
                 LazyColumn(Modifier.heightIn(max = 430.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(options) { (name, swatch) ->
+                    items(options, key = { it.first }) { (name, swatch) ->
                         val selected = isSelected(name)
                         Surface(
                             onClick = { fuel.setAccent(name); onDismiss() },
@@ -2025,7 +2181,6 @@ private fun AppearanceModal(fuel: FuelStore, onDismiss: () -> Unit) {
 @Composable
 private fun OdometerModal(fuel: FuelStore, onDismiss: () -> Unit) {
     var odo by remember { mutableStateOf(if (fuel.currentOdo > 0) String.format(Locale.US, "%.0f", fuel.currentOdo) else "") }
-    var tank by remember { mutableStateOf(if (fuel.tankCapacity > 0) String.format(Locale.US, "%.0f", fuel.tankCapacity) else "") }
     var errorText by remember { mutableStateOf<String?>(null) }
 
     Box(
@@ -2041,15 +2196,11 @@ private fun OdometerModal(fuel: FuelStore, onDismiss: () -> Unit) {
                 Text("Odometer", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
                 Spacer(Modifier.height(16.dp))
                 OutlinedTextField(
-                    value = odo, onValueChange = { odo = it },
+                    value = odo, onValueChange = { odo = it; errorText = null },
                     label = { Text("Current odometer (km)") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = tank, onValueChange = { tank = it },
-                    label = { Text("Tank capacity (L)") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
                 )
                 if (errorText != null) {
                     Spacer(Modifier.height(6.dp))
@@ -2058,16 +2209,59 @@ private fun OdometerModal(fuel: FuelStore, onDismiss: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
                 PrimaryButton(text = "Save", onClick = {
                     val od = odo.replace(',', '.').toDoubleOrNull()
-                    val tankValue = if (tank.isBlank()) null else tank.replace(',', '.').toDoubleOrNull()
+                    if (od == null || !od.isFinite() || od <= 0) {
+                        errorText = "Enter a valid odometer"
+                    } else {
+                        fuel.setOdometer(od)
+                        onDismiss()
+                    }
+                })
+                Spacer(Modifier.height(8.dp))
+                Box(Modifier.fillMaxWidth().clickable { onDismiss() }.padding(12.dp), contentAlignment = Alignment.Center) {
+                    Text("Cancel", fontSize = 15.sp, color = GrayMid, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TankCapacityModal(fuel: FuelStore, onDismiss: () -> Unit) {
+    var tank by remember { mutableStateOf(if (fuel.tankCapacity > 0) String.format(Locale.US, "%.0f", fuel.tankCapacity) else "") }
+    var errorText by remember { mutableStateOf<String?>(null) }
+
+    Box(
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { onDismiss() },
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Surface(
+            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding(),
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            color = White
+        ) {
+            Column(Modifier.padding(24.dp)) {
+                Text("Tank capacity", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
+                Spacer(Modifier.height(4.dp))
+                Text("Used for fuel estimates and trip cost.", fontSize = 13.sp, color = GrayMid)
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = tank, onValueChange = { tank = it; errorText = null },
+                    label = { Text("Capacity (L)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (errorText != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(errorText!!, fontSize = 12.sp, color = ErrorRed)
+                }
+                Spacer(Modifier.height(16.dp))
+                PrimaryButton(text = "Save", onClick = {
+                    val parsed = tank.replace(',', '.').toDoubleOrNull()
                     when {
-                        od == null || !od.isFinite() || od <= 0 -> errorText = "Enter a valid odometer"
-                        tankValue != null && (!tankValue.isFinite() || tankValue <= 0) -> errorText = "Enter a valid tank capacity"
-                        tank.isNotBlank() && tankValue == null -> errorText = "Enter a valid tank capacity"
-                        else -> {
-                            fuel.setOdometer(od)
-                            tankValue?.let { fuel.updateTankCapacity(it) }
-                            onDismiss()
-                        }
+                        parsed == null || !parsed.isFinite() || parsed <= 0 -> errorText = "Enter a valid tank capacity"
+                        parsed > 300 -> errorText = "That looks too high"
+                        else -> { fuel.updateTankCapacity(parsed); onDismiss() }
                     }
                 })
                 Spacer(Modifier.height(8.dp))
@@ -2101,7 +2295,9 @@ private fun FuelPriceModal(fuel: FuelStore, onDismiss: () -> Unit) {
                 OutlinedTextField(
                     value = price, onValueChange = { price = it; errorText = null },
                     label = { Text("${fuel.currency} per liter") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
                 )
                 if (errorText != null) {
                     Spacer(Modifier.height(6.dp))
