@@ -28,6 +28,8 @@ class ParkingMonitorService : Service() {
 
     private var lastLocation: Location? = null
     private var trackingLocation = false
+    private val parkingCaptureInProgress = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val lastParkingCaptureStartedAt = java.util.concurrent.atomic.AtomicLong(0L)
 
     private val fused by lazy { LocationServices.getFusedLocationProviderClient(this) }
 
@@ -38,7 +40,13 @@ class ParkingMonitorService : Service() {
             val prev = lastLocation
             if (prev != null) {
                 val d = prev.distanceTo(loc)
-                if (d in 10.0..5000.0) {
+                val elapsedSeconds = (loc.elapsedRealtimeNanos - prev.elapsedRealtimeNanos) / 1_000_000_000.0
+                val noiseFloorMeters = maxOf(15.0, prev.accuracy.toDouble() + loc.accuracy.toDouble())
+                val speedMps = if (elapsedSeconds > 0) d / elapsedSeconds else Double.POSITIVE_INFINITY
+
+                // Ignore stationary GPS wander and impossible jumps. A raw 10 m
+                // threshold can slowly add kilometres while a parked car sits still.
+                if (d > noiseFloorMeters && d <= 5000.0 && speedMps <= 70.0) {
                     fuel.addKm(d / 1000.0)
                 }
             }
@@ -128,10 +136,25 @@ class ParkingMonitorService : Service() {
 
                 when (intent?.action) {
                     BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                        // A real reconnect means a previous disconnect cycle is over.
+                        // Clear the duplicate-event window only after any prior capture
+                        // has completed, so a short legitimate trip can still park.
+                        if (!parkingCaptureInProgress.get()) {
+                            lastParkingCaptureStartedAt.set(0L)
+                        }
                         notifyStatus("Automatic parking on")
                         startLocationTracking()
                     }
                     BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                        // Some car/head-unit stacks emit the same disconnect more than
+                        // once. Guard both concurrent and immediately repeated events so
+                        // one parking action cannot create duplicate saves/alerts.
+                        val now = android.os.SystemClock.elapsedRealtime()
+                        val previous = lastParkingCaptureStartedAt.get()
+                        if (previous > 0L && now - previous < 15_000L) return@launch
+                        if (!lastParkingCaptureStartedAt.compareAndSet(previous, now)) return@launch
+                        if (!parkingCaptureInProgress.compareAndSet(false, true)) return@launch
+
                         // Keep the final in-car GPS sample as a fallback. Requesting a
                         // fresh fix can fail in garages exactly when it matters most.
                         val fallback = lastLocation
@@ -154,10 +177,18 @@ class ParkingMonitorService : Service() {
             .setMinUpdateDistanceMeters(10f)
             .build()
         try {
-            fused.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
             trackingLocation = true
             lastLocation = null
-        } catch (_: SecurityException) {}
+            fused.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
+                .addOnFailureListener {
+                    // A request can fail asynchronously (for example if Location
+                    // services are switched off). Do not leave the service believing
+                    // it is tracking, otherwise a later reconnect will not retry.
+                    trackingLocation = false
+                }
+        } catch (_: SecurityException) {
+            trackingLocation = false
+        }
     }
 
     private fun stopLocationTracking(clearLast: Boolean = true) {
@@ -171,33 +202,61 @@ class ParkingMonitorService : Service() {
     private suspend fun captureLocation(deviceName: String, fallback: Location? = null) {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
             ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
-        ) return
+        ) {
+            parkingCaptureInProgress.set(false)
+            notifyStatus("Parking detected — location permission needed")
+            return
+        }
 
-        val priority = if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
-            Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY
+        // Prefer the final in-car sample first. This normally gives Parked! the
+        // parking position without waking GPS right after Bluetooth disconnects.
+        val fallbackRecent = fallback?.takeIf {
+            System.currentTimeMillis() - it.time <= 5 * 60 * 1000L && it.accuracy <= 120f
+        }
+        if (fallbackRecent != null) {
+            persistParking(deviceName, fallbackRecent)
+            return
+        }
 
-        fused.getCurrentLocation(priority, null).addOnCompleteListener { task ->
-            val fresh = if (task.isSuccessful) task.result else null
-            val fallbackRecent = fallback?.takeIf {
-                System.currentTimeMillis() - it.time <= 5 * 60 * 1000L && it.accuracy <= 100f
-            }
-            val chosen = fresh ?: fallbackRecent
-            if (chosen != null) {
-                persistParking(deviceName, chosen)
-            } else {
-                // One final inexpensive fallback to the fused provider cache.
-                fused.lastLocation.addOnSuccessListener { cached ->
-                    val recent = cached != null && System.currentTimeMillis() - cached.time <= 10 * 60 * 1000L
-                    if (recent && cached != null) persistParking(deviceName, cached)
-                    else notifyStatus("Couldn't save parking location")
+        // Next try Android's fused cache. Only ask for a fresh balanced-power fix
+        // when neither cached source is good enough.
+        try {
+            fused.lastLocation.addOnCompleteListener { cachedTask ->
+                val cached = if (cachedTask.isSuccessful) cachedTask.result else null
+                val cachedRecent = cached?.takeIf {
+                    System.currentTimeMillis() - it.time <= 10 * 60 * 1000L && it.accuracy <= 150f
+                }
+                if (cachedRecent != null) {
+                    persistParking(deviceName, cachedRecent)
+                    return@addOnCompleteListener
+                }
+
+                try {
+                    fused.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
+                        .addOnCompleteListener { freshTask ->
+                            val fresh = if (freshTask.isSuccessful) freshTask.result else null
+                            if (fresh != null) {
+                                persistParking(deviceName, fresh)
+                            } else {
+                                parkingCaptureInProgress.set(false)
+                                notifyStatus("Couldn't save parking location")
+                            }
+                        }
+                } catch (_: SecurityException) {
+                    parkingCaptureInProgress.set(false)
+                    notifyStatus("Parking detected — location permission needed")
                 }
             }
+        } catch (_: SecurityException) {
+            parkingCaptureInProgress.set(false)
+            notifyStatus("Parking detected — location permission needed")
         }
     }
 
     private fun persistParking(deviceName: String, loc: Location) {
         scope.launch { store.saveParking(loc.latitude, loc.longitude) }
         lastLocation = null
+        parkingCaptureInProgress.set(false)
 
         val canNotify = android.os.Build.VERSION.SDK_INT < 33 ||
             ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -208,15 +267,24 @@ class ParkingMonitorService : Service() {
                 Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
+            val logFuelPending = PendingIntent.getActivity(
+                this,
+                3,
+                Intent(this, MainActivity::class.java)
+                    .putExtra(MainActivity.EXTRA_OPEN_TAB, MainActivity.TAB_FUEL)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
             getSystemService(NotificationManager::class.java).notify(
                 2,
                 NotificationCompat.Builder(this, ALERT_CHANNEL)
                     .setSmallIcon(R.drawable.ic_notification)
                     .setContentTitle("Parking saved")
-                    .setContentText("$deviceName disconnected — your spot is saved.")
+                    .setContentText("Your spot is saved. Log your fuel level when ready.")
                     .setContentIntent(pending)
                     .setAutoCancel(true)
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .addAction(R.drawable.ic_notification, "Log fuel", logFuelPending)
                     .build()
             )
         }
