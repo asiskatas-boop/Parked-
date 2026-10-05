@@ -20,3 +20,5 @@ Car-companion usability pass.
 - Split Tank capacity out of the Odometer editor into its own setting.
 - Simplified AutoPark prompts to short action-only messages.
 - Bumped Android build to version code 5 / version 0.2.3.
+
+Build fix: corrected invalid Compose padding(horizontal + top) overload in Fuel screen.

@@ -33,6 +33,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -922,7 +924,7 @@ private fun HourglassIcon() {
 
 @Composable
 fun FuelScreen(fuel: FuelStore) {
-    val tank = if (fuel.tankCapacity > 0) fuel.tankCapacity else 50.0
+    val configuredTank = fuel.tankCapacity.takeIf { it.isFinite() && it > 0 }
     val initialFraction = (fuel.estimateLevelPct() / 100.0).coerceIn(0.0, 1.0).toFloat()
     var sliderFraction by remember { mutableFloatStateOf(initialFraction) }
     var showAllLogs by remember { mutableStateOf(false) }
@@ -934,7 +936,7 @@ fun FuelScreen(fuel: FuelStore) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    val litersInTank = tank * sliderFraction
+    val litersInTank = configuredTank?.times(sliderFraction)
     val lastSavedText = fuel.fuelLogs.firstOrNull()?.let { log ->
         val fmt = SimpleDateFormat("d MMM · HH:mm", Locale.getDefault())
         "Last saved ${fmt.format(Date(log.date))}"
@@ -1065,7 +1067,7 @@ fun FuelScreen(fuel: FuelStore) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
                 Column(
-                    Modifier.fillMaxWidth().padding(horizontal = 24.dp, top = 16.dp),
+                    Modifier.fillMaxWidth().padding(start = 24.dp, top = 16.dp, end = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Surface(
@@ -1218,7 +1220,7 @@ private fun FuelHistoryPage(
 @Composable
 private fun NativeFuelGauge(
     fraction: Float,
-    litersInTank: Double,
+    litersInTank: Double?,
     lastUpdatedText: String?,
     onFractionChange: (Float) -> Unit,
 ) {
@@ -1249,12 +1251,17 @@ private fun NativeFuelGauge(
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        "${String.format(Locale.US, "%.0f", litersInTank)} L",
+                        litersInTank?.let { "${String.format(Locale.US, "%.0f", it)} L" } ?: "—",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = NearBlack
                     )
-                    Text("approx.", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = GrayMid)
+                    Text(
+                        if (litersInTank != null) "approx." else "set tank capacity",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = GrayMid
+                    )
                 }
             }
 
@@ -1429,11 +1436,11 @@ private fun RefuelModal(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(
-            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding(),
+            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding().imePadding(),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             color = White
         ) {
-            Column(Modifier.padding(24.dp)) {
+            Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
                 Text("Refuel", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
                 Spacer(Modifier.height(4.dp))
                 Text("Only use this when you actually add fuel.", fontSize = 13.sp, color = GrayMid)
@@ -1545,11 +1552,11 @@ private fun TripCostModal(fuel: FuelStore, onDismiss: () -> Unit) {
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(
-            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding(),
+            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding().imePadding(),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             color = White
         ) {
-            Column(Modifier.padding(24.dp)) {
+            Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
                 Text("Trip cost", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
                 Spacer(Modifier.height(4.dp))
                 Text("Quick estimate only — this does not create a fuel log or refuel.", fontSize = 13.sp, color = GrayMid)
@@ -1882,6 +1889,11 @@ fun SettingsScreen(fuel: FuelStore) {
                         ) {
                             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         } else if (!areNotificationsAllowed(context)) {
+                            // Remember that the user wants alerts before opening
+                            // Android's channel settings. If they enable the channel
+                            // there, Parked should be on immediately when they return
+                            // instead of requiring a second toggle.
+                            fuel.updateNotificationsEnabled(true)
                             statusMessage = "Enable Parking alerts in Android settings"
                             runCatching {
                                 val intent = if (android.os.Build.VERSION.SDK_INT >= 26) {
@@ -2188,11 +2200,11 @@ private fun OdometerModal(fuel: FuelStore, onDismiss: () -> Unit) {
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(
-            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding(),
+            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding().imePadding(),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             color = White
         ) {
-            Column(Modifier.padding(24.dp)) {
+            Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
                 Text("Odometer", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
                 Spacer(Modifier.height(16.dp))
                 OutlinedTextField(
@@ -2235,11 +2247,11 @@ private fun TankCapacityModal(fuel: FuelStore, onDismiss: () -> Unit) {
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(
-            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding(),
+            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding().imePadding(),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             color = White
         ) {
-            Column(Modifier.padding(24.dp)) {
+            Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
                 Text("Tank capacity", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
                 Spacer(Modifier.height(4.dp))
                 Text("Used for fuel estimates and trip cost.", fontSize = 13.sp, color = GrayMid)
@@ -2283,11 +2295,11 @@ private fun FuelPriceModal(fuel: FuelStore, onDismiss: () -> Unit) {
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(
-            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding(),
+            Modifier.fillMaxWidth().clickable { }.navigationBarsPadding().imePadding(),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             color = White
         ) {
-            Column(Modifier.padding(24.dp)) {
+            Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
                 Text("Fuel price", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
                 Spacer(Modifier.height(4.dp))
                 Text("Leave blank to auto-calculate from logs", fontSize = 13.sp, color = GrayMid)

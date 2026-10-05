@@ -257,7 +257,18 @@ class FuelStore(context: Context) {
     fun logRefuel(litres: Double, cost: Double, odometer: Double, tankFull: Boolean) {
         if (!litres.isFinite() || !cost.isFinite() || !odometer.isFinite()) return
         if (litres <= 0 || cost < 0 || odometer < 0) return
-        val levelBeforeRefuel = estimateLevelPct()
+        // Estimate the level at the odometer reading for this fill-up. If the
+        // car's displayed odometer is ahead of Parked's GPS-tracked value, using
+        // the old currentOdo here would overstate the fuel remaining on a partial
+        // refuel. Older readings are treated as historical and do not roll the
+        // current estimate backwards.
+        val effectiveOdo = when {
+            odometer > currentOdo && odometer > 0 -> odometer
+            currentOdo > 0 -> currentOdo
+            odometer > 0 -> odometer
+            else -> 0.0
+        }
+        val levelBeforeRefuel = estimateLevelPctAtOdometer(effectiveOdo)
         val recordedOdo = when {
             odometer > 0 -> odometer
             currentOdo > 0 -> currentOdo
@@ -309,17 +320,21 @@ class FuelStore(context: Context) {
     }
 
     fun estimatedRangeKm(): Double? {
+        if (!tankCapacity.isFinite() || tankCapacity <= 0) return null
         val avg = averageL100km() ?: return null
-        if (avg <= 0) return null
+        if (!avg.isFinite() || avg <= 0) return null
         return tankCapacity / avg * 100.0
     }
 
-    fun estimateLevelPct(): Double {
+    private fun estimateLevelPctAtOdometer(odometer: Double): Double {
         val range = estimatedRangeKm() ?: return levelPct
-        val driven = currentOdo - odoForLevel
-        if (driven <= 0) return levelPct
+        if (!range.isFinite() || range <= 0) return levelPct
+        val driven = odometer - odoForLevel
+        if (!driven.isFinite() || driven <= 0) return levelPct
         return (levelPct - driven / range * 100.0).coerceIn(0.0, 100.0)
     }
+
+    fun estimateLevelPct(): Double = estimateLevelPctAtOdometer(currentOdo)
 
     fun estimatedRangeRemainingKm(): Double? {
         val range = estimatedRangeKm() ?: return null
