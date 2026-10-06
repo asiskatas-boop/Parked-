@@ -37,6 +37,7 @@ class FuelStore(context: Context) {
             "gpsKm" -> gpsKm = prefs.getFloat("gpsKm", 0f).toDouble()
             "levelPct" -> levelPct = prefs.getFloat("levelPct", 100f).toDouble()
             "odoForLevel" -> odoForLevel = prefs.getFloat("odoForLevel", 0f).toDouble()
+            "levelUpdatedAt" -> levelUpdatedAt = prefs.getLong("levelUpdatedAt", 0L)
             "promptDismissedAtOdo" -> promptDismissedAtOdo = prefs.getFloat("promptDismissedAtOdo", 0f).toDouble()
             "fuelLevelLogs" -> fuelLogs = loadFuelLogs()
             "refuels" -> refuels = loadRefuels()
@@ -63,6 +64,8 @@ class FuelStore(context: Context) {
     var levelPct: Double by mutableStateOf(prefs.getFloat("levelPct", 100f).toDouble())
         private set
     var odoForLevel: Double by mutableStateOf(prefs.getFloat("odoForLevel", 0f).toDouble())
+        private set
+    var levelUpdatedAt: Long by mutableStateOf(prefs.getLong("levelUpdatedAt", 0L))
         private set
     var promptDismissedAtOdo: Double by mutableStateOf(prefs.getFloat("promptDismissedAtOdo", 0f).toDouble())
         private set
@@ -92,6 +95,7 @@ class FuelStore(context: Context) {
 
     init {
         migrateLegacyFuelMeterEntriesIfNeeded()
+        backfillLevelUpdatedAtIfNeeded()
         normalizeSavedAccentIfNeeded()
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
     }
@@ -115,6 +119,18 @@ class FuelStore(context: Context) {
         else -> raw.trim().takeIf { it in supportedAccentNames } ?: "Blue"
     }
 
+
+    private fun backfillLevelUpdatedAtIfNeeded() {
+        if (levelUpdatedAt > 0L) return
+        val refuelThatCouldSetLevel = refuels.firstOrNull { it.tankFull || tankCapacity > 0 }?.date
+        val inferred = listOfNotNull(
+            fuelLogs.firstOrNull()?.date,
+            refuelThatCouldSetLevel,
+        ).maxOrNull() ?: return
+        levelUpdatedAt = inferred
+        prefs.edit().putLong("levelUpdatedAt", inferred).apply()
+    }
+
     private fun normalizeSavedAccentIfNeeded() {
         val raw = prefs.getString("accentName", "Blue") ?: "Blue"
         val canonical = canonicalAccentName(raw)
@@ -134,11 +150,15 @@ class FuelStore(context: Context) {
         prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
     }
 
-    val currentOdo: Double get() = baselineOdo + gpsKm
+    // gpsKm is only meaningful once the user has anchored it to the car's real
+    // odometer. Without a baseline, exposing raw GPS distance as an odometer
+    // produces values such as "42 km" on a car that actually has 80,000 km.
+    val currentOdo: Double get() = if (baselineOdo > 0) baselineOdo + gpsKm else 0.0
 
     val isConfigured: Boolean get() = tankCapacity > 0 && baselineOdo > 0
 
     fun addKm(km: Double) {
+        if (baselineOdo <= 0) return
         if (!km.isFinite() || km <= 0 || km > 5) return
         gpsKm += km
         prefs.edit().putFloat("gpsKm", gpsKm.toFloat()).apply()
@@ -210,14 +230,16 @@ class FuelStore(context: Context) {
         setAccent("Blue")
     }
 
-    /** Update the current fuel estimate without creating a history row. */
+    /** Update the current fuel level without creating a history row. */
     fun setLevel(pct: Double) {
         if (!pct.isFinite()) return
         levelPct = pct.coerceIn(0.0, 100.0)
         odoForLevel = currentOdo
+        levelUpdatedAt = System.currentTimeMillis()
         prefs.edit()
             .putFloat("levelPct", levelPct.toFloat())
             .putFloat("odoForLevel", odoForLevel.toFloat())
+            .putLong("levelUpdatedAt", levelUpdatedAt)
             .apply()
     }
 
@@ -405,6 +427,7 @@ class FuelStore(context: Context) {
                     editor
                         .putFloat("levelPct", latest.levelPct.toFloat())
                         .putFloat("odoForLevel", (latest.odometer.takeIf { it > 0 } ?: currentOdo).toFloat())
+                        .putLong("levelUpdatedAt", latest.date)
                 }
                 editor.commit()
 
@@ -413,6 +436,7 @@ class FuelStore(context: Context) {
                 latest?.let {
                     levelPct = it.levelPct
                     odoForLevel = it.odometer.takeIf { value -> value > 0 } ?: currentOdo
+                    levelUpdatedAt = it.date
                 }
             } else {
                 // No v1 rows to migrate, or the new fuel-log schema was already in

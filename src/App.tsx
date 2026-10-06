@@ -58,7 +58,7 @@ function makeCarIcon(dark: boolean, pulse: boolean) {
     className: '',
     iconSize: [44, 60],
     iconAnchor: [22, 60],
-    html: `<div style="position:relative;display:flex;flex-direction:column;align-items:center;">
+    html: `<div class="car-marker-shell" style="position:relative;display:flex;flex-direction:column;align-items:center;">
       ${pulseRing}
       <div style="width:44px;height:44px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;box-shadow:${glow};position:relative;">
         ${CAR_SVG}
@@ -74,7 +74,7 @@ function makeUserIcon(dark: boolean) {
     className: '',
     iconSize: [22, 22],
     iconAnchor: [11, 11],
-    html: `<div style="position:relative;width:22px;height:22px;display:flex;align-items:center;justify-content:center;">
+    html: `<div class="user-marker-shell" style="position:relative;width:22px;height:22px;display:flex;align-items:center;justify-content:center;">
       <div style="position:absolute;width:22px;height:22px;border-radius:50%;background:${blue};opacity:0.25;animation:ping 2.2s cubic-bezier(0,0,0.2,1) infinite;"></div>
       <div style="width:14px;height:14px;border-radius:50%;background:${blue};border:2.5px solid white;box-shadow:0 2px 10px ${blue}80;"></div>
     </div>`,
@@ -133,7 +133,7 @@ function LeafletMap({ dark, screen, carCoords, pulse, onMapRef }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, dark, pulse])
 
-  return <div ref={containerRef} className="absolute inset-0" style={{ zIndex: 0 }} />
+  return <div ref={containerRef} className="absolute inset-0 map-layer-enter" style={{ zIndex: 0 }} />
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -186,8 +186,8 @@ function IconChevronRight({ size = 16 }: { size?: number }) {
 function IconNavigation({ size = 18 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" /></svg>
 }
-function IconMapPin({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+function IconMapPin({ size = 16, className = '' }: { size?: number; className?: string }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
 }
 function IconMoreVertical({ size = 18 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
@@ -250,8 +250,8 @@ function SetupBluetooth({ dark, onSelect }: { dark: boolean; onSelect: (d: strin
   }
 
   return (
-    <div className="absolute inset-0 flex flex-col" style={{ background: dark ? C.bgD : C.bgL }}>
-      <div className="flex-1 flex flex-col justify-center px-6 pb-8 pt-20">
+    <div className="absolute inset-0 flex flex-col screen-enter" style={{ background: dark ? C.bgD : C.bgL }}>
+      <div className="flex-1 flex flex-col justify-center px-6 pb-8 pt-20 stagger-in">
         <div className="flex items-center justify-center rounded-2xl mb-8 self-start"
           style={{ width: 56, height: 56, background: dark ? 'rgba(79,142,247,0.18)' : 'rgba(37,99,235,0.1)' }}>
           <IconBluetooth size={24} className={dark ? 'text-blue-400' : 'text-blue-600'} />
@@ -295,7 +295,7 @@ function SetupBluetooth({ dark, onSelect }: { dark: boolean; onSelect: (d: strin
           ))}
         </div>
       </div>
-      <div className="px-6 pb-10">
+      <div className="px-6 pb-10 action-enter">
         <PrimaryBtn dark={dark} onClick={() => selected && onSelect(selected)}>
           Continue
         </PrimaryBtn>
@@ -306,8 +306,8 @@ function SetupBluetooth({ dark, onSelect }: { dark: boolean; onSelect: (d: strin
 
 function PermissionScreen({ dark, device, onAllow }: { dark: boolean; device: string; onAllow: () => void }) {
   return (
-    <div className="absolute inset-0 flex flex-col" style={{ background: dark ? C.bgD : C.bgL }}>
-      <div className="flex-1 flex flex-col justify-center px-6">
+    <div className="absolute inset-0 flex flex-col screen-enter" style={{ background: dark ? C.bgD : C.bgL }}>
+      <div className="flex-1 flex flex-col justify-center px-6 stagger-in">
         <div className="flex items-center justify-center rounded-2xl mb-8 self-start"
           style={{ width: 56, height: 56, background: dark ? 'rgba(79,142,247,0.18)' : 'rgba(37,99,235,0.1)' }}>
           <IconMapPin size={24} className={dark ? 'text-blue-400' : 'text-blue-600'} />
@@ -316,16 +316,16 @@ function PermissionScreen({ dark, device, onAllow }: { dark: boolean; device: st
           Allow location access
         </h1>
         <p className="mb-6" style={{ fontSize: 15, color: dark ? C.mutedD : C.mutedL, lineHeight: 1.6 }}>
-          We use your location when{' '}
+          AutoPark uses your location while your car is connected so it can remember the right spot when{' '}
           <span style={{ color: dark ? '#CBD5E1' : '#1E293B', fontWeight: 500 }}>{device}</span>{' '}
-          disconnects to remember where you parked.
+          disconnects.
         </p>
         <div className="rounded-2xl p-4 mb-8"
           style={{ background: dark ? C.cardD : C.panelL, border: `1px solid ${dark ? C.borderD : C.borderL}` }}>
           {[
-            { label: 'When disconnected', desc: 'Saves location on Bluetooth disconnect' },
-            { label: 'Precise location',  desc: 'Required for accurate parking spot' },
-            { label: 'Never in background', desc: 'Only triggered by Bluetooth events' },
+            { label: 'Automatic save', desc: 'Saves your parking spot when the car disconnects' },
+            { label: 'Accurate location',  desc: 'Helps place your parked car correctly on the map' },
+            { label: 'While AutoPark is on', desc: 'Uses location only to support parking detection and your saved spot' },
           ].map(({ label, desc }) => (
             <div key={label} className="flex gap-3 py-2.5 items-start">
               <div className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, marginTop: 7, background: dark ? C.blueD : C.blueL }} />
@@ -337,7 +337,7 @@ function PermissionScreen({ dark, device, onAllow }: { dark: boolean; device: st
           ))}
         </div>
       </div>
-      <div className="px-6 pb-10 flex flex-col gap-3">
+      <div className="px-6 pb-10 flex flex-col gap-3 action-enter">
         <PrimaryBtn dark={dark} onClick={onAllow}>Allow Location</PrimaryBtn>
         <button className="btn-press w-full rounded-2xl font-medium" style={{ padding: '14px', fontSize: 15, color: dark ? C.mutedD : C.mutedL }}>
           Not now
@@ -365,14 +365,14 @@ function SettingsPanel({ dark, device, onClose, onChangeState }: {
   )
 
   return (
-    <div className="absolute inset-0 flex flex-col" style={{ background: dark ? C.bgD : C.bgL }}>
-      <div className="flex items-center justify-between px-5 pt-14 pb-4" style={{ borderBottom: divider }}>
+    <div className="absolute inset-0 flex flex-col screen-enter" style={{ background: dark ? C.bgD : C.bgL }}>
+      <div className="flex items-center justify-between px-5 pt-14 pb-4 hud-enter" style={{ borderBottom: divider }}>
         <span style={{ fontSize: 18, fontWeight: 600, color: dark ? C.textD : C.textL, letterSpacing: '-0.01em' }}>Settings</span>
         <button onClick={onClose} className="btn-press-sm rounded-full p-2" style={{ color: dark ? C.mutedD : C.mutedL }}>
           <IconX size={20} />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto settings-content-enter">
         {sectionLabel('Car Bluetooth')}
         <div className="mx-4 rounded-2xl overflow-hidden" style={card}>
           <button className="btn-press-sm w-full flex items-center justify-between px-4 py-3.5" onClick={() => onChangeState('bluetooth')}>
@@ -394,12 +394,12 @@ function SettingsPanel({ dark, device, onClose, onChangeState }: {
                 width: 48, height: 28,
                 background: autoDetect ? (dark ? C.blueD : C.blueL) : (dark ? '#334155' : '#CBD5E1'),
                 padding: 3,
-                justifyContent: autoDetect ? 'flex-end' : 'flex-start',
-                transition: 'background 0.25s ease, justify-content 0s',
+                justifyContent: 'flex-start',
+                transition: 'background 0.25s ease, box-shadow 0.25s ease',
                 boxShadow: autoDetect ? (dark ? '0 0 12px rgba(79,142,247,0.4)' : '0 0 12px rgba(37,99,235,0.3)') : 'none',
               }}>
               <div className="rounded-full bg-white"
-                style={{ width: 22, height: 22, boxShadow: '0 1px 4px rgba(0,0,0,0.25)', transition: 'transform 0.25s cubic-bezier(0.34,1.56,0.64,1)' }} />
+                style={{ width: 22, height: 22, boxShadow: '0 1px 4px rgba(0,0,0,0.25)', transform: autoDetect ? 'translateX(20px)' : 'translateX(0)', transition: 'transform 0.28s cubic-bezier(0.34,1.56,0.64,1)' }} />
             </button>
           </div>
         </div>
@@ -479,8 +479,8 @@ function OverflowMenu({ dark, onForget, onChangeCar, onSettings, onClose }: {
   const divider = `1px solid ${dark ? C.borderD : C.borderL}`
   return (
     <>
-      <div className="absolute inset-0" style={{ zIndex: 40 }} onClick={onClose} />
-      <div className="absolute right-4 rounded-2xl overflow-hidden animate-spring-up"
+      <div className="absolute inset-0 overlay-fade-in" style={{ zIndex: 40 }} onClick={onClose} />
+      <div className="absolute right-4 rounded-2xl overflow-hidden animate-popover-in"
         style={{ bottom: 230, minWidth: 215, background: dark ? C.cardD : C.panelL, boxShadow: dark ? '0 12px 32px rgba(0,0,0,0.6)' : '0 12px 32px rgba(0,0,0,0.16)', border: `1px solid ${dark ? C.borderD : C.borderL}`, zIndex: 45 }}>
         {items.map(({ label, action, danger }, i) => (
           <button key={label} className="btn-press-sm w-full px-4 py-3.5 text-left"
@@ -529,7 +529,7 @@ function MapControlBtn({ dark, onClick, children, label, showLabel }: {
 
 function BottomPanel({ dark, children }: { dark: boolean; children: React.ReactNode }) {
   return (
-    <div className="absolute bottom-0 left-0 right-0 animate-spring-up" style={{ padding: '0 0 34px 0', zIndex: 20 }}>
+    <div className="absolute bottom-0 left-0 right-0 animate-panel-in" style={{ padding: '0 0 34px 0', zIndex: 20 }}>
       <div className="mx-3 rounded-3xl px-5 py-5"
         style={{
           background: dark ? C.panelD : C.panelL,
@@ -652,7 +652,7 @@ export default function App() {
   const chipShadow = dark ? '0 2px 12px rgba(0,0,0,0.5)' : '0 2px 12px rgba(0,0,0,0.1)'
 
   return (
-    <div className="relative flex items-start justify-center min-h-full"
+    <div className="app-shell relative flex items-start justify-center min-h-full"
       style={{ background: dark ? '#070C18' : '#DFE0DC' }}>
       <div className="relative overflow-hidden"
         style={{ width: 390, height: '100dvh', maxHeight: 844, fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
@@ -667,7 +667,7 @@ export default function App() {
 
         {/* BT status chip + dark toggle */}
         {isMapScreen && screen !== 'adjusting' && (
-          <div className="absolute top-0 left-0 right-0 flex items-start justify-between px-4" style={{ paddingTop: 52, zIndex: 20 }}>
+          <div className="absolute top-0 left-0 right-0 flex items-start justify-between px-4 hud-enter" style={{ paddingTop: 52, zIndex: 20 }}>
             <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5"
               style={{ background: chipBg, backdropFilter: 'blur(12px)', boxShadow: chipShadow, border: chipBorder }}>
               <div
@@ -678,14 +678,16 @@ export default function App() {
                   flexShrink: 0,
                 }}
               />
-              <span style={{ fontSize: 12, fontWeight: 500, color: dark ? '#CBD5E1' : '#334155' }}>
+              <span key={screen === 'connected' ? 'connected' : 'watching'} className="status-text-swap" style={{ fontSize: 12, fontWeight: 500, color: dark ? '#CBD5E1' : '#334155' }}>
                 {screen === 'connected' ? `Connected to ${device}` : `Watching: ${device}`}
               </span>
             </div>
             <button onClick={() => setDark(v => !v)}
               className="btn-press-sm flex items-center justify-center rounded-full"
               style={{ width: 36, height: 36, background: chipBg, backdropFilter: 'blur(12px)', boxShadow: chipShadow, color: dark ? '#94A3B8' : '#475569', border: chipBorder }}>
-              {dark ? <IconSun size={16} /> : <IconMoon size={16} />}
+              <span key={dark ? 'sun-map' : 'moon-map'} className="theme-icon-swap">
+                {dark ? <IconSun size={16} /> : <IconMoon size={16} />}
+              </span>
             </button>
           </div>
         )}
@@ -693,15 +695,17 @@ export default function App() {
         {/* Dark toggle on setup screens */}
         {!isMapScreen && screen !== 'settings' && (
           <button onClick={() => setDark(v => !v)}
-            className="btn-press-sm absolute flex items-center justify-center rounded-full"
+            className="btn-press-sm absolute flex items-center justify-center rounded-full hud-enter"
             style={{ top: 52, right: 20, width: 36, height: 36, background: dark ? C.cardD : C.panelL, color: dark ? '#64748B' : '#94A3B8', boxShadow: dark ? '0 2px 10px rgba(0,0,0,0.4)' : '0 2px 10px rgba(0,0,0,0.1)', border: `1px solid ${dark ? C.borderD : C.borderL}`, zIndex: 20 }}>
-            {dark ? <IconSun size={16} /> : <IconMoon size={16} />}
+            <span key={dark ? 'sun-setup' : 'moon-setup'} className="theme-icon-swap">
+              {dark ? <IconSun size={16} /> : <IconMoon size={16} />}
+            </span>
           </button>
         )}
 
         {/* Map controls */}
         {['connected', 'parked', 'nearby'].includes(screen) && (
-          <div className="absolute right-4 flex flex-col items-end gap-2" style={{ bottom: 230, zIndex: 20 }}>
+          <div className="absolute right-4 flex flex-col items-end gap-2 map-controls-enter" style={{ bottom: 230, zIndex: 20 }}>
             <MapControlBtn dark={dark} onClick={recenterMe} label="My location" showLabel={showControlLabels}>
               <div className="rounded-full flex-shrink-0"
                 style={{ width: 12, height: 12, background: dark ? C.blueD : C.blueL, border: '2px solid white', boxShadow: `0 1px 5px ${dark ? C.blueD : C.blueL}80` }} />
@@ -731,7 +735,7 @@ export default function App() {
                   Car connected
                 </div>
                 <div style={{ fontSize: 14, color: dark ? C.mutedD : C.mutedL, marginTop: 3, lineHeight: 1.55 }}>
-                  We'll save your parking location automatically when Bluetooth disconnects.
+                  AutoPark is ready. We'll remember this spot when your car disconnects.
                 </div>
               </div>
             </div>
@@ -840,7 +844,7 @@ export default function App() {
         {/* ── ADJUSTING ── */}
         {screen === 'adjusting' && (
           <>
-            <div className="absolute inset-0 flex items-center justify-center" style={{ zIndex: 10, pointerEvents: 'none', paddingBottom: 120 }}>
+            <div className="absolute inset-0 flex items-center justify-center marker-focus-in" style={{ zIndex: 10, pointerEvents: 'none', paddingBottom: 120 }}>
               <div className="flex flex-col items-center">
                 <div style={{ color: dark ? C.blueD : C.blueL, marginBottom: 2 }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
@@ -859,7 +863,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4" style={{ paddingTop: 52, zIndex: 20 }}>
+            <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 hud-enter" style={{ paddingTop: 52, zIndex: 20 }}>
               <div className="flex items-center gap-1.5 rounded-full px-3 py-2"
                 style={{ background: chipBg, backdropFilter: 'blur(12px)', fontSize: 13, fontWeight: 500, color: dark ? '#CBD5E1' : '#334155', boxShadow: chipShadow, border: chipBorder }}>
                 Move the map to set location
@@ -871,7 +875,7 @@ export default function App() {
               </button>
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0" style={{ padding: '0 12px 34px', zIndex: 20 }}>
+            <div className="absolute bottom-0 left-0 right-0 action-enter" style={{ padding: '0 12px 34px', zIndex: 20 }}>
               <PrimaryBtn dark={dark} onClick={handleSetHere}>Set Car Here</PrimaryBtn>
             </div>
           </>

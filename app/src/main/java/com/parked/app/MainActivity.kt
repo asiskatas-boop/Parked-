@@ -1,6 +1,7 @@
 package com.parked.app
 
 import android.Manifest
+import android.animation.ValueAnimator
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
@@ -16,6 +17,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Looper
 import android.provider.Settings
+import android.widget.VideoView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
@@ -50,10 +52,12 @@ import androidx.compose.material.icons.filled.GasMeter
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Settings as SettingsIconFilled
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LocalGasStation
+import androidx.compose.material.icons.outlined.Settings as SettingsIconOutlined
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -302,40 +306,121 @@ fun ParkedApp(fuel: FuelStore, requestedTab: String? = null, onTabHandled: () ->
 fun OnboardingFlow(page: Int, onNext: () -> Unit) {
     val bg = if (page == 0) OliveDark else LimeBright
     val fg = if (page == 0) White else OliveDark
+    val headline = if (page == 0) {
+        "Never wonder where you parked."
+    } else {
+        "Connect once. We'll handle the rest."
+    }
+    val body = if (page == 0) {
+        "Park. Walk away. Parked! remembers the spot, so it's waiting when you need your car."
+    } else {
+        "Choose your car's Bluetooth and turn on AutoPark. When you disconnect, Parked! saves the spot automatically."
+    }
+    val action = if (page == 0) "Tap to continue" else "Tap to get started"
 
-    Box(Modifier.fillMaxSize().background(bg).clickable { onNext() }) {
-        Image(
-            painter = painterResource(if (page == 0) R.drawable.splash_dark else R.drawable.splash_lime),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.FillBounds
-        )
+    Box(Modifier.fillMaxSize().background(bg)) {
+        if (page == 0) {
+            OnboardingLogoVideo(Modifier.fillMaxSize())
+        } else {
+            Image(
+                painter = painterResource(R.drawable.splash_lime),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.FillBounds
+            )
+        }
+
         Column(
             Modifier
-                .align(Alignment.Center)
-                .offset(y = 70.dp)
-                .padding(horizontal = 36.dp),
+                .align(if (page == 0) Alignment.BottomCenter else Alignment.Center)
+                .then(if (page == 1) Modifier.offset(y = 72.dp) else Modifier)
+                .navigationBarsPadding()
+                .padding(horizontal = 34.dp, vertical = if (page == 0) 42.dp else 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 "Parked!",
-                fontSize = 52.sp,
+                fontSize = 46.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = fg,
                 letterSpacing = (-1.5).sp
             )
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(12.dp))
             Text(
-                "helps you find the last location of your car through BT and GPS connection.",
-                fontSize = 17.sp,
-                lineHeight = 26.sp,
-                fontWeight = FontWeight.Normal,
-                color = fg.copy(alpha = 0.94f),
+                headline,
+                fontSize = 25.sp,
+                lineHeight = 31.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = fg.copy(alpha = 0.96f),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.widthIn(max = 300.dp)
+                modifier = Modifier.widthIn(max = 330.dp)
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                body,
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight.Normal,
+                color = fg.copy(alpha = 0.84f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = 330.dp)
+            )
+            Spacer(Modifier.height(22.dp))
+            Text(
+                action,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = fg.copy(alpha = 0.74f)
             )
         }
+
+        // Keep the entire onboarding page tappable even though the video is an Android View.
+        Box(
+            Modifier
+                .matchParentSize()
+                .clickable { onNext() }
+                .semantics { contentDescription = action }
+        )
     }
+}
+
+@Composable
+private fun OnboardingLogoVideo(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val motionEnabled = remember { ValueAnimator.areAnimatorsEnabled() }
+
+    if (!motionEnabled) {
+        Box(modifier.background(OliveDark), contentAlignment = Alignment.TopCenter) {
+            Image(
+                painter = painterResource(R.drawable.ic_parked_logo),
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(top = 120.dp)
+                    .size(250.dp),
+                contentScale = ContentScale.Fit
+            )
+        }
+        return
+    }
+
+    AndroidView(
+        modifier = modifier.background(OliveDark),
+        factory = { ctx ->
+            VideoView(ctx).apply {
+                setBackgroundColor(android.graphics.Color.rgb(43, 74, 35))
+                isClickable = false
+                isFocusable = false
+                setOnPreparedListener { player ->
+                    player.isLooping = false
+                    player.setVolume(0f, 0f)
+                    start()
+                }
+                setVideoURI(
+                    Uri.parse("android.resource://${ctx.packageName}/${R.raw.onboarding_car}")
+                )
+            }
+        }
+    )
 }
 
 // ============================================================
@@ -349,7 +434,7 @@ enum class AppTab(
 ) {
     Home("Home", Icons.Filled.Home, Icons.Outlined.Home),
     Fuel("Fuel", Icons.Filled.LocalGasStation, Icons.Outlined.LocalGasStation),
-    Settings("Settings", Icons.Filled.DirectionsCar, Icons.Outlined.DirectionsCar),
+    Settings("Settings", SettingsIconFilled, SettingsIconOutlined),
 }
 
 @Composable
@@ -374,6 +459,9 @@ fun MainContent(fuel: FuelStore, requestedTab: String? = null, onTabHandled: () 
     var liveLng by remember { mutableStateOf<Double?>(null) }
     var hasPerm by remember { mutableStateOf(hasLocationPermission(context)) }
     val lifecycleOwner = LocalLifecycleOwner.current
+    var activityResumed by remember {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    }
 
     val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
     val locCallback = remember {
@@ -386,8 +474,8 @@ fun MainContent(fuel: FuelStore, requestedTab: String? = null, onTabHandled: () 
         }
     }
 
-    LaunchedEffect(hasPerm, tab) {
-        if (!hasPerm || tab != AppTab.Home) return@LaunchedEffect
+    LaunchedEffect(hasPerm, tab, activityResumed) {
+        if (!hasPerm || tab != AppTab.Home || !activityResumed) return@LaunchedEffect
         try {
             fused.lastLocation.addOnSuccessListener { loc ->
                 if (loc != null && liveLat == null) {
@@ -398,8 +486,8 @@ fun MainContent(fuel: FuelStore, requestedTab: String? = null, onTabHandled: () 
         } catch (_: SecurityException) {}
     }
 
-    LaunchedEffect(hasPerm, tab) {
-        if (hasPerm && tab == AppTab.Home) {
+    LaunchedEffect(hasPerm, tab, activityResumed) {
+        if (hasPerm && tab == AppTab.Home && activityResumed) {
             val req = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 5000L)
                 .setMinUpdateIntervalMillis(3000L)
                 .setMaxUpdateDelayMillis(8000L).build()
@@ -419,8 +507,13 @@ fun MainContent(fuel: FuelStore, requestedTab: String? = null, onTabHandled: () 
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                hasPerm = hasLocationPermission(context)
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    activityResumed = true
+                    hasPerm = hasLocationPermission(context)
+                }
+                Lifecycle.Event.ON_PAUSE -> activityResumed = false
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -448,7 +541,6 @@ fun MainContent(fuel: FuelStore, requestedTab: String? = null, onTabHandled: () 
             ) { t ->
                 when (t) {
                     AppTab.Home -> HomeScreen(
-                        fuel = fuel,
                         liveLat = liveLat,
                         liveLng = liveLng,
                         hasPerm = hasPerm,
@@ -511,7 +603,6 @@ fun BottomNav(tab: AppTab, onChange: (AppTab) -> Unit) {
 
 @Composable
 fun HomeScreen(
-    fuel: FuelStore,
     liveLat: Double?,
     liveLng: Double?,
     hasPerm: Boolean,
@@ -522,9 +613,7 @@ fun HomeScreen(
     val store = remember { ParkingStore(context) }
     val state by store.state.collectAsState(initial = com.parked.app.data.ParkingState())
 
-    var toastVisible by remember { mutableStateOf(false) }
     var saveErrorMessage by remember { mutableStateOf<String?>(null) }
-    var lastSeenParkedAt by remember { mutableStateOf<Long?>(null) }
     var pendingParkingSave by remember { mutableStateOf(false) }
 
     LaunchedEffect(hasPerm) {
@@ -544,24 +633,6 @@ fun HomeScreen(
             delay(3200)
             saveErrorMessage = null
         }
-    }
-
-    LaunchedEffect(state.parkedAt) {
-        val current = state.parkedAt
-        val previous = lastSeenParkedAt
-        if (current != null && previous != null && current != previous) {
-            val lastFuelLogTime = maxOf(
-                fuel.fuelLogs.firstOrNull()?.date ?: 0L,
-                fuel.refuels.firstOrNull()?.date ?: 0L
-            )
-            val oneDayAgo = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
-            if (lastFuelLogTime < oneDayAgo) {
-                toastVisible = true
-                delay(2800)
-                toastVisible = false
-            }
-        }
-        lastSeenParkedAt = current
     }
 
     val hasValid = state.parkedLat != null && state.parkedLng != null &&
@@ -674,7 +745,7 @@ fun HomeScreen(
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Never lose track of your car again.",
+                            "Save this spot now. AutoPark can handle it next time.",
                             fontSize = 14.sp, color = GrayMid, fontWeight = FontWeight.Medium
                         )
                         Spacer(Modifier.height(18.dp))
@@ -686,7 +757,7 @@ fun HomeScreen(
                         // phone cannot provide a live location. Do not trap the
                         // user behind a GPS/location prompt just to see the car.
                         Text(
-                            "Parking is saved.",
+                            "Your parking spot is saved",
                             fontSize = 26.sp, fontWeight = FontWeight.ExtraBold,
                             color = NearBlack, letterSpacing = (-0.5).sp
                         )
@@ -696,7 +767,7 @@ fun HomeScreen(
                             right = autoParkLabel
                         )
                         Spacer(Modifier.height(18.dp))
-                        PrimaryButton(text = "Open saved location", showDirectionIcon = true, onClick = onDirections)
+                        PrimaryButton(text = "Open in Maps", showDirectionIcon = true, onClick = onDirections)
                         Spacer(Modifier.height(10.dp))
                         SecondaryRow(onSave = onSaveSpot, onShare = onShare)
                     }
@@ -720,7 +791,7 @@ fun HomeScreen(
 
                     else -> {
                         Text(
-                            "Parking is saved.",
+                            "Your parking spot is saved",
                             fontSize = 26.sp, fontWeight = FontWeight.ExtraBold,
                             color = NearBlack, letterSpacing = (-0.5).sp
                         )
@@ -753,20 +824,6 @@ fun HomeScreen(
             }
         }
 
-        AnimatedVisibility(
-            visible = toastVisible,
-            enter = slideInVertically(tween(400)) { -it } + fadeIn(tween(300)),
-            exit = slideOutVertically(tween(300)) { -it } + fadeOut(tween(200)),
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 60.dp)
-        ) {
-            Surface(color = White, shape = RoundedCornerShape(999.dp), shadowElevation = 12.dp) {
-                Text(
-                    "Log your fuel!",
-                    Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                    fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack
-                )
-            }
-        }
     }
 }
 
@@ -925,8 +982,12 @@ private fun HourglassIcon() {
 @Composable
 fun FuelScreen(fuel: FuelStore) {
     val configuredTank = fuel.tankCapacity.takeIf { it.isFinite() && it > 0 }
-    val initialFraction = (fuel.estimateLevelPct() / 100.0).coerceIn(0.0, 1.0).toFloat()
-    var sliderFraction by remember { mutableFloatStateOf(initialFraction) }
+    val hasSavedFuelLevel = fuel.levelUpdatedAt > 0L
+    var sliderFraction by remember {
+        mutableFloatStateOf(
+            if (hasSavedFuelLevel) (fuel.levelPct / 100.0).coerceIn(0.0, 1.0).toFloat() else 0.5f
+        )
+    }
     var showAllLogs by remember { mutableStateOf(false) }
     var showRefuelHistory by remember { mutableStateOf(false) }
     var showRefuelModal by remember { mutableStateOf(false) }
@@ -936,17 +997,32 @@ fun FuelScreen(fuel: FuelStore) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    val litersInTank = configuredTank?.times(sliderFraction)
-    val lastSavedText = fuel.fuelLogs.firstOrNull()?.let { log ->
-        val fmt = SimpleDateFormat("d MMM · HH:mm", Locale.getDefault())
-        "Last saved ${fmt.format(Date(log.date))}"
+    // The main fuel experience is a current snapshot, not a logging chore. Keep
+    // the slider synced with actual saved corrections/refuels, but do not move it
+    // from the hidden GPS odometer accumulator while the user is looking at it.
+    LaunchedEffect(fuel.levelPct, fuel.levelUpdatedAt) {
+        if (fuel.levelUpdatedAt > 0L) {
+            sliderFraction = (fuel.levelPct / 100.0).coerceIn(0.0, 1.0).toFloat()
+        }
     }
+
+    val litersInTank = configuredTank?.times(sliderFraction)
+    val lastSavedText = fuel.levelUpdatedAt.takeIf { it > 0L }?.let { updatedAt ->
+        val fmt = SimpleDateFormat("d MMM · HH:mm", Locale.getDefault())
+        "Updated ${fmt.format(Date(updatedAt))}"
+    } ?: "Not set yet"
+    val averageConsumption = fuel.averageL100km()
+    val fullTankRangeKm = if (configuredTank != null && averageConsumption != null && averageConsumption > 0) {
+        configuredTank / averageConsumption * 100.0
+    } else null
+    val rangeFromCurrentLevel = if (hasSavedFuelLevel) fullTankRangeKm?.times(sliderFraction.toDouble()) else null
+    val latestRefuel = fuel.refuels.firstOrNull()
 
     fun deleteFuelLogWithUndo(log: com.parked.app.data.FuelLevelLog) {
         fuel.deleteFuelLog(log.date)
         scope.launch {
             val result = snackbarHostState.showSnackbar(
-                message = "Fuel log deleted",
+                message = "Fuel check deleted",
                 actionLabel = "Undo",
                 withDismissAction = true
             )
@@ -958,8 +1034,8 @@ fun FuelScreen(fuel: FuelStore) {
         BackHandler { showAllLogs = false }
         Box(Modifier.fillMaxSize()) {
             FuelHistoryPage(
-                title = "Fuel logs",
-                emptyText = "No fuel logs yet",
+                title = "Past level checks",
+                emptyText = "No saved level checks",
                 isEmpty = fuel.fuelLogs.isEmpty(),
                 onBack = { showAllLogs = false },
             ) {
@@ -1000,159 +1076,229 @@ fun FuelScreen(fuel: FuelStore) {
         return
     }
 
-    Column(Modifier.fillMaxSize().background(White)) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(bottomStart = 58.dp, bottomEnd = 58.dp))
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(OliveDark, Color(0xFF4E8F27), LimeBright),
-                        start = Offset.Zero,
-                        end = Offset(850f, 1000f)
+    Box(Modifier.fillMaxSize().background(White)) {
+        Column(Modifier.fillMaxSize()) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(bottomStart = 58.dp, bottomEnd = 58.dp))
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(OliveDark, Color(0xFF4E8F27), LimeBright),
+                            start = Offset.Zero,
+                            end = Offset(850f, 1000f)
+                        )
                     )
-                )
-                .statusBarsPadding()
-                .padding(top = 12.dp, bottom = 18.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text("Fuel level", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = White)
-            Spacer(Modifier.height(12.dp))
-
-            NativeFuelGauge(
-                fraction = sliderFraction,
-                litersInTank = litersInTank,
-                lastUpdatedText = lastSavedText,
-                onFractionChange = { sliderFraction = it }
-            )
-
-            Spacer(Modifier.height(14.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    .statusBarsPadding()
+                    .padding(top = 12.dp, bottom = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Button(
-                    onClick = {
-                        val now = System.currentTimeMillis()
-                        if (now - lastSaveTime < 1200) return@Button
-                        lastSaveTime = now
-                        fuel.logFuelLevel(sliderFraction * 100.0)
-                        scope.launch { snackbarHostState.showSnackbar("Fuel level saved") }
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF3C3A3F),
-                        contentColor = White
-                    )
-                ) {
-                    Text("Save level", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                }
+                Text("Fuel", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = White)
+                Spacer(Modifier.height(12.dp))
 
-                Button(
-                    onClick = { showRefuelModal = true },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = White,
-                        contentColor = OliveDark
-                    )
-                ) {
-                    Icon(Icons.Filled.LocalGasStation, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(7.dp))
-                    Text("Refuel", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
+                NativeFuelGauge(
+                    fraction = sliderFraction,
+                    litersInTank = litersInTank,
+                    lastUpdatedText = lastSavedText,
+                    onFractionChange = { sliderFraction = it }
+                )
 
-        Box(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize()) {
-                Column(
-                    Modifier.fillMaxWidth().padding(start = 24.dp, top = 16.dp, end = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        onClick = { showTripCostModal = true },
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFFF5F7F3),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Filled.DirectionsCar, contentDescription = null, tint = OliveDark)
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("Trip cost", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
-                                Text("Estimate fuel cost for a drive", fontSize = 12.sp, color = GrayMid)
-                            }
-                            Text("›", fontSize = 24.sp, color = OliveDark)
-                        }
-                    }
-                    Surface(
-                        onClick = { showRefuelHistory = true },
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFFF5F7F3),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Filled.LocalGasStation, contentDescription = null, tint = OliveDark)
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("Refuel history", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
-                                Text(
-                                    if (fuel.refuels.isEmpty()) "No refuels yet" else "${fuel.refuels.size} saved refuel${if (fuel.refuels.size == 1) "" else "s"}",
-                                    fontSize = 12.sp,
-                                    color = GrayMid
-                                )
-                            }
-                            Text("›", fontSize = 24.sp, color = OliveDark)
-                        }
-                    }
-                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    if (hasSavedFuelLevel) "Adjust only when your car's gauge is different."
+                    else "Set it once to match your car. After that, correct it only when needed.",
+                    fontSize = 12.sp,
+                    color = White.copy(alpha = 0.78f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 28.dp)
+                )
+                Spacer(Modifier.height(12.dp))
 
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Fuel logs", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
-                    if (fuel.fuelLogs.size > 4) {
-                        Text(
-                            "View all",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = OliveDark,
-                            modifier = Modifier.clickable { showAllLogs = true }
+                    Button(
+                        onClick = {
+                            val now = System.currentTimeMillis()
+                            if (now - lastSaveTime < 1200) return@Button
+                            lastSaveTime = now
+                            fuel.setLevel(sliderFraction * 100.0)
+                            scope.launch { snackbarHostState.showSnackbar("Fuel level updated") }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF3C3A3F),
+                            contentColor = White
                         )
+                    ) {
+                        Text(if (hasSavedFuelLevel) "Correct level" else "Set level", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = { showRefuelModal = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = White,
+                            contentColor = OliveDark
+                        )
+                    ) {
+                        Icon(Icons.Filled.LocalGasStation, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(7.dp))
+                        Text("Refuel", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("At a glance", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
+
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color(0xFFF5F7F3),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (averageConsumption != null && rangeFromCurrentLevel != null) {
+                        Row(
+                            Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(18.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FuelStat(
+                                label = "Approx. range",
+                                value = "~${rangeFromCurrentLevel.roundToInt()} km",
+                                modifier = Modifier.weight(1f)
+                            )
+                            Box(Modifier.width(1.dp).height(42.dp).background(Color(0xFFDDE2D9)))
+                            FuelStat(
+                                label = "Average",
+                                value = "${String.format(Locale.US, "%.1f", averageConsumption)} L/100 km",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    } else {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 15.dp)) {
+                            Text("Fuel insights", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                "After two full-tank refuels with odometer readings, Parked! can calculate your average consumption and an approximate range.",
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp,
+                                color = GrayMid
+                            )
+                        }
                     }
                 }
 
-                val logs = fuel.fuelLogs.take(4)
-            if (logs.isEmpty()) {
-                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Filled.GasMeter, null, tint = RedFuel, modifier = Modifier.size(78.dp))
-                        Spacer(Modifier.height(10.dp))
-                        Text("Move the gauge and save your first fuel level", color = GrayMid, fontSize = 13.sp)
+                Surface(
+                    onClick = { showRefuelModal = true },
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFFF5F7F3),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Filled.LocalGasStation, contentDescription = null, tint = OliveDark)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Add a refuel", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
+                            Text(
+                                latestRefuel?.let {
+                                    val fmt = SimpleDateFormat("d MMM", Locale.getDefault())
+                                    "Last refuel ${fmt.format(Date(it.date))} · ${String.format(Locale.US, "%.1f", it.litres)} L"
+                                } ?: "Save it only when you actually add fuel",
+                                fontSize = 12.sp,
+                                color = GrayMid
+                            )
+                        }
+                        Text("+", fontSize = 24.sp, color = OliveDark, fontWeight = FontWeight.Medium)
                     }
                 }
-            } else {
-                LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
-                    itemsIndexed(logs, key = { _, log -> log.date }) { idx, log ->
-                        FuelLevelLogRow(log = log, index = idx, onDelete = { deleteFuelLogWithUndo(log) })
+
+                Surface(
+                    onClick = { showRefuelHistory = true },
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFFF5F7F3),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Filled.Bookmark, contentDescription = null, tint = OliveDark)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Refuel history", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
+                            Text(
+                                if (fuel.refuels.isEmpty()) "No refuels yet" else "${fuel.refuels.size} saved refuel${if (fuel.refuels.size == 1) "" else "s"}",
+                                fontSize = 12.sp,
+                                color = GrayMid
+                            )
+                        }
+                        Text("›", fontSize = 24.sp, color = OliveDark)
                     }
                 }
+
+                Surface(
+                    onClick = { showTripCostModal = true },
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFFF5F7F3),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Filled.DirectionsCar, contentDescription = null, tint = OliveDark)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Trip cost", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
+                            Text("Estimate a drive without saving a trip", fontSize = 12.sp, color = GrayMid)
+                        }
+                        Text("›", fontSize = 24.sp, color = OliveDark)
+                    }
+                }
+
+                // Existing level logs are preserved for people upgrading from an
+                // older build, but new corrections no longer create another row.
+                if (fuel.fuelLogs.isNotEmpty()) {
+                    Surface(
+                        onClick = { showAllLogs = true },
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFFF5F7F3),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.GasMeter, contentDescription = null, tint = OliveDark)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Past level checks", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
+                                Text("${fuel.fuelLogs.size} saved before the simpler fuel view", fontSize = 12.sp, color = GrayMid)
+                            }
+                            Text("›", fontSize = 24.sp, color = OliveDark)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
             }
-            }
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp)
-            )
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp)
+        )
     }
 
     if (showRefuelModal) {
@@ -1160,7 +1306,7 @@ fun FuelScreen(fuel: FuelStore) {
             fuel = fuel,
             onDismiss = { showRefuelModal = false },
             onSaved = {
-                sliderFraction = (fuel.estimateLevelPct() / 100.0).coerceIn(0.0, 1.0).toFloat()
+                sliderFraction = (fuel.levelPct / 100.0).coerceIn(0.0, 1.0).toFloat()
                 showRefuelModal = false
                 scope.launch { snackbarHostState.showSnackbar("Refuel saved") }
             }
@@ -1169,6 +1315,15 @@ fun FuelScreen(fuel: FuelStore) {
 
     if (showTripCostModal) {
         TripCostModal(fuel = fuel, onDismiss = { showTripCostModal = false })
+    }
+}
+
+@Composable
+private fun FuelStat(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = GrayMid)
+        Spacer(Modifier.height(3.dp))
+        Text(value, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
     }
 }
 
@@ -1247,7 +1402,7 @@ private fun NativeFuelGauge(
                         fontWeight = FontWeight.ExtraBold,
                         color = NearBlack
                     )
-                    Text("tank level", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = GrayMid)
+                    Text("current level", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = GrayMid)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
@@ -1678,7 +1833,7 @@ fun SettingsScreen(fuel: FuelStore) {
                 )
             }.isSuccess
             if (started) {
-                statusMessage = "AutoPark is on"
+                statusMessage = "AutoPark is ready"
             } else {
                 store.setMonitoring(false)
                 statusMessage = "Couldn't start AutoPark"
@@ -1879,7 +2034,7 @@ fun SettingsScreen(fuel: FuelStore) {
             Text("Preferences", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = White, modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 10.dp))
             Card {
                 ToggleRow(
-                    "Notifications",
+                    "Parking alerts",
                     notificationsChecked,
                     onToggle = { enabled ->
                         if (!enabled) {
@@ -2254,7 +2409,7 @@ private fun TankCapacityModal(fuel: FuelStore, onDismiss: () -> Unit) {
             Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
                 Text("Tank capacity", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
                 Spacer(Modifier.height(4.dp))
-                Text("Used for fuel estimates and trip cost.", fontSize = 13.sp, color = GrayMid)
+                Text("Used to show approximate litres and range.", fontSize = 13.sp, color = GrayMid)
                 Spacer(Modifier.height(16.dp))
                 OutlinedTextField(
                     value = tank, onValueChange = { tank = it; errorText = null },

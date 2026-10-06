@@ -64,7 +64,7 @@ class ParkingMonitorService : Service() {
             ServiceCompat.startForeground(
                 this,
                 1,
-                buildNotification("Automatic parking on"),
+                buildNotification("AutoPark is ready"),
                 if (android.os.Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
             )
         } catch (_: Exception) {
@@ -142,7 +142,7 @@ class ParkingMonitorService : Service() {
                         if (!parkingCaptureInProgress.get()) {
                             lastParkingCaptureStartedAt.set(0L)
                         }
-                        notifyStatus("Automatic parking on")
+                        notifyStatus("AutoPark is ready")
                         startLocationTracking()
                     }
                     BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
@@ -267,24 +267,15 @@ class ParkingMonitorService : Service() {
                 Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
-            val logFuelPending = PendingIntent.getActivity(
-                this,
-                3,
-                Intent(this, MainActivity::class.java)
-                    .putExtra(MainActivity.EXTRA_OPEN_TAB, MainActivity.TAB_FUEL)
-                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
             getSystemService(NotificationManager::class.java).notify(
                 2,
                 NotificationCompat.Builder(this, ALERT_CHANNEL)
                     .setSmallIcon(R.drawable.ic_notification)
                     .setContentTitle("Parking saved")
-                    .setContentText("Your spot is saved. Log your fuel level when ready.")
+                    .setContentText("Your parking spot is saved and ready when you need it.")
                     .setContentIntent(pending)
                     .setAutoCancel(true)
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                    .addAction(R.drawable.ic_notification, "Log fuel", logFuelPending)
                     .build()
             )
         }
