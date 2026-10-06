@@ -168,10 +168,22 @@ class FuelStore(context: Context) {
         if (!value.isFinite() || value <= 0) return
         baselineOdo = value
         gpsKm = 0.0
-        prefs.edit()
+
+        // An odometer edit is a calibration, not distance driven. If the user has
+        // already set a fuel level, move that level's odometer anchor with the new
+        // reading so correcting the odometer cannot instantly consume fuel in the
+        // estimator.
+        if (levelUpdatedAt > 0L) {
+            odoForLevel = value
+        }
+
+        val editor = prefs.edit()
             .putFloat("baselineOdo", value.toFloat())
             .putFloat("gpsKm", 0f)
-            .apply()
+        if (levelUpdatedAt > 0L) {
+            editor.putFloat("odoForLevel", value.toFloat())
+        }
+        editor.apply()
     }
 
     fun resetOdometerTracker() {
@@ -276,9 +288,14 @@ class FuelStore(context: Context) {
      * Occasional action: record an actual refuel. Existing versions already
      * persisted these under "refuels", so the format is kept compatible.
      */
-    fun logRefuel(litres: Double, cost: Double, odometer: Double, tankFull: Boolean) {
-        if (!litres.isFinite() || !cost.isFinite() || !odometer.isFinite()) return
-        if (litres <= 0 || cost < 0 || odometer < 0) return
+    fun logRefuel(litres: Double, cost: Double, odometer: Double, tankFull: Boolean): Boolean {
+        if (!litres.isFinite() || !cost.isFinite() || !odometer.isFinite()) return false
+        if (litres <= 0 || cost < 0 || odometer < 0) return false
+        // Refuel rows are timestamped "now", so accepting an older odometer reading
+        // would create a newest-first history row that is chronologically impossible
+        // and can corrupt consumption calculations. Allow a 1 km rounding tolerance
+        // because the UI displays the current odometer as a whole number.
+        if (currentOdo > 0 && odometer > 0 && odometer + 1.0 < currentOdo) return false
         // Estimate the level at the odometer reading for this fill-up. If the
         // car's displayed odometer is ahead of Parked's GPS-tracked value, using
         // the old currentOdo here would overstate the fuel remaining on a partial
@@ -312,6 +329,7 @@ class FuelStore(context: Context) {
         } else if (tankCapacity > 0) {
             setLevel(levelBeforeRefuel + litres / tankCapacity * 100.0)
         }
+        return true
     }
 
     fun deleteRefuel(date: Long) {
@@ -322,23 +340,38 @@ class FuelStore(context: Context) {
     }
 
     fun averageL100km(): Double? {
-        // Work between full-tank anchor points, but include every partial refuel
-        // that happened between them. Refuels are stored newest-first.
-        val fullIndices = refuels.indices.filter { refuels[it].tankFull }.take(6)
+        // Full-to-full consumption only makes sense when both anchor refuels have
+        // real odometer readings. A "full" row with the optional odometer left blank
+        // must never become a 0 km anchor and produce a wildly optimistic average.
+        val history = refuels.sortedByDescending { it.date }
+        val fullIndices = history.indices
+            .filter { history[it].tankFull && history[it].odometer.isFinite() && history[it].odometer > 0 }
+            .take(6)
         if (fullIndices.size < 2) return null
 
-        val newestFullIndex = fullIndices.first()
-        val oldestFullIndex = fullIndices.last()
-        val newestFull = refuels[newestFullIndex]
-        val oldestFull = refuels[oldestFullIndex]
-        val distanceKm = newestFull.odometer - oldestFull.odometer
-        if (distanceKm <= 50.0) return null
+        // Prefer the widest valid recent span for a steadier average, but skip any
+        // malformed/out-of-order historical pair instead of letting one bad reading
+        // suppress every fuel insight.
+        var bestDistance = 0.0
+        var bestLitres = 0.0
+        for (newerPos in 0 until fullIndices.lastIndex) {
+            val newerIndex = fullIndices[newerPos]
+            for (olderPos in newerPos + 1 until fullIndices.size) {
+                val olderIndex = fullIndices[olderPos]
+                val distanceKm = history[newerIndex].odometer - history[olderIndex].odometer
+                if (!distanceKm.isFinite() || distanceKm <= 50.0 || distanceKm <= bestDistance) continue
 
-        val litresUsed = refuels
-            .subList(newestFullIndex, oldestFullIndex)
-            .sumOf { it.litres }
-        if (litresUsed <= 0.0) return null
-        return litresUsed / distanceKm * 100.0
+                val litresUsed = history
+                    .subList(newerIndex, olderIndex)
+                    .sumOf { it.litres }
+                if (!litresUsed.isFinite() || litresUsed <= 0.0) continue
+
+                bestDistance = distanceKm
+                bestLitres = litresUsed
+            }
+        }
+        if (bestDistance <= 0.0 || bestLitres <= 0.0) return null
+        return bestLitres / bestDistance * 100.0
     }
 
     fun estimatedRangeKm(): Double? {

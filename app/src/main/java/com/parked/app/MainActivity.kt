@@ -16,7 +16,7 @@ import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Looper
-import android.provider.Settings
+import android.provider.Settings as AndroidSettings
 import android.widget.VideoView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -52,12 +52,12 @@ import androidx.compose.material.icons.filled.GasMeter
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Navigation
-import androidx.compose.material.icons.filled.Settings as SettingsIconFilled
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LocalGasStation
-import androidx.compose.material.icons.outlined.Settings as SettingsIconOutlined
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -434,7 +434,7 @@ enum class AppTab(
 ) {
     Home("Home", Icons.Filled.Home, Icons.Outlined.Home),
     Fuel("Fuel", Icons.Filled.LocalGasStation, Icons.Outlined.LocalGasStation),
-    Settings("Settings", SettingsIconFilled, SettingsIconOutlined),
+    Settings("Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
 }
 
 @Composable
@@ -468,6 +468,10 @@ fun MainContent(fuel: FuelStore, requestedTab: String? = null, onTabHandled: () 
         object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val loc = result.lastLocation ?: return
+                // Do not let a very poor fused fix make Home claim the user is at
+                // the car (or hundreds of metres away) when Android has low-quality
+                // location data.
+                if (loc.hasAccuracy() && loc.accuracy > 100f) return
                 liveLat = loc.latitude
                 liveLng = loc.longitude
             }
@@ -478,7 +482,10 @@ fun MainContent(fuel: FuelStore, requestedTab: String? = null, onTabHandled: () 
         if (!hasPerm || tab != AppTab.Home || !activityResumed) return@LaunchedEffect
         try {
             fused.lastLocation.addOnSuccessListener { loc ->
-                if (loc != null && liveLat == null) {
+                val recentEnough = loc != null &&
+                    System.currentTimeMillis() - loc.time in 0..(5 * 60 * 1000L)
+                val accurateEnough = loc != null && (!loc.hasAccuracy() || loc.accuracy <= 150f)
+                if (loc != null && recentEnough && accurateEnough && liveLat == null) {
                     liveLat = loc.latitude
                     liveLng = loc.longitude
                 }
@@ -665,7 +672,7 @@ fun HomeScreen(
     val onDirections = {
         val lat = state.parkedLat; val lng = state.parkedLng
         if (lat != null && lng != null && !(lat == 0.0 && lng == 0.0)) {
-            val nav = Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$lat,$lng&mode=d")).apply {
+            val nav = Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$lat,$lng&mode=w")).apply {
                 setPackage("com.google.android.apps.maps")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
@@ -673,7 +680,7 @@ fun HomeScreen(
                 runCatching {
                     context.startActivity(
                         Intent(Intent.ACTION_VIEW,
-                            Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
+                            Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=walking")
                         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     )
                 }
@@ -1572,6 +1579,7 @@ private fun DeleteConfirmDialog(
 
 @Composable
 private fun RefuelModal(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> Unit) {
+    BackHandler(onBack = onDismiss)
     var litres by remember { mutableStateOf("") }
     var totalPaid by remember { mutableStateOf("") }
     var odometer by remember {
@@ -1663,10 +1671,11 @@ private fun RefuelModal(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
                         l == null || !l.isFinite() || l <= 0 -> errorText = "Enter the litres added"
                         c == null || !c.isFinite() || c < 0 -> errorText = "Enter the total paid"
                         o == null || !o.isFinite() || o < 0 -> errorText = "Check the odometer"
-                        else -> {
-                            fuel.logRefuel(litres = l, cost = c, odometer = o, tankFull = fullTank)
-                            onSaved()
-                        }
+                        o > 0 && fuel.currentOdo > 0 && o + 1.0 < fuel.currentOdo ->
+                            errorText = "Odometer can't be lower than the current reading"
+                        !fuel.logRefuel(litres = l, cost = c, odometer = o, tankFull = fullTank) ->
+                            errorText = "Check the refuel details"
+                        else -> onSaved()
                     }
                 })
                 Spacer(Modifier.height(8.dp))
@@ -1680,6 +1689,7 @@ private fun RefuelModal(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
 
 @Composable
 private fun TripCostModal(fuel: FuelStore, onDismiss: () -> Unit) {
+    BackHandler(onBack = onDismiss)
     val learnedConsumption = fuel.averageL100km()
     val learnedPrice = fuel.customFuelPrice.takeIf { it > 0 }
         ?: fuel.refuels.firstOrNull { it.litres > 0 && it.cost > 0 }?.let { it.cost / it.litres }
@@ -1963,11 +1973,18 @@ fun SettingsScreen(fuel: FuelStore) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 systemNotificationsAllowed = areNotificationsAllowed(context)
-                if (pendingAutoStart && latestParkingState.deviceAddress != null && hasLocation() && hasBluetooth() &&
-                    isBluetoothEnabled(context) && isLocationServicesEnabled(context)
-                ) {
-                    pendingAutoStart = false
-                    startMonitorReady()
+                if (pendingAutoStart) {
+                    if (latestParkingState.deviceAddress != null && hasLocation() && hasBluetooth() &&
+                        isBluetoothEnabled(context) && isLocationServicesEnabled(context)
+                    ) {
+                        pendingAutoStart = false
+                        startMonitorReady()
+                    } else if (!isLocationServicesEnabled(context)) {
+                        // The user returned from Location settings without enabling it.
+                        // Cancel the one-shot setup request so AutoPark cannot switch on
+                        // unexpectedly during some unrelated future app resume.
+                        pendingAutoStart = false
+                    }
                 }
             }
         }
@@ -1977,115 +1994,124 @@ fun SettingsScreen(fuel: FuelStore) {
 
     val notificationsChecked = fuel.notificationsEnabled && systemNotificationsAllowed
 
-    Column(Modifier.fillMaxSize().background(White)) {
+    Box(Modifier.fillMaxSize().background(White)) {
         Column(
             Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(OliveDark, Color(0xFF4D8D26), LimeBright),
-                        start = Offset.Zero,
-                        end = Offset(900f, 850f)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(OliveDark, Color(0xFF4D8D26), LimeBright),
+                            start = Offset.Zero,
+                            end = Offset(900f, 850f)
+                        )
                     )
-                )
-                .statusBarsPadding()
-                .padding(top = 18.dp, bottom = 24.dp, start = 20.dp, end = 20.dp)
-        ) {
-            Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = White, letterSpacing = (-0.5).sp)
-            Spacer(Modifier.height(20.dp))
-            Text("Vehicle", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = White, modifier = Modifier.padding(start = 4.dp, bottom = 10.dp))
-            Card {
-                ToggleRow(
-                    "AutoPark",
-                    state.monitoring,
-                    onToggle = { on ->
-                        if (on) {
-                            beginAutoPark()
-                        } else {
-                            runCatching {
-                                context.stopService(Intent(context, ParkingMonitorService::class.java))
-                            }
-                            scope.launch { store.setMonitoring(false) }
-                            statusMessage = "AutoPark is off"
-                        }
-                    }
-                )
-                DividerRow()
-                TextRow("Car Bluetooth", state.deviceName ?: "Not set") {
-                    pendingDevicePickerOnly = true
-                    if (android.os.Build.VERSION.SDK_INT >= 31 && !hasBluetooth()) {
-                        bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                    } else if (!isBluetoothEnabled(context)) {
-                        bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
-                    } else {
-                        pendingDevicePickerOnly = false
-                        showDevicePicker = true
-                    }
-                }
-                DividerRow()
-                TextRow("Odometer", formatOdometer(fuel.currentOdo)) { showOdoModal = true }
-                DividerRow()
-                TextRow(
-                    "Tank capacity",
-                    if (fuel.tankCapacity > 0) "${String.format(Locale.US, "%.0f", fuel.tankCapacity)} L" else "Not set"
-                ) { showTankModal = true }
-            }
-
-            Text("Preferences", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = White, modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 10.dp))
-            Card {
-                ToggleRow(
-                    "Parking alerts",
-                    notificationsChecked,
-                    onToggle = { enabled ->
-                        if (!enabled) {
-                            fuel.updateNotificationsEnabled(false)
-                        } else if (android.os.Build.VERSION.SDK_INT >= 33 &&
-                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                        ) {
-                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else if (!areNotificationsAllowed(context)) {
-                            // Remember that the user wants alerts before opening
-                            // Android's channel settings. If they enable the channel
-                            // there, Parked should be on immediately when they return
-                            // instead of requiring a second toggle.
-                            fuel.updateNotificationsEnabled(true)
-                            statusMessage = "Enable Parking alerts in Android settings"
-                            runCatching {
-                                val intent = if (android.os.Build.VERSION.SDK_INT >= 26) {
-                                    Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-                                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                        .putExtra(Settings.EXTRA_CHANNEL_ID, ParkingMonitorService.ALERT_CHANNEL)
-                                } else {
-                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    .statusBarsPadding()
+                    .padding(top = 18.dp, bottom = 24.dp, start = 20.dp, end = 20.dp)
+            ) {
+                Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = White, letterSpacing = (-0.5).sp)
+                Spacer(Modifier.height(20.dp))
+                Text("Vehicle", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = White, modifier = Modifier.padding(start = 4.dp, bottom = 10.dp))
+                Card {
+                    ToggleRow(
+                        "AutoPark",
+                        state.monitoring,
+                        onToggle = { on ->
+                            if (on) {
+                                beginAutoPark()
+                            } else {
+                                runCatching {
+                                    context.stopService(Intent(context, ParkingMonitorService::class.java))
                                 }
-                                context.startActivity(intent)
+                                scope.launch { store.setMonitoring(false) }
+                                statusMessage = "AutoPark is off"
                             }
+                        }
+                    )
+                    DividerRow()
+                    TextRow("Car Bluetooth", state.deviceName ?: "Not set") {
+                        pendingDevicePickerOnly = true
+                        if (android.os.Build.VERSION.SDK_INT >= 31 && !hasBluetooth()) {
+                            bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                        } else if (!isBluetoothEnabled(context)) {
+                            bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
                         } else {
-                            fuel.updateNotificationsEnabled(true)
-                            statusMessage = "Parking alerts are on"
+                            pendingDevicePickerOnly = false
+                            showDevicePicker = true
                         }
                     }
-                )
-                DividerRow()
-                TextRow("Car appearance", fuel.accentName) { showAppearanceModal = true }
+                    DividerRow()
+                    TextRow("Odometer", formatOdometer(fuel.currentOdo)) { showOdoModal = true }
+                    DividerRow()
+                    TextRow(
+                        "Tank capacity",
+                        if (fuel.tankCapacity > 0) "${String.format(Locale.US, "%.0f", fuel.tankCapacity)} L" else "Not set"
+                    ) { showTankModal = true }
+                }
+
+                Text("Preferences", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = White, modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 10.dp))
+                Card {
+                    ToggleRow(
+                        "Parking alerts",
+                        notificationsChecked,
+                        onToggle = { enabled ->
+                            if (!enabled) {
+                                fuel.updateNotificationsEnabled(false)
+                            } else if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else if (!areNotificationsAllowed(context)) {
+                                // Remember that the user wants alerts before opening
+                                // Android's channel settings. If they enable the channel
+                                // there, Parked should be on immediately when they return
+                                // instead of requiring a second toggle.
+                                fuel.updateNotificationsEnabled(true)
+                                statusMessage = "Enable Parking alerts in Android settings"
+                                runCatching {
+                                    val intent = if (android.os.Build.VERSION.SDK_INT >= 26) {
+                                        Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                                            .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
+                                            .putExtra(AndroidSettings.EXTRA_CHANNEL_ID, ParkingMonitorService.ALERT_CHANNEL)
+                                    } else {
+                                        Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                            .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
+                                    }
+                                    context.startActivity(intent)
+                                }
+                            } else {
+                                fuel.updateNotificationsEnabled(true)
+                                statusMessage = "Parking alerts are on"
+                            }
+                        }
+                    )
+                    DividerRow()
+                    TextRow("Car appearance", fuel.accentName) { showAppearanceModal = true }
+                }
             }
 
-        }
-
-        Box(
-            Modifier.fillMaxSize().background(White),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(Modifier.clickable { showAppearanceModal = true }) {
-                CarIllustration(fuel.accentName)
+            Box(
+                Modifier.fillMaxWidth().heightIn(min = 250.dp).background(White),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(Modifier.clickable { showAppearanceModal = true }) {
+                    CarIllustration(fuel.accentName)
+                }
             }
-
-            SettingsStatusToast(
-                message = statusMessage,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp)
-            )
+            Spacer(Modifier.height(18.dp))
         }
+
+        SettingsStatusToast(
+            message = statusMessage,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 10.dp)
+        )
     }
 
     if (showOdoModal) {
@@ -2347,6 +2373,7 @@ private fun AppearanceModal(fuel: FuelStore, onDismiss: () -> Unit) {
 
 @Composable
 private fun OdometerModal(fuel: FuelStore, onDismiss: () -> Unit) {
+    BackHandler(onBack = onDismiss)
     var odo by remember { mutableStateOf(if (fuel.currentOdo > 0) String.format(Locale.US, "%.0f", fuel.currentOdo) else "") }
     var errorText by remember { mutableStateOf<String?>(null) }
 
@@ -2394,6 +2421,7 @@ private fun OdometerModal(fuel: FuelStore, onDismiss: () -> Unit) {
 
 @Composable
 private fun TankCapacityModal(fuel: FuelStore, onDismiss: () -> Unit) {
+    BackHandler(onBack = onDismiss)
     var tank by remember { mutableStateOf(if (fuel.tankCapacity > 0) String.format(Locale.US, "%.0f", fuel.tankCapacity) else "") }
     var errorText by remember { mutableStateOf<String?>(null) }
 
@@ -2442,6 +2470,7 @@ private fun TankCapacityModal(fuel: FuelStore, onDismiss: () -> Unit) {
 
 @Composable
 private fun FuelPriceModal(fuel: FuelStore, onDismiss: () -> Unit) {
+    BackHandler(onBack = onDismiss)
     var price by remember { mutableStateOf(if (fuel.customFuelPrice > 0) String.format(Locale.US, "%.2f", fuel.customFuelPrice) else "") }
     var errorText by remember { mutableStateOf<String?>(null) }
 
@@ -2664,7 +2693,7 @@ private fun ensureLocationOn(context: Context) {
     if (isLocationServicesEnabled(context)) return
     runCatching {
         context.startActivity(
-            Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            Intent(AndroidSettings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     }
 }
