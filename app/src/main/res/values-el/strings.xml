@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common -->
+    <string name="cancel">Άκυρο</string>
+    <string name="close">Κλείσιμο</string>
+    <string name="save">Αποθήκευση</string>
+    <string name="done">Τέλος</string>
+    <string name="delete">Διαγραφή</string>
+    <string name="undo">Αναίρεση</string>
+    <string name="not_set">Δεν έχει οριστεί</string>
+    <string name="cd_back">Πίσω</string>
+
+    <!-- Tabs -->
+    <string name="tab_home">Αρχική</string>
+    <string name="tab_fuel">Καύσιμα</string>
+    <string name="tab_settings">Ρυθμίσεις</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_1_title">Μην ψάχνεις ποτέ ξανά πού πάρκαρες.</string>
+    <string name="onboarding_1_body">Πάρκαρε. Φύγε. Το Parked! θυμάται το σημείο, για να σε περιμένει όταν χρειαστείς το αυτοκίνητο.</string>
+    <string name="onboarding_2_title">Σύνδεσέ το μία φορά. Τα υπόλοιπα τα αναλαμβάνουμε εμείς.</string>
+    <string name="onboarding_2_body">Διάλεξε το Bluetooth του αυτοκινήτου σου και άνοιξε το AutoPark. Μόλις αποσυνδεθείς, το Parked! αποθηκεύει αυτόματα το σημείο.</string>
+    <string name="onboarding_continue">Πάτησε για να συνεχίσεις</string>
+    <string name="onboarding_start">Πάτησε για να ξεκινήσεις</string>
+
+    <!-- Home -->
+    <string name="home_empty_title">Αποθήκευσε πού πάρκαρες</string>
+    <string name="home_empty_body">Αποθήκευσε αυτό το σημείο τώρα. Την επόμενη φορά μπορεί να το κάνει το AutoPark.</string>
+    <string name="home_saved_title">Το σημείο στάθμευσης αποθηκεύτηκε</string>
+    <string name="home_at_car">Το αυτοκίνητό σου είναι εδώ!</string>
+    <string name="save_parking_spot">Αποθήκευση σημείου</string>
+    <string name="save_current_spot">Αποθήκευση εδώ</string>
+    <string name="share_spot">Κοινοποίηση</string>
+    <string name="get_directions">Οδηγίες προς το αυτοκίνητο</string>
+    <string name="saving">Αποθήκευση…</string>
+    <string name="spot_saved">Το σημείο αποθηκεύτηκε</string>
+    <string name="parked_recently">Πάρκαρες πρόσφατα</string>
+    <string name="parked_today">Πάρκαρες σήμερα στις %1$s</string>
+    <string name="parked_yesterday">Πάρκαρες χθες στις %1$s</string>
+    <string name="parked_on">Πάρκαρες %1$s στις %2$s</string>
+    <string name="distance_walk">%1$s μακριά · %2$d λεπτά με τα πόδια</string>
+    <string name="autopark_on">Το AutoPark είναι ενεργό</string>
+    <string name="autopark_off">Το AutoPark είναι ανενεργό</string>
+    <string name="autopark_on_limited">Το AutoPark θα σου ζητήσει να αποθηκεύσεις</string>
+    <string name="turn_on_location">Άνοιξε την Τοποθεσία και δοκίμασε ξανά</string>
+    <string name="error_no_location">Δεν βρέθηκε η τοποθεσία σου. Δοκίμασε ξανά σε ανοιχτό χώρο.</string>
+    <string name="error_location_permission">Χρειάζεται άδεια τοποθεσίας</string>
+    <string name="osm_attribution">© Συντελεστές του OpenStreetMap</string>
+    <string name="map_parked_car">Σταθμευμένο αυτοκίνητο</string>
+    <string name="map_you">Είσαι εδώ</string>
+    <string name="map_center_car">Δείξε το αυτοκίνητο</string>
+    <string name="map_show_both">Δείξε εμένα και το αυτοκίνητο</string>
+    <string name="share_text">Πάρκαρα εδώ: %1$s</string>
+    <string name="share_text_note">Πάρκαρα εδώ (%1$s): %2$s</string>
+
+    <string name="chip_add_note">Σημείωση</string>
+    <string name="chip_edit_note">Σημείωση</string>
+    <string name="chip_add_photo">Φωτογραφία</string>
+    <string name="chip_view_photo">Φωτογραφία</string>
+    <string name="chip_timer">Χρονόμετρο</string>
+    <string name="chip_timer_edit">Χρονόμετρο</string>
+
+    <string name="note_title">Σημείωση σημείου</string>
+    <string name="note_subtitle">Όροφος, σειρά ή κάποιο ορόσημο για να βρεις το αυτοκίνητο.</string>
+    <string name="note_label">Σημείωση</string>
+    <string name="note_placeholder">Όροφος −2, θέση B14</string>
+    <string name="save_note">Αποθήκευση σημείωσης</string>
+    <string name="remove_note">Αφαίρεση σημείωσης</string>
+
+    <string name="photo_retake">Νέα λήψη</string>
+    <string name="photo_remove">Αφαίρεση</string>
+    <string name="cd_spot_photo">Φωτογραφία του σημείου στάθμευσης</string>
+
+    <!-- Parking timer -->
+    <string name="timer_title">Χρονόμετρο στάθμευσης</string>
+    <string name="timer_subtitle">Θα λάβεις υπενθύμιση %1$d λεπτά πριν λήξει ο χρόνος και μία ακόμη όταν λήξει.</string>
+    <string name="timer_current">Λήγει στις %1$s</string>
+    <string name="timer_custom_label">Άλλη διάρκεια (λεπτά)</string>
+    <string name="timer_custom_error">Δώσε από 1 έως 1440 λεπτά</string>
+    <string name="timer_start">Έναρξη χρονομέτρου</string>
+    <string name="timer_cancel">Ακύρωση χρονομέτρου</string>
+    <string name="timer_inexact">Οι υπενθυμίσεις μπορεί να καθυστερήσουν έως ένα λεπτό, μέχρι να επιτρέψεις τα ακριβή ξυπνητήρια.</string>
+    <string name="timer_allow_exact">Να επιτρέπονται ακριβή ξυπνητήρια</string>
+    <string name="timer_needs_notifications">Επίτρεψε τις ειδοποιήσεις για να λαμβάνεις υπενθυμίσεις χρονομέτρου</string>
+    <string name="timer_ends_at">Η στάθμευση λήγει στις %1$s · απομένουν %2$s</string>
+    <string name="timer_expired_at">Ο χρόνος στάθμευσης έληξε στις %1$s</string>
+    <string name="timer_warning_title">Η στάθμευση λήγει σε %1$d λεπτά</string>
+    <string name="timer_end_title">Ο χρόνος στάθμευσης έληξε</string>
+    <string name="timer_body">Πάτησε για να βρεις το αυτοκίνητο.</string>
+    <string name="duration_m">%1$d λεπτά</string>
+    <string name="duration_h">%1$d ώρ.</string>
+    <string name="duration_hm">%1$d ώρ. %2$d λεπτά</string>
+
+    <!-- AutoPark service -->
+    <string name="autopark">AutoPark</string>
+    <string name="autopark_supporting">Αποθηκεύει το σημείο όταν αποσυνδέεται το Bluetooth του αυτοκινήτου</string>
+    <string name="autopark_ready">Το AutoPark είναι έτοιμο</string>
+    <string name="autopark_limited">Άνοιξε μία φορά το Parked! για να γίνεται ξανά αυτόματα η αποθήκευση. Μέχρι τότε θα λαμβάνεις ειδοποίηση για να αποθηκεύσεις με ένα πάτημα.</string>
+    <string name="autopark_saved">Το σημείο στάθμευσης αποθηκεύτηκε</string>
+    <string name="autopark_failed">Δεν ήταν δυνατή η εκκίνηση του AutoPark</string>
+    <string name="action_stop">Διακοπή</string>
+    <string name="notif_parked_title">Η στάθμευση αποθηκεύτηκε</string>
+    <string name="notif_parked_body">Το σημείο στάθμευσης αποθηκεύτηκε και σε περιμένει όταν το χρειαστείς.</string>
+    <string name="notif_tap_to_save_title">Μόλις πάρκαρες;</string>
+    <string name="notif_tap_to_save_body">Πάτησε τώρα για να αποθηκεύσεις το σημείο. Το Parked! δεν μπόρεσε να βρει αυτόματα την τοποθεσία σου.</string>
+    <string name="notif_autopark_stopped_title">Το AutoPark σταμάτησε</string>
+    <string name="notif_autopark_stopped_body">Το Android το διέκοψε. Πάτησε για να ανοίξεις το Parked! και να το ενεργοποιήσεις ξανά.</string>
+    <string name="notif_service_due_title">Ώρα για: %1$s</string>
+    <string name="notif_service_due_body">Πάτησε για να δεις τις υπενθυμίσεις συντήρησης.</string>
+
+    <string name="channel_monitor">Αυτόματη στάθμευση</string>
+    <string name="channel_monitor_desc">Κρατά το Parked! έτοιμο να αποθηκεύσει το σημείο σου</string>
+    <string name="channel_alerts">Ειδοποιήσεις στάθμευσης</string>
+    <string name="channel_alerts_desc">Επιβεβαιώνει πότε το Parked! αποθηκεύει τη θέση του αυτοκινήτου</string>
+    <string name="channel_timer">Χρονόμετρο στάθμευσης</string>
+    <string name="channel_timer_desc">Σου θυμίζει πριν λήξει ο χρόνος στάθμευσης</string>
+    <string name="channel_service">Υπενθυμίσεις συντήρησης</string>
+    <string name="channel_service_desc">Σε ενημερώνει όταν πλησιάζει η συντήρηση του αυτοκινήτου</string>
+
+    <!-- Widget and tile -->
+    <string name="widget_no_spot">Δεν έχει αποθηκευτεί σημείο</string>
+    <string name="widget_save">Αποθήκευση</string>
+    <string name="widget_find">Εύρεση</string>
+    <string name="widget_description">Αποθήκευσε το σημείο ή βρες το αυτοκίνητο από την αρχική οθόνη</string>
+    <string name="tile_label">Αποθήκευση σημείου</string>
+
+    <!-- Fuel -->
+    <string name="fuel_current_level">τρέχουσα στάθμη</string>
+    <string name="fuel_level">Στάθμη καυσίμου</string>
+    <string name="fuel_approx">περίπου</string>
+    <string name="fuel_set_tank">όρισε χωρητικότητα ρεζερβουάρ</string>
+    <string name="fuel_not_set">Όρισέ τη μία φορά ώστε να ταιριάζει με το αυτοκίνητο. Μετά, διόρθωσέ τη μόνο όταν χρειάζεται.</string>
+    <string name="fuel_updated">Ενημερώθηκε %1$s</string>
+    <string name="fuel_estimated_since">Εκτίμηση: ορίστηκε %1$s, %2$d km από τότε</string>
+    <string name="fuel_set_level">Ορισμός στάθμης</string>
+    <string name="fuel_correct_level">Διόρθωση στάθμης</string>
+    <string name="fuel_level_updated">Η στάθμη καυσίμου ενημερώθηκε</string>
+    <string name="refuel">Ανεφοδιασμός</string>
+    <string name="refuel_saved">Ο ανεφοδιασμός αποθηκεύτηκε</string>
+    <string name="fuel_at_a_glance">Με μια ματιά</string>
+    <string name="fuel_range">Αυτονομία περίπου</string>
+    <string name="fuel_average">Μέση κατανάλωση</string>
+    <string name="fuel_insights_title">Στοιχεία καυσίμου</string>
+    <string name="fuel_insights_body">Μετά από δύο γεμίσματα με ενδείξεις χιλιομετρητή, το Parked! μπορεί να υπολογίσει τη μέση κατανάλωση και μια εκτίμηση αυτονομίας.</string>
+
+    <string name="spend_title">Έξοδα καυσίμων</string>
+    <string name="spend_month_summary">%1$s: %2$s · %3$s L</string>
+
+    <string name="refuel_history">Ιστορικό ανεφοδιασμών</string>
+    <string name="refuel_history_empty">Δεν υπάρχουν ανεφοδιασμοί ακόμα</string>
+    <string name="refuel_history_summary">Τελευταίος %1$s · %2$s L · %3$d αποθηκευμένοι</string>
+    <string name="refuels">Ανεφοδιασμοί</string>
+    <string name="refuels_empty">Δεν υπάρχουν ανεφοδιασμοί ακόμα. Πρόσθεσε έναν με το κουμπί Ανεφοδιασμός όταν βάλεις καύσιμα.</string>
+    <string name="refuel_full">Γέμισμα</string>
+    <string name="refuel_partial">Συμπλήρωση</string>
+    <string name="delete_refuel_title">Διαγραφή ανεφοδιασμού;</string>
+    <string name="delete_refuel_body">Ο ανεφοδιασμός θα αφαιρεθεί. Ο χιλιομετρητής και η στάθμη καυσίμου δεν αλλάζουν.</string>
+    <string name="export_csv">Εξαγωγή σε CSV</string>
+    <string name="export_subject">Ανεφοδιασμοί Parked!</string>
+
+    <string name="refuel_subtitle">Χρησιμοποίησέ το μόνο όταν βάζεις καύσιμα.</string>
+    <string name="refuel_litres">Λίτρα</string>
+    <string name="refuel_total">Σύνολο (%1$s)</string>
+    <string name="refuel_odometer">Χιλιομετρητής (προαιρετικό)</string>
+    <string name="refuel_odometer_hint">Περίπου %1$s</string>
+    <string name="refuel_full_tank">Γέμισα το ρεζερβουάρ</string>
+    <string name="refuel_full_tank_hint">Απενεργοποίησέ το για μερική συμπλήρωση</string>
+    <string name="save_refuel">Αποθήκευση ανεφοδιασμού</string>
+    <string name="error_litres">Συμπλήρωσε τα λίτρα</string>
+    <string name="error_total">Συμπλήρωσε το ποσό που πλήρωσες</string>
+    <string name="error_odometer">Δώσε μια έγκυρη ένδειξη χιλιομετρητή</string>
+    <string name="error_odometer_low">Ο χιλιομετρητής δεν μπορεί να είναι μικρότερος από την τρέχουσα ένδειξη</string>
+    <string name="error_refuel">Έλεγξε τα στοιχεία του ανεφοδιασμού</string>
+
+    <string name="trip_cost">Κόστος διαδρομής</string>
+    <string name="trip_cost_row">Υπολόγισε μια διαδρομή χωρίς να την αποθηκεύσεις</string>
+    <string name="trip_cost_subtitle">Γρήγορη εκτίμηση. Δεν αποθηκεύεται τίποτα.</string>
+    <string name="trip_distance">Απόσταση (km)</string>
+    <string name="trip_consumption">Κατανάλωση (L/100 km)</string>
+    <string name="trip_consumption_learned">Από το ιστορικό ανεφοδιασμών σου</string>
+    <string name="trip_consumption_enter">Δώσε τη μέση κατανάλωση του αυτοκινήτου</string>
+    <string name="trip_price">Τιμή καυσίμου (%1$s/L)</string>
+    <string name="trip_price_learned">Από τον τελευταίο ανεφοδιασμό σου</string>
+    <string name="trip_round">Με επιστροφή</string>
+    <string name="trip_estimated">Εκτιμώμενο κόστος</string>
+
+    <string name="level_checks">Παλαιότεροι έλεγχοι στάθμης</string>
+    <string name="level_checks_row">%1$d αποθηκευμένοι από την προηγούμενη έκδοση</string>
+    <string name="level_checks_empty">Δεν υπάρχουν αποθηκευμένοι έλεγχοι στάθμης</string>
+    <string name="level_check_deleted">Ο έλεγχος στάθμης διαγράφηκε</string>
+
+    <!-- Service reminders -->
+    <string name="service_title">Υπενθυμίσεις συντήρησης</string>
+    <string name="service_row_empty">Λάδια, ελαστικά, ΚΤΕΟ — υπενθύμιση ανά km ή ημερομηνία</string>
+    <string name="service_row_ok">Τίποτα επείγον</string>
+    <string name="service_empty">Δεν υπάρχουν υπενθυμίσεις ακόμα. Πρόσθεσε μία για αλλαγή λαδιών, ελαστικά ή ΚΤΕΟ.</string>
+    <string name="service_needs_odometer">Όρισε τον χιλιομετρητή στις Ρυθμίσεις για να μετρούν οι υπενθυμίσεις ανά km.</string>
+    <string name="service_add">Νέα υπενθύμιση</string>
+    <string name="service_edit">Επεξεργασία υπενθύμισης</string>
+    <string name="service_sheet_subtitle">Υπενθύμιση μετά από απόσταση, χρόνο ή ό,τι έρθει πρώτο.</string>
+    <string name="service_name">Όνομα</string>
+    <string name="service_every_km">Κάθε (km)</string>
+    <string name="service_every_months">Κάθε (μήνες)</string>
+    <string name="service_last_odo">Χιλιομετρητής την τελευταία φορά (km)</string>
+    <string name="service_last_odo_hint">Άφησέ το ως έχει αν έγινε σήμερα</string>
+    <string name="service_error_name">Δώσε ένα όνομα στην υπενθύμιση</string>
+    <string name="service_error_interval">Δώσε απόσταση, αριθμό μηνών ή και τα δύο</string>
+    <string name="service_preset_oil">Αλλαγή λαδιών</string>
+    <string name="service_preset_tyres">Εναλλαγή ελαστικών</string>
+    <string name="service_preset_inspection">ΚΤΕΟ</string>
+    <string name="service_preset_brakes">Φρένα</string>
+    <string name="service_status_due">Πρέπει να γίνει</string>
+    <string name="service_status_soon">Πλησιάζει</string>
+    <string name="service_status_ok">Όλα καλά</string>
+    <string name="service_km_left">απομένουν %1$s</string>
+    <string name="service_km_over">καθυστέρηση %1$s</string>
+    <string name="service_due_on">έως %1$s</string>
+    <string name="service_no_odometer_short">Αναμονή για ένδειξη χιλιομετρητή</string>
+    <string name="service_last_done">Τελευταία φορά %1$s</string>
+    <string name="service_done">Έγινε</string>
+    <string name="service_marked_done">Σημειώθηκε ως ολοκληρωμένο</string>
+    <string name="service_deleted">Η υπενθύμιση διαγράφηκε</string>
+    <plurals name="service_row_due">
+        <item quantity="one">%1$d υπενθύμιση θέλει προσοχή</item>
+        <item quantity="other">%1$d υπενθυμίσεις θέλουν προσοχή</item>
+    </plurals>
+
+    <!-- Settings -->
+    <string name="settings_vehicle">Όχημα</string>
+    <string name="settings_preferences">Προτιμήσεις</string>
+    <string name="car_bluetooth">Bluetooth αυτοκινήτου</string>
+    <string name="odometer">Χιλιομετρητής</string>
+    <string name="odometer_subtitle">Η ένδειξη στο ταμπλό. Το Parked! προσθέτει την απόσταση που οδηγείς με ενεργό το AutoPark.</string>
+    <string name="odometer_label">Τρέχουσα ένδειξη (km)</string>
+    <string name="tank_capacity">Χωρητικότητα ρεζερβουάρ</string>
+    <string name="tank_subtitle">Χρησιμοποιείται για τα λίτρα και την αυτονομία κατά προσέγγιση.</string>
+    <string name="tank_label">Χωρητικότητα (L)</string>
+    <string name="error_tank">Δώσε μια έγκυρη χωρητικότητα</string>
+    <string name="error_tank_high">Φαίνεται πολύ μεγάλη</string>
+    <string name="parking_alerts">Ειδοποιήσεις στάθμευσης</string>
+    <string name="car_appearance">Εμφάνιση αυτοκινήτου</string>
+    <string name="appearance_hint">Διάλεξε το πιο κοντινό χρώμα.</string>
+    <string name="cd_car_preview">Προεπισκόπηση αυτοκινήτου, %1$s</string>
+    <string name="choose_your_car">Διάλεξε το αυτοκίνητό σου</string>
+    <string name="no_paired_devices">Δεν βρέθηκαν συζευγμένες συσκευές. Σύζευξε πρώτα το αυτοκίνητο από τις ρυθμίσεις Bluetooth του Android.</string>
+    <string name="unnamed_device">Συσκευή χωρίς όνομα</string>
+    <string name="car_bluetooth_saved">Το Bluetooth αυτοκινήτου αποθηκεύτηκε</string>
+    <string name="bluetooth_needed">Το AutoPark χρειάζεται Bluetooth</string>
+    <string name="turn_on_bluetooth">Άνοιξε το Bluetooth</string>
+    <string name="choose_car_bluetooth">Διάλεξε το Bluetooth του αυτοκινήτου</string>
+    <string name="location_needed">Άνοιξε την Τοποθεσία για το AutoPark</string>
+    <string name="permissions_needed">Το AutoPark χρειάζεται πρόσβαση σε Τοποθεσία και Bluetooth</string>
+    <string name="bluetooth_permission_needed">Χρειάζεται άδεια Bluetooth</string>
+    <string name="alerts_on">Οι ειδοποιήσεις στάθμευσης είναι ενεργές</string>
+    <string name="alerts_not_enabled">Οι ειδοποιήσεις δεν ενεργοποιήθηκαν</string>
+    <string name="alerts_enable_in_settings">Ενεργοποίησε τις Ειδοποιήσεις στάθμευσης στις ρυθμίσεις του Android</string>
+
+    <string name="history_toggle">Ιστορικό στάθμευσης</string>
+    <string name="history_toggle_supporting">Ανενεργό από προεπιλογή. Κρατά τα τελευταία 50 σημεία μόνο σε αυτό το κινητό.</string>
+    <string name="history_title">Ιστορικό στάθμευσης</string>
+    <string name="history_empty">Τα σημεία που θα αποθηκεύεις από εδώ και πέρα θα εμφανίζονται εδώ.</string>
+    <string name="history_clear">Διαγραφή ιστορικού</string>
+    <string name="history_clear_title">Διαγραφή ιστορικού στάθμευσης;</string>
+    <string name="history_clear_body">Όλα τα σημεία του ιστορικού θα διαγραφούν. Το τρέχον σημείο μένει.</string>
+    <string name="history_off_title">Διακοπή ιστορικού;</string>
+    <string name="history_off_body">Το αποθηκευμένο ιστορικό στάθμευσης θα διαγραφεί. Το τρέχον σημείο μένει.</string>
+    <string name="history_off_confirm">Διαγραφή και απενεργοποίηση</string>
+    <plurals name="history_count">
+        <item quantity="one">%1$d σημείο</item>
+        <item quantity="other">%1$d σημεία</item>
+    </plurals>
+
+    <string name="colour_white">Λευκό</string>
+    <string name="colour_silver">Ασημί</string>
+    <string name="colour_gray">Γκρι</string>
+    <string name="colour_black">Μαύρο</string>
+    <string name="colour_blue">Μπλε</string>
+    <string name="colour_red">Κόκκινο</string>
+    <string name="colour_green">Πράσινο</string>
+    <string name="colour_yellow">Κίτρινο</string>
+    <string name="colour_orange">Πορτοκαλί</string>
+    <string name="colour_brown">Καφέ</string>
+    <string name="colour_purple">Μωβ</string>
+</resources>

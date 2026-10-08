@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Parked!</string>
+
+    <!-- Common -->
+    <string name="cancel">Cancel</string>
+    <string name="close">Close</string>
+    <string name="save">Save</string>
+    <string name="done">Done</string>
+    <string name="delete">Delete</string>
+    <string name="undo">Undo</string>
+    <string name="not_set">Not set</string>
+    <string name="cd_back">Back</string>
+
+    <!-- Tabs -->
+    <string name="tab_home">Home</string>
+    <string name="tab_fuel">Fuel</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_1_title">Never wonder where you parked.</string>
+    <string name="onboarding_1_body">Park. Walk away. Parked! remembers the spot, so it\'s waiting when you need your car.</string>
+    <string name="onboarding_2_title">Connect once. We\'ll handle the rest.</string>
+    <string name="onboarding_2_body">Choose your car\'s Bluetooth and turn on AutoPark. When you disconnect, Parked! saves the spot automatically.</string>
+    <string name="onboarding_continue">Tap to continue</string>
+    <string name="onboarding_start">Tap to get started</string>
+
+    <!-- Home -->
+    <string name="home_empty_title">Save where you parked</string>
+    <string name="home_empty_body">Save this spot now. AutoPark can handle it next time.</string>
+    <string name="home_saved_title">Your parking spot is saved</string>
+    <string name="home_at_car">Your car is here!</string>
+    <string name="save_parking_spot">Save parking spot</string>
+    <string name="save_current_spot">Save current spot</string>
+    <string name="share_spot">Share spot</string>
+    <string name="get_directions">Get directions</string>
+    <string name="saving">Saving…</string>
+    <string name="spot_saved">Spot saved</string>
+    <string name="parked_recently">Parked recently</string>
+    <string name="parked_today">Parked today at %1$s</string>
+    <string name="parked_yesterday">Parked yesterday at %1$s</string>
+    <string name="parked_on">Parked %1$s at %2$s</string>
+    <string name="distance_walk">%1$s away · %2$d min walk</string>
+    <string name="autopark_on">AutoPark is on</string>
+    <string name="autopark_off">AutoPark is off</string>
+    <string name="autopark_on_limited">AutoPark will ask you to save</string>
+    <string name="turn_on_location">Turn on Location, then try again</string>
+    <string name="error_no_location">Couldn\'t find your location. Try again outdoors.</string>
+    <string name="error_location_permission">Location permission required</string>
+    <string name="osm_attribution">© OpenStreetMap contributors</string>
+    <string name="map_parked_car">Parked car</string>
+    <string name="map_you">You are here</string>
+    <string name="map_center_car">Show my car</string>
+    <string name="map_show_both">Show me and my car</string>
+    <string name="share_text">I parked here: %1$s</string>
+    <string name="share_text_note">I parked here (%1$s): %2$s</string>
+
+    <string name="chip_add_note">Add note</string>
+    <string name="chip_edit_note">Edit note</string>
+    <string name="chip_add_photo">Add photo</string>
+    <string name="chip_view_photo">Photo</string>
+    <string name="chip_timer">Timer</string>
+    <string name="chip_timer_edit">Timer</string>
+
+    <string name="note_title">Spot note</string>
+    <string name="note_subtitle">A level, row or landmark to help you find the car.</string>
+    <string name="note_label">Note</string>
+    <string name="note_placeholder">Level −2, spot B14</string>
+    <string name="save_note">Save note</string>
+    <string name="remove_note">Remove note</string>
+
+    <string name="photo_retake">Retake</string>
+    <string name="photo_remove">Remove</string>
+    <string name="cd_spot_photo">Photo of the parking spot</string>
+
+    <!-- Parking timer -->
+    <string name="timer_title">Parking timer</string>
+    <string name="timer_subtitle">You\'ll get a reminder %1$d minutes before the time is up, and another when it ends.</string>
+    <string name="timer_current">Ends at %1$s</string>
+    <string name="timer_custom_label">Other length (minutes)</string>
+    <string name="timer_custom_error">Enter between 1 and 1440 minutes</string>
+    <string name="timer_start">Start timer</string>
+    <string name="timer_cancel">Cancel timer</string>
+    <string name="timer_inexact">Reminders may arrive up to a minute late until you allow exact alarms.</string>
+    <string name="timer_allow_exact">Allow exact alarms</string>
+    <string name="timer_needs_notifications">Allow notifications to get timer reminders</string>
+    <string name="timer_ends_at">Parking ends at %1$s · %2$s left</string>
+    <string name="timer_expired_at">Parking time ended at %1$s</string>
+    <string name="timer_warning_title">Parking ends in %1$d minutes</string>
+    <string name="timer_end_title">Parking time is up</string>
+    <string name="timer_body">Tap to find your car.</string>
+    <string name="duration_m">%1$d min</string>
+    <string name="duration_h">%1$d h</string>
+    <string name="duration_hm">%1$d h %2$d min</string>
+
+    <!-- AutoPark service -->
+    <string name="autopark">AutoPark</string>
+    <string name="autopark_supporting">Saves the spot when your car\'s Bluetooth disconnects</string>
+    <string name="autopark_ready">AutoPark is ready</string>
+    <string name="autopark_limited">Open Parked! once to make saving automatic again. Until then you\'ll get a tap-to-save alert.</string>
+    <string name="autopark_saved">Parking spot saved</string>
+    <string name="autopark_failed">Couldn\'t start AutoPark</string>
+    <string name="action_stop">Stop</string>
+    <string name="notif_parked_title">Parking saved</string>
+    <string name="notif_parked_body">Your parking spot is saved and ready when you need it.</string>
+    <string name="notif_tap_to_save_title">Just parked?</string>
+    <string name="notif_tap_to_save_body">Tap now to save this spot. Parked! couldn\'t get your location automatically.</string>
+    <string name="notif_autopark_stopped_title">AutoPark is paused</string>
+    <string name="notif_autopark_stopped_body">Android stopped it. Tap to open Parked! and turn it back on.</string>
+    <string name="notif_service_due_title">%1$s is due</string>
+    <string name="notif_service_due_body">Tap to see your service reminders.</string>
+
+    <string name="channel_monitor">Automatic parking</string>
+    <string name="channel_monitor_desc">Keeps Parked! ready to save your spot</string>
+    <string name="channel_alerts">Parking alerts</string>
+    <string name="channel_alerts_desc">Confirms when Parked! saves your car location</string>
+    <string name="channel_timer">Parking timer</string>
+    <string name="channel_timer_desc">Reminds you before your parking time runs out</string>
+    <string name="channel_service">Service reminders</string>
+    <string name="channel_service_desc">Tells you when car maintenance is due</string>
+
+    <!-- Widget and tile -->
+    <string name="widget_no_spot">No spot saved yet</string>
+    <string name="widget_save">Save spot</string>
+    <string name="widget_find">Find car</string>
+    <string name="widget_description">Save your spot or find your car from the home screen</string>
+    <string name="tile_label">Save spot</string>
+
+    <!-- Fuel -->
+    <string name="fuel_current_level">current level</string>
+    <string name="fuel_level">Fuel level</string>
+    <string name="fuel_approx">approx.</string>
+    <string name="fuel_set_tank">set tank capacity</string>
+    <string name="fuel_not_set">Set it once to match your car. After that, correct it only when needed.</string>
+    <string name="fuel_updated">Updated %1$s</string>
+    <string name="fuel_estimated_since">Estimated: set %1$s, %2$d km driven since</string>
+    <string name="fuel_set_level">Set level</string>
+    <string name="fuel_correct_level">Correct level</string>
+    <string name="fuel_level_updated">Fuel level updated</string>
+    <string name="refuel">Refuel</string>
+    <string name="refuel_saved">Refuel saved</string>
+    <string name="fuel_at_a_glance">At a glance</string>
+    <string name="fuel_range">Approx. range</string>
+    <string name="fuel_average">Average</string>
+    <string name="fuel_insights_title">Fuel insights</string>
+    <string name="fuel_insights_body">After two full-tank refuels with odometer readings, Parked! can calculate your average consumption and an approximate range.</string>
+
+    <string name="spend_title">Fuel spending</string>
+    <string name="spend_month_summary">%1$s: %2$s · %3$s L</string>
+
+    <string name="refuel_history">Refuel history</string>
+    <string name="refuel_history_empty">No refuels yet</string>
+    <string name="refuel_history_summary">Last %1$s · %2$s L · %3$d saved</string>
+    <string name="refuels">Refuels</string>
+    <string name="refuels_empty">No refuels yet. Add one with Refuel when you fill up.</string>
+    <string name="refuel_full">Full tank</string>
+    <string name="refuel_partial">Top-up</string>
+    <string name="delete_refuel_title">Delete refuel?</string>
+    <string name="delete_refuel_body">This refuel will be removed. Your odometer and fuel level stay the same.</string>
+    <string name="export_csv">Export as CSV</string>
+    <string name="export_subject">Parked! refuels</string>
+
+    <string name="refuel_subtitle">Only use this when you actually add fuel.</string>
+    <string name="refuel_litres">Litres added</string>
+    <string name="refuel_total">Total paid (%1$s)</string>
+    <string name="refuel_odometer">Odometer (optional)</string>
+    <string name="refuel_odometer_hint">About %1$s</string>
+    <string name="refuel_full_tank">Filled the tank</string>
+    <string name="refuel_full_tank_hint">Turn off for a partial top-up</string>
+    <string name="save_refuel">Save refuel</string>
+    <string name="error_litres">Enter the litres added</string>
+    <string name="error_total">Enter the total paid</string>
+    <string name="error_odometer">Enter a valid odometer reading</string>
+    <string name="error_odometer_low">The odometer can\'t be lower than the current reading</string>
+    <string name="error_refuel">Check the refuel details</string>
+
+    <string name="trip_cost">Trip cost</string>
+    <string name="trip_cost_row">Estimate a drive without saving it</string>
+    <string name="trip_cost_subtitle">A quick estimate. Nothing is saved.</string>
+    <string name="trip_distance">Distance (km)</string>
+    <string name="trip_consumption">Consumption (L/100 km)</string>
+    <string name="trip_consumption_learned">Filled in from your refuel history</string>
+    <string name="trip_consumption_enter">Enter your car\'s average consumption</string>
+    <string name="trip_price">Fuel price (%1$s/L)</string>
+    <string name="trip_price_learned">Filled in from your latest refuel</string>
+    <string name="trip_round">Round trip</string>
+    <string name="trip_estimated">Estimated cost</string>
+
+    <string name="level_checks">Past level checks</string>
+    <string name="level_checks_row">%1$d saved before the simpler fuel view</string>
+    <string name="level_checks_empty">No saved level checks</string>
+    <string name="level_check_deleted">Level check deleted</string>
+
+    <!-- Service reminders -->
+    <string name="service_title">Service reminders</string>
+    <string name="service_row_empty">Oil, tyres, inspection — get reminded by km or date</string>
+    <string name="service_row_ok">Nothing due</string>
+    <string name="service_empty">No reminders yet. Add one for oil changes, tyres or the yearly inspection.</string>
+    <string name="service_needs_odometer">Set your odometer in Settings so kilometre reminders can count down.</string>
+    <string name="service_add">Add reminder</string>
+    <string name="service_edit">Edit reminder</string>
+    <string name="service_sheet_subtitle">Remind me after a distance, a time, or whichever comes first.</string>
+    <string name="service_name">Name</string>
+    <string name="service_every_km">Every (km)</string>
+    <string name="service_every_months">Every (months)</string>
+    <string name="service_last_odo">Odometer when last done (km)</string>
+    <string name="service_last_odo_hint">Leave as is if it was done today</string>
+    <string name="service_error_name">Give the reminder a name</string>
+    <string name="service_error_interval">Enter a distance, a number of months, or both</string>
+    <string name="service_preset_oil">Oil change</string>
+    <string name="service_preset_tyres">Tyre rotation</string>
+    <string name="service_preset_inspection">Inspection</string>
+    <string name="service_preset_brakes">Brakes</string>
+    <string name="service_status_due">Due now</string>
+    <string name="service_status_soon">Due soon</string>
+    <string name="service_status_ok">On track</string>
+    <string name="service_km_left">%1$s left</string>
+    <string name="service_km_over">%1$s overdue</string>
+    <string name="service_due_on">by %1$s</string>
+    <string name="service_no_odometer_short">Waiting for an odometer reading</string>
+    <string name="service_last_done">Last done %1$s</string>
+    <string name="service_done">Done</string>
+    <string name="service_marked_done">Marked as done</string>
+    <string name="service_deleted">Reminder deleted</string>
+    <plurals name="service_row_due">
+        <item quantity="one">%1$d reminder needs attention</item>
+        <item quantity="other">%1$d reminders need attention</item>
+    </plurals>
+
+    <!-- Settings -->
+    <string name="settings_vehicle">Vehicle</string>
+    <string name="settings_preferences">Preferences</string>
+    <string name="car_bluetooth">Car Bluetooth</string>
+    <string name="odometer">Odometer</string>
+    <string name="odometer_subtitle">The reading on your dashboard. Parked! adds the distance you drive with AutoPark on.</string>
+    <string name="odometer_label">Current odometer (km)</string>
+    <string name="tank_capacity">Tank capacity</string>
+    <string name="tank_subtitle">Used to show approximate litres and range.</string>
+    <string name="tank_label">Capacity (L)</string>
+    <string name="error_tank">Enter a valid tank capacity</string>
+    <string name="error_tank_high">That looks too high</string>
+    <string name="parking_alerts">Parking alerts</string>
+    <string name="car_appearance">Car appearance</string>
+    <string name="appearance_hint">Choose the closest colour.</string>
+    <string name="cd_car_preview">Car preview, %1$s</string>
+    <string name="choose_your_car">Choose your car</string>
+    <string name="no_paired_devices">No paired devices found. Pair your car in Android\'s Bluetooth settings first.</string>
+    <string name="unnamed_device">Unnamed device</string>
+    <string name="car_bluetooth_saved">Car Bluetooth saved</string>
+    <string name="bluetooth_needed">Bluetooth is needed for AutoPark</string>
+    <string name="turn_on_bluetooth">Turn on Bluetooth</string>
+    <string name="choose_car_bluetooth">Choose your car\'s Bluetooth</string>
+    <string name="location_needed">Turn on Location for AutoPark</string>
+    <string name="permissions_needed">AutoPark needs Location and Bluetooth access</string>
+    <string name="bluetooth_permission_needed">Bluetooth permission is needed</string>
+    <string name="alerts_on">Parking alerts are on</string>
+    <string name="alerts_not_enabled">Notifications weren\'t enabled</string>
+    <string name="alerts_enable_in_settings">Turn on Parking alerts in Android settings</string>
+
+    <string name="history_toggle">Keep parking history</string>
+    <string name="history_toggle_supporting">Off by default. Saves your last 50 spots on this phone only.</string>
+    <string name="history_title">Parking history</string>
+    <string name="history_empty">Spots you save from now on will appear here.</string>
+    <string name="history_clear">Clear history</string>
+    <string name="history_clear_title">Clear parking history?</string>
+    <string name="history_clear_body">All saved spots in your history will be deleted. Your current spot stays.</string>
+    <string name="history_off_title">Stop keeping history?</string>
+    <string name="history_off_body">Your saved parking history will be deleted. Your current spot stays.</string>
+    <string name="history_off_confirm">Delete and turn off</string>
+    <plurals name="history_count">
+        <item quantity="one">%1$d spot</item>
+        <item quantity="other">%1$d spots</item>
+    </plurals>
+
+    <string name="colour_white">White</string>
+    <string name="colour_silver">Silver</string>
+    <string name="colour_gray">Grey</string>
+    <string name="colour_black">Black</string>
+    <string name="colour_blue">Blue</string>
+    <string name="colour_red">Red</string>
+    <string name="colour_green">Green</string>
+    <string name="colour_yellow">Yellow</string>
+    <string name="colour_orange">Orange</string>
+    <string name="colour_brown">Brown</string>
+    <string name="colour_purple">Purple</string>
+</resources>

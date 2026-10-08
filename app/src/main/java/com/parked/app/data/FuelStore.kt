@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Calendar
+import java.util.Locale
 
 data class FuelLevelLog(
     val date: Long,
@@ -21,39 +23,59 @@ data class Refuel(
     val tankFull: Boolean,
 )
 
+data class MonthlySpend(
+    val year: Int,
+    /** 0-based, like [Calendar.MONTH]. */
+    val month: Int,
+    val cost: Double,
+    val litres: Double,
+)
+
+data class ServiceReminder(
+    val id: Long,
+    val name: String,
+    val intervalKm: Int?,
+    val intervalMonths: Int?,
+    val lastDoneOdo: Double,
+    val lastDoneAt: Long,
+    /** [lastDoneAt] value for which the "due" alert was already shown. */
+    val alertedFor: Long = 0L,
+)
+
+enum class ReminderStatus { Ok, Soon, Due }
+
+data class ReminderProgress(
+    val status: ReminderStatus,
+    val kmLeft: Double?,
+    val dueAt: Long?,
+)
+
 class FuelStore(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("parked_fuel", Context.MODE_PRIVATE)
 
     // The Activity and foreground service each hold a FuelStore instance. Keep
-    // them in sync when either side updates SharedPreferences so odometer/fuel
-    // state and notification preferences do not stay stale until a restart.
+    // them in sync when either side updates SharedPreferences.
     private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
             "tankCapacity" -> tankCapacity = prefs.getFloat("tankCapacity", 0f).toDouble()
             "currency" -> currency = prefs.getString("currency", "€") ?: "€"
-            "units" -> units = prefs.getString("units", "L/100km") ?: "L/100km"
             "baselineOdo" -> baselineOdo = prefs.getFloat("baselineOdo", 0f).toDouble()
             "gpsKm" -> gpsKm = prefs.getFloat("gpsKm", 0f).toDouble()
             "levelPct" -> levelPct = prefs.getFloat("levelPct", 100f).toDouble()
             "odoForLevel" -> odoForLevel = prefs.getFloat("odoForLevel", 0f).toDouble()
             "levelUpdatedAt" -> levelUpdatedAt = prefs.getLong("levelUpdatedAt", 0L)
-            "promptDismissedAtOdo" -> promptDismissedAtOdo = prefs.getFloat("promptDismissedAtOdo", 0f).toDouble()
             "fuelLevelLogs" -> fuelLogs = loadFuelLogs()
             "refuels" -> refuels = loadRefuels()
             "accentName" -> accentName = canonicalAccentName(prefs.getString("accentName", "Blue") ?: "Blue")
             "notificationsEnabled" -> notificationsEnabled = prefs.getBoolean("notificationsEnabled", true)
-            "customFuelPrice" -> customFuelPrice = prefs.getFloat("customFuelPrice", 0f).toDouble()
-            "customAccentStart" -> customAccentStart = prefs.getInt("customAccentStart", 0)
-            "customAccentEnd" -> customAccentEnd = prefs.getInt("customAccentEnd", 0)
+            "serviceReminders" -> reminders = loadReminders()
         }
     }
 
     var tankCapacity: Double by mutableStateOf(prefs.getFloat("tankCapacity", 0f).toDouble())
         private set
     var currency: String by mutableStateOf(prefs.getString("currency", "€") ?: "€")
-        private set
-    var units: String by mutableStateOf(prefs.getString("units", "L/100km") ?: "L/100km")
         private set
 
     var baselineOdo: Double by mutableStateOf(prefs.getFloat("baselineOdo", 0f).toDouble())
@@ -67,12 +89,8 @@ class FuelStore(context: Context) {
         private set
     var levelUpdatedAt: Long by mutableStateOf(prefs.getLong("levelUpdatedAt", 0L))
         private set
-    var promptDismissedAtOdo: Double by mutableStateOf(prefs.getFloat("promptDismissedAtOdo", 0f).toDouble())
-        private set
 
-    // New routine fuel-level history. This intentionally uses a new preference
-    // key so every existing refuel entry from previous Parked! versions stays
-    // untouched during an in-place update.
+    /** Level checks saved by builds before 0.2.6. Shown read-only for upgraders. */
     var fuelLogs: List<FuelLevelLog> by mutableStateOf(loadFuelLogs())
         private set
 
@@ -85,12 +103,7 @@ class FuelStore(context: Context) {
     var notificationsEnabled: Boolean by mutableStateOf(prefs.getBoolean("notificationsEnabled", true))
         private set
 
-    var customFuelPrice: Double by mutableStateOf(prefs.getFloat("customFuelPrice", 0f).toDouble())
-        private set
-
-    var customAccentStart: Int by mutableStateOf(prefs.getInt("customAccentStart", 0))
-        private set
-    var customAccentEnd: Int by mutableStateOf(prefs.getInt("customAccentEnd", 0))
+    var reminders: List<ServiceReminder> by mutableStateOf(loadReminders())
         private set
 
     init {
@@ -106,6 +119,8 @@ class FuelStore(context: Context) {
             "White", "Silver", "Gray", "Black", "Blue", "Red",
             "Green", "Yellow", "Orange", "Brown", "Purple"
         )
+        private const val SOON_KM = 500.0
+        private const val SOON_MS = 14L * 24 * 60 * 60 * 1000
     }
 
     private fun canonicalAccentName(raw: String): String = when (raw.trim()) {
@@ -113,12 +128,9 @@ class FuelStore(context: Context) {
         "Forest Green", "Racing Green" -> "Green"
         "Midnight" -> "Black"
         "Sunset" -> "Orange"
-        // Older builds could persist the label itself instead of a real colour,
-        // which left the selector with no selected item and a blue fallback car.
         "Match my car", "" -> "Blue"
         else -> raw.trim().takeIf { it in supportedAccentNames } ?: "Blue"
     }
-
 
     private fun backfillLevelUpdatedAtIfNeeded() {
         if (levelUpdatedAt > 0L) return
@@ -135,13 +147,11 @@ class FuelStore(context: Context) {
         val raw = prefs.getString("accentName", "Blue") ?: "Blue"
         val canonical = canonicalAccentName(raw)
         accentName = canonical
-        if (raw != canonical || customAccentStart != 0 || customAccentEnd != 0) {
-            customAccentStart = 0
-            customAccentEnd = 0
+        if (raw != canonical || prefs.contains("customAccentStart") || prefs.contains("customAccentEnd")) {
             prefs.edit()
                 .putString("accentName", canonical)
-                .putInt("customAccentStart", 0)
-                .putInt("customAccentEnd", 0)
+                .remove("customAccentStart")
+                .remove("customAccentEnd")
                 .apply()
         }
     }
@@ -151,11 +161,8 @@ class FuelStore(context: Context) {
     }
 
     // gpsKm is only meaningful once the user has anchored it to the car's real
-    // odometer. Without a baseline, exposing raw GPS distance as an odometer
-    // produces values such as "42 km" on a car that actually has 80,000 km.
+    // odometer. Without a baseline, raw GPS distance is not shown as an odometer.
     val currentOdo: Double get() = if (baselineOdo > 0) baselineOdo + gpsKm else 0.0
-
-    val isConfigured: Boolean get() = tankCapacity > 0 && baselineOdo > 0
 
     fun addKm(km: Double) {
         if (baselineOdo <= 0) return
@@ -169,10 +176,8 @@ class FuelStore(context: Context) {
         baselineOdo = value
         gpsKm = 0.0
 
-        // An odometer edit is a calibration, not distance driven. If the user has
-        // already set a fuel level, move that level's odometer anchor with the new
-        // reading so correcting the odometer cannot instantly consume fuel in the
-        // estimator.
+        // An odometer edit is a calibration, not distance driven. Move the fuel
+        // level's anchor with it so a correction cannot appear to consume fuel.
         if (levelUpdatedAt > 0L) {
             odoForLevel = value
         }
@@ -186,60 +191,21 @@ class FuelStore(context: Context) {
         editor.apply()
     }
 
-    fun resetOdometerTracker() {
-        val newBaseline = currentOdo
-        baselineOdo = newBaseline
-        gpsKm = 0.0
-        prefs.edit()
-            .putFloat("baselineOdo", newBaseline.toFloat())
-            .putFloat("gpsKm", 0f)
-            .apply()
-    }
-
     fun updateTankCapacity(v: Double) {
         if (!v.isFinite() || v <= 0) return
         tankCapacity = v
         prefs.edit().putFloat("tankCapacity", v.toFloat()).apply()
     }
 
-    fun updateCurrency(v: String) {
-        currency = v
-        prefs.edit().putString("currency", v).apply()
-    }
-
-    fun updateUnits(v: String) {
-        units = v
-        prefs.edit().putString("units", v).apply()
-    }
-
     fun setAccent(name: String) {
         val canonical = canonicalAccentName(name)
         accentName = canonical
-        customAccentStart = 0
-        customAccentEnd = 0
-        prefs.edit()
-            .putString("accentName", canonical)
-            .putInt("customAccentStart", 0)
-            .putInt("customAccentEnd", 0)
-            .apply()
+        prefs.edit().putString("accentName", canonical).apply()
     }
 
     fun updateNotificationsEnabled(v: Boolean) {
         notificationsEnabled = v
         prefs.edit().putBoolean("notificationsEnabled", v).apply()
-    }
-
-    fun updateCustomFuelPrice(v: Double) {
-        if (!v.isFinite() || v < 0) return
-        customFuelPrice = v
-        prefs.edit().putFloat("customFuelPrice", v.toFloat()).apply()
-    }
-
-    @Deprecated("Custom accent gradients are no longer used by the native car colour picker")
-    fun setCustomAccent(startArgb: Int, endArgb: Int) {
-        // Keep binary/source compatibility with older callers without persisting
-        // the invalid "Match my car" pseudo-colour again.
-        setAccent("Blue")
     }
 
     /** Update the current fuel level without creating a history row. */
@@ -253,21 +219,6 @@ class FuelStore(context: Context) {
             .putFloat("odoForLevel", odoForLevel.toFloat())
             .putLong("levelUpdatedAt", levelUpdatedAt)
             .apply()
-    }
-
-    /** Routine action: record the level that is currently visible on the car gauge. */
-    fun logFuelLevel(pct: Double) {
-        if (!pct.isFinite()) return
-        val normalized = pct.coerceIn(0.0, 100.0)
-        setLevel(normalized)
-        val entry = FuelLevelLog(
-            date = System.currentTimeMillis(),
-            levelPct = normalized,
-            odometer = currentOdo,
-        )
-        val updated = (listOf(entry) + fuelLogs).take(300)
-        fuelLogs = updated
-        saveFuelLogs(updated)
     }
 
     fun deleteFuelLog(date: Long) {
@@ -284,23 +235,14 @@ class FuelStore(context: Context) {
         saveFuelLogs(updated)
     }
 
-    /**
-     * Occasional action: record an actual refuel. Existing versions already
-     * persisted these under "refuels", so the format is kept compatible.
-     */
+    /** Record an actual refuel. The stored format is unchanged since 0.2.0. */
     fun logRefuel(litres: Double, cost: Double, odometer: Double, tankFull: Boolean): Boolean {
         if (!litres.isFinite() || !cost.isFinite() || !odometer.isFinite()) return false
         if (litres <= 0 || cost < 0 || odometer < 0) return false
-        // Refuel rows are timestamped "now", so accepting an older odometer reading
-        // would create a newest-first history row that is chronologically impossible
-        // and can corrupt consumption calculations. Allow a 1 km rounding tolerance
-        // because the UI displays the current odometer as a whole number.
+        // Refuels are timestamped "now", so an odometer below the current reading
+        // would make history impossible and corrupt consumption. Allow 1 km for
+        // rounding because the UI shows whole kilometres.
         if (currentOdo > 0 && odometer > 0 && odometer + 1.0 < currentOdo) return false
-        // Estimate the level at the odometer reading for this fill-up. If the
-        // car's displayed odometer is ahead of Parked's GPS-tracked value, using
-        // the old currentOdo here would overstate the fuel remaining on a partial
-        // refuel. Older readings are treated as historical and do not roll the
-        // current estimate backwards.
         val effectiveOdo = when {
             odometer > currentOdo && odometer > 0 -> odometer
             currentOdo > 0 -> currentOdo
@@ -308,18 +250,14 @@ class FuelStore(context: Context) {
             else -> 0.0
         }
         val levelBeforeRefuel = estimateLevelPctAtOdometer(effectiveOdo)
-        val recordedOdo = when {
-            odometer > 0 -> odometer
-            currentOdo > 0 -> currentOdo
-            else -> 0.0
-        }
-        val entry = Refuel(System.currentTimeMillis(), litres, cost, recordedOdo, tankFull)
+        // Only a reading the user typed is stored with the refuel. A GPS estimate
+        // must never become a consumption anchor.
+        val entry = Refuel(System.currentTimeMillis(), litres, cost, odometer.coerceAtLeast(0.0), tankFull)
         val newList = (listOf(entry) + refuels).take(200)
         refuels = newList
         saveRefuels(newList)
 
-        // Refuel odometer is optional. Only move the stored odometer forward;
-        // a typo or older receipt must never roll the car backwards.
+        // Only move the stored odometer forward; a typo must not roll it back.
         if (odometer > currentOdo && odometer > 0) {
             setOdometer(odometer)
         }
@@ -340,18 +278,14 @@ class FuelStore(context: Context) {
     }
 
     fun averageL100km(): Double? {
-        // Full-to-full consumption only makes sense when both anchor refuels have
-        // real odometer readings. A "full" row with the optional odometer left blank
-        // must never become a 0 km anchor and produce a wildly optimistic average.
+        // Full-to-full consumption needs real odometer readings on both anchors.
         val history = refuels.sortedByDescending { it.date }
         val fullIndices = history.indices
             .filter { history[it].tankFull && history[it].odometer.isFinite() && history[it].odometer > 0 }
             .take(6)
         if (fullIndices.size < 2) return null
 
-        // Prefer the widest valid recent span for a steadier average, but skip any
-        // malformed/out-of-order historical pair instead of letting one bad reading
-        // suppress every fuel insight.
+        // Prefer the widest valid recent span, skipping malformed pairs.
         var bestDistance = 0.0
         var bestLitres = 0.0
         for (newerPos in 0 until fullIndices.lastIndex) {
@@ -389,41 +323,168 @@ class FuelStore(context: Context) {
         return (levelPct - driven / range * 100.0).coerceIn(0.0, 100.0)
     }
 
+    /** Saved level minus the fuel used for the distance driven since it was set. */
     fun estimateLevelPct(): Double = estimateLevelPctAtOdometer(currentOdo)
 
-    fun estimatedRangeRemainingKm(): Double? {
-        val range = estimatedRangeKm() ?: return null
-        return range * estimateLevelPct() / 100.0
+    /** Kilometres driven since the level was last set, when that is known. */
+    fun kmSinceLevelSet(): Double? {
+        if (levelUpdatedAt <= 0L || odoForLevel <= 0 || currentOdo <= 0) return null
+        return (currentOdo - odoForLevel).takeIf { it.isFinite() && it >= 1.0 }
     }
 
-    fun shouldShowPrompt(): Boolean {
-        if (!isConfigured) return false
-        if (refuels.isEmpty()) return false
-        return currentOdo - promptDismissedAtOdo > 50
+    fun latestPricePerLitre(): Double? =
+        refuels.firstOrNull { it.litres > 0 && it.cost > 0 }?.let { it.cost / it.litres }
+
+    /** Fuel spending per calendar month, newest first, for the last [months] months. */
+    fun monthlySpend(months: Int = 6, now: Long = System.currentTimeMillis()): List<MonthlySpend> {
+        val cal = Calendar.getInstance().apply { timeInMillis = now }
+        val result = mutableListOf<MonthlySpend>()
+        repeat(months) {
+            val y = cal.get(Calendar.YEAR)
+            val m = cal.get(Calendar.MONTH)
+            val inMonth = refuels.filter {
+                val c = Calendar.getInstance().apply { timeInMillis = it.date }
+                c.get(Calendar.YEAR) == y && c.get(Calendar.MONTH) == m
+            }
+            result += MonthlySpend(y, m, inMonth.sumOf { it.cost }, inMonth.sumOf { it.litres })
+            cal.add(Calendar.MONTH, -1)
+        }
+        return result
     }
 
-    fun dismissPrompt() {
-        promptDismissedAtOdo = currentOdo
-        prefs.edit().putFloat("promptDismissedAtOdo", currentOdo.toFloat()).apply()
+    /** Refuel history as CSV, oldest first, for spreadsheets. */
+    fun refuelsCsv(): String = buildString {
+        append("date,litres,total_paid,currency,price_per_litre,odometer_km,full_tank\n")
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+        refuels.sortedBy { it.date }.forEach { r ->
+            val ppl = if (r.litres > 0) r.cost / r.litres else 0.0
+            append(fmt.format(java.util.Date(r.date))).append(',')
+            append(String.format(Locale.US, "%.2f", r.litres)).append(',')
+            append(String.format(Locale.US, "%.2f", r.cost)).append(',')
+            append('"').append(currency.replace("\"", "\"\"")).append('"').append(',')
+            append(String.format(Locale.US, "%.3f", ppl)).append(',')
+            append(if (r.odometer > 0) String.format(Locale.US, "%.0f", r.odometer) else "").append(',')
+            append(if (r.tankFull) "yes" else "no").append('\n')
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Service reminders
+    // ---------------------------------------------------------------------
+
+    fun addReminder(name: String, intervalKm: Int?, intervalMonths: Int?, lastDoneOdo: Double, lastDoneAt: Long) {
+        val reminder = ServiceReminder(
+            id = System.currentTimeMillis(),
+            name = name.trim().take(40),
+            intervalKm = intervalKm?.takeIf { it > 0 },
+            intervalMonths = intervalMonths?.takeIf { it > 0 },
+            lastDoneOdo = lastDoneOdo.coerceAtLeast(0.0),
+            lastDoneAt = lastDoneAt,
+        )
+        saveReminders(reminders + reminder)
+    }
+
+    fun updateReminder(updated: ServiceReminder) {
+        saveReminders(reminders.map { if (it.id == updated.id) updated else it })
+    }
+
+    /** "Done today" resets the interval from now and the current odometer. */
+    fun markReminderDone(id: Long) {
+        val now = System.currentTimeMillis()
+        saveReminders(reminders.map {
+            if (it.id == id) it.copy(lastDoneOdo = currentOdo, lastDoneAt = now, alertedFor = 0L) else it
+        })
+    }
+
+    fun deleteReminder(id: Long) = saveReminders(reminders.filterNot { it.id == id })
+
+    fun restoreReminder(reminder: ServiceReminder) {
+        if (reminders.any { it.id == reminder.id }) return
+        saveReminders((reminders + reminder).sortedBy { it.id })
+    }
+
+    fun progress(r: ServiceReminder, now: Long = System.currentTimeMillis()): ReminderProgress {
+        val kmLeft = r.intervalKm?.let { interval ->
+            if (currentOdo > 0 && r.lastDoneOdo > 0) r.lastDoneOdo + interval - currentOdo else null
+        }
+        val dueAt = r.intervalMonths?.let { months ->
+            Calendar.getInstance().apply { timeInMillis = r.lastDoneAt; add(Calendar.MONTH, months) }.timeInMillis
+        }
+        val due = (kmLeft != null && kmLeft <= 0) || (dueAt != null && dueAt <= now)
+        val soon = (kmLeft != null && kmLeft <= SOON_KM) || (dueAt != null && dueAt - now <= SOON_MS)
+        val status = when {
+            due -> ReminderStatus.Due
+            soon -> ReminderStatus.Soon
+            else -> ReminderStatus.Ok
+        }
+        return ReminderProgress(status, kmLeft, dueAt)
     }
 
     /**
-     * Version 1 stored every fuel-meter save in the `refuels` array even though
-     * that screen was being used as a routine tank-level log. On the first 0.2.x
-     * launch, convert those legacy rows once so old user history keeps its date
-     * and odometer but does not masquerade as a real refuel.
-     *
-     * If `fuelLevelLogs` already exists, the user has already run a 0.2.x build,
-     * so any rows in `refuels` may be genuine new refuels and must not be moved.
+     * Reminders that just became due and have not been announced yet. Marks them
+     * as announced, so each due date produces at most one alert.
+     */
+    fun takeNewlyDueReminders(): List<ServiceReminder> {
+        val newlyDue = reminders.filter { progress(it).status == ReminderStatus.Due && it.alertedFor != it.lastDoneAt }
+        if (newlyDue.isEmpty()) return emptyList()
+        val ids = newlyDue.map { it.id }.toSet()
+        saveReminders(reminders.map { if (it.id in ids) it.copy(alertedFor = it.lastDoneAt) else it })
+        return newlyDue
+    }
+
+    private fun saveReminders(list: List<ServiceReminder>) {
+        reminders = list
+        val arr = JSONArray()
+        list.forEach { r ->
+            arr.put(JSONObject().apply {
+                put("id", r.id)
+                put("name", r.name)
+                if (r.intervalKm != null) put("km", r.intervalKm)
+                if (r.intervalMonths != null) put("months", r.intervalMonths)
+                put("lastOdo", r.lastDoneOdo)
+                put("lastAt", r.lastDoneAt)
+                put("alertedFor", r.alertedFor)
+            })
+        }
+        prefs.edit().putString("serviceReminders", arr.toString()).apply()
+    }
+
+    private fun loadReminders(): List<ServiceReminder> {
+        val raw = prefs.getString("serviceReminders", "[]") ?: "[]"
+        return runCatching {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i ->
+                runCatching {
+                    val o = arr.getJSONObject(i)
+                    ServiceReminder(
+                        id = o.getLong("id"),
+                        name = o.getString("name"),
+                        intervalKm = if (o.has("km")) o.getInt("km") else null,
+                        intervalMonths = if (o.has("months")) o.getInt("months") else null,
+                        lastDoneOdo = o.optDouble("lastOdo", 0.0).takeIf { it.isFinite() } ?: 0.0,
+                        lastDoneAt = o.getLong("lastAt"),
+                        alertedFor = o.optLong("alertedFor", 0L),
+                    )
+                }.getOrNull()
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    // ---------------------------------------------------------------------
+    // Legacy migration and persistence
+    // ---------------------------------------------------------------------
+
+    /**
+     * Version 1 stored every fuel-meter save in `refuels`. On the first 0.2.x
+     * launch those rows are moved once into level checks so they do not count
+     * as real refuels. If `fuelLevelLogs` already exists the user has run 0.2.x
+     * and nothing is moved.
      */
     private fun migrateLegacyFuelMeterEntriesIfNeeded() {
         synchronized(legacyMigrationLock) {
             val key = "legacyFuelMeterMigratedV2"
             if (prefs.getBoolean(key, false)) return
 
-            // Presence of the new key is a stronger signal than an empty list: a
-            // user may have created then deleted all 0.2.x fuel logs. In that case
-            // genuine new Refuel entries must never be reclassified as legacy logs.
             if (!prefs.contains("fuelLevelLogs") && refuels.isNotEmpty()) {
                 val capacity = tankCapacity.takeIf { it.isFinite() && it > 0 } ?: 50.0
                 val migrated = refuels.mapNotNull { legacy ->
@@ -447,10 +508,8 @@ class FuelStore(context: Context) {
                 val legacyRaw = prefs.getString("refuels", "[]") ?: "[]"
                 val latest = migrated.firstOrNull()
 
-                // One synchronous transaction prevents the Activity and foreground
-                // service from racing this one-time migration and guarantees that the
-                // exact v1 JSON backup is on disk before the legacy Refuel bucket is
-                // cleared. The stored backup is intentionally never deleted here.
+                // One synchronous transaction so the Activity and service cannot race
+                // it; the exact v1 JSON is backed up before the bucket is cleared.
                 val editor = prefs.edit()
                     .putString("legacyRefuelsBackupV1", legacyRaw)
                     .putString("fuelLevelLogs", migratedJson)
@@ -472,8 +531,6 @@ class FuelStore(context: Context) {
                     levelUpdatedAt = it.date
                 }
             } else {
-                // No v1 rows to migrate, or the new fuel-log schema was already in
-                // use. Mark the migration complete without touching any history.
                 prefs.edit().putBoolean(key, true).commit()
             }
         }
