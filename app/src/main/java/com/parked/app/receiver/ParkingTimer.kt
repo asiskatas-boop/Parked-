@@ -48,9 +48,9 @@ object ParkingTimer {
             if (canBeExact(context)) {
                 am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
             } else {
-                // Without the exact-alarm permission, ask for delivery inside a
-                // short window instead of letting Android defer it indefinitely.
-                am.setWindow(AlarmManager.RTC_WAKEUP, at - 60_000L, 60_000L, pi)
+                // Without the exact-alarm permission this is the most timely option
+                // left: it still fires in Doze, though Android may delay it a little.
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
             }
         }.onFailure {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)

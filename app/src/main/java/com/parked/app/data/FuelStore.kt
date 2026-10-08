@@ -115,6 +115,7 @@ class FuelStore(context: Context) {
 
     companion object {
         private val legacyMigrationLock = Any()
+        private val reminderLock = Any()
         private val supportedAccentNames = setOf(
             "White", "Silver", "Gray", "Black", "Blue", "Red",
             "Green", "Yellow", "Orange", "Brown", "Purple"
@@ -372,6 +373,16 @@ class FuelStore(context: Context) {
     // Service reminders
     // ---------------------------------------------------------------------
 
+    /**
+     * The app and the AutoPark service each hold a FuelStore. Every reminder change
+     * re-reads the stored list under a lock, so neither side overwrites the other.
+     */
+    private fun mutateReminders(change: (List<ServiceReminder>) -> List<ServiceReminder>) {
+        synchronized(reminderLock) {
+            saveReminders(change(loadReminders()))
+        }
+    }
+
     fun addReminder(name: String, intervalKm: Int?, intervalMonths: Int?, lastDoneOdo: Double, lastDoneAt: Long) {
         val reminder = ServiceReminder(
             id = System.currentTimeMillis(),
@@ -381,26 +392,26 @@ class FuelStore(context: Context) {
             lastDoneOdo = lastDoneOdo.coerceAtLeast(0.0),
             lastDoneAt = lastDoneAt,
         )
-        saveReminders(reminders + reminder)
+        mutateReminders { it + reminder }
     }
 
     fun updateReminder(updated: ServiceReminder) {
-        saveReminders(reminders.map { if (it.id == updated.id) updated else it })
+        mutateReminders { list -> list.map { if (it.id == updated.id) updated else it } }
     }
 
     /** "Done today" resets the interval from now and the current odometer. */
     fun markReminderDone(id: Long) {
         val now = System.currentTimeMillis()
-        saveReminders(reminders.map {
-            if (it.id == id) it.copy(lastDoneOdo = currentOdo, lastDoneAt = now, alertedFor = 0L) else it
-        })
+        val odo = currentOdo
+        mutateReminders { list ->
+            list.map { if (it.id == id) it.copy(lastDoneOdo = odo, lastDoneAt = now, alertedFor = 0L) else it }
+        }
     }
 
-    fun deleteReminder(id: Long) = saveReminders(reminders.filterNot { it.id == id })
+    fun deleteReminder(id: Long) = mutateReminders { list -> list.filterNot { it.id == id } }
 
-    fun restoreReminder(reminder: ServiceReminder) {
-        if (reminders.any { it.id == reminder.id }) return
-        saveReminders((reminders + reminder).sortedBy { it.id })
+    fun restoreReminder(reminder: ServiceReminder) = mutateReminders { list ->
+        if (list.any { it.id == reminder.id }) list else (list + reminder).sortedBy { it.id }
     }
 
     fun progress(r: ServiceReminder, now: Long = System.currentTimeMillis()): ReminderProgress {
@@ -425,10 +436,12 @@ class FuelStore(context: Context) {
      * as announced, so each due date produces at most one alert.
      */
     fun takeNewlyDueReminders(): List<ServiceReminder> {
-        val newlyDue = reminders.filter { progress(it).status == ReminderStatus.Due && it.alertedFor != it.lastDoneAt }
-        if (newlyDue.isEmpty()) return emptyList()
-        val ids = newlyDue.map { it.id }.toSet()
-        saveReminders(reminders.map { if (it.id in ids) it.copy(alertedFor = it.lastDoneAt) else it })
+        var newlyDue: List<ServiceReminder> = emptyList()
+        mutateReminders { list ->
+            newlyDue = list.filter { progress(it).status == ReminderStatus.Due && it.alertedFor != it.lastDoneAt }
+            val ids = newlyDue.map { it.id }.toSet()
+            list.map { if (it.id in ids) it.copy(alertedFor = it.lastDoneAt) else it }
+        }
         return newlyDue
     }
 

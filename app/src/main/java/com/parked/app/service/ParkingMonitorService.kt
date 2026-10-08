@@ -36,6 +36,7 @@ import com.parked.app.receiver.ParkingTimer
 import com.parked.app.util.Channels
 import com.parked.app.util.hasBluetoothPermission
 import com.parked.app.util.hasLocationPermission
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -62,7 +63,10 @@ enum class AutoParkMode {
 }
 
 class ParkingMonitorService : Service() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // A storage error must not take the whole app down with it.
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, _ -> parkingCaptureInProgress.set(false) }
+    )
     private lateinit var store: ParkingStore
     private lateinit var fuel: FuelStore
 
@@ -276,7 +280,8 @@ class ParkingMonitorService : Service() {
     }
 
     private fun captureLocation(fallback: Location?) {
-        if (!hasLocationPermission(this)) {
+        // Without location access in the background, don't guess: ask right away.
+        if (_mode.value != AutoParkMode.Full || !hasLocationPermission(this)) {
             parkingCaptureInProgress.set(false)
             askUserToSave()
             return
@@ -296,7 +301,7 @@ class ParkingMonitorService : Service() {
             fused.lastLocation.addOnCompleteListener { cachedTask ->
                 val cached = if (cachedTask.isSuccessful) cachedTask.result else null
                 val cachedRecent = cached?.takeIf {
-                    System.currentTimeMillis() - it.time <= 10 * 60 * 1000L && it.accuracy <= 150f
+                    System.currentTimeMillis() - it.time <= 2 * 60 * 1000L && it.accuracy <= 100f
                 }
                 if (cachedRecent != null) {
                     persistParking(cachedRecent)
@@ -325,13 +330,16 @@ class ParkingMonitorService : Service() {
     private fun persistParking(loc: Location) {
         lastLocation = null
         scope.launch {
-            val previous = store.saveParking(loc.latitude, loc.longitude)
-            // No undo for automatic saves, so the old spot's photo can go now.
-            store.deletePhotoFile(previous.photoPath)
-            if (previous.timerEndsAt != null) ParkingTimer.cancel(this@ParkingMonitorService)
-            parkingCaptureInProgress.set(false)
-            com.parked.app.widget.ParkedWidget.refresh(this@ParkingMonitorService)
-            announceDueReminders()
+            try {
+                val previous = store.saveParking(loc.latitude, loc.longitude)
+                // No undo for automatic saves, so the old spot's photo can go now.
+                store.deletePhotoFile(previous.photoPath)
+                if (previous.timerEndsAt != null) ParkingTimer.cancel(this@ParkingMonitorService)
+                com.parked.app.widget.ParkedWidget.refresh(this@ParkingMonitorService)
+                announceDueReminders()
+            } finally {
+                parkingCaptureInProgress.set(false)
+            }
         }
 
         if (fuel.notificationsEnabled && Channels.canPost(this, Channels.ALERTS)) {
@@ -436,6 +444,12 @@ class ParkingMonitorService : Service() {
          * start it; the user is then told with a notification.
          */
         fun start(context: Context, fromBackground: Boolean = false): Boolean {
+            // Without Bluetooth access the service could not enter the foreground,
+            // and Android crashes an app whose foreground service never does.
+            if (!hasBluetoothPermission(context)) {
+                if (fromBackground) notifyAutoParkStopped(context)
+                return false
+            }
             val intent = Intent(context, ParkingMonitorService::class.java)
                 .putExtra(EXTRA_FROM_FOREGROUND, !fromBackground)
             val ok = runCatching { ContextCompat.startForegroundService(context, intent) }.isSuccess

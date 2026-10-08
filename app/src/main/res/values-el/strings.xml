@@ -79,7 +79,7 @@
     <string name="timer_custom_error">Δώσε από 1 έως 1440 λεπτά</string>
     <string name="timer_start">Έναρξη χρονομέτρου</string>
     <string name="timer_cancel">Ακύρωση χρονομέτρου</string>
-    <string name="timer_inexact">Οι υπενθυμίσεις μπορεί να καθυστερήσουν έως ένα λεπτό, μέχρι να επιτρέψεις τα ακριβή ξυπνητήρια.</string>
+    <string name="timer_inexact">Οι υπενθυμίσεις μπορεί να καθυστερήσουν λίγα λεπτά, μέχρι να επιτρέψεις τα ακριβή ξυπνητήρια.</string>
     <string name="timer_allow_exact">Να επιτρέπονται ακριβή ξυπνητήρια</string>
     <string name="timer_needs_notifications">Επίτρεψε τις ειδοποιήσεις για να λαμβάνεις υπενθυμίσεις χρονομέτρου</string>
     <string name="timer_ends_at">Η στάθμευση λήγει στις %1$s · απομένουν %2$s</string>

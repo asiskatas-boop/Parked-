@@ -42,7 +42,13 @@ class MainActivity : ComponentActivity() {
         pendingAction = actionFrom(intent)
     }
 
-    private fun actionFrom(intent: Intent?): AppAction? = when (intent?.action) {
+    private fun actionFrom(intent: Intent?): AppAction? {
+        // Reopening from Recents replays the launching intent; a save must not repeat.
+        if (intent == null || intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return null
+        return actionFor(intent)
+    }
+
+    private fun actionFor(intent: Intent): AppAction? = when (intent.action) {
         ACTION_SAVE_SPOT -> {
             // A "tap to save" notification tapped long after parking would save
             // wherever the phone is now, not where the car is. Just open Home then.

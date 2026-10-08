@@ -117,7 +117,9 @@ class ParkingStore(context: Context) {
 
     /** Puts back a spot captured by [saveParking]; used by Undo. */
     suspend fun restore(spot: SavedSpot) {
+        var replacedPhoto: String? = null
         context.dataStore.edit {
+            replacedPhoto = it[Keys.photoPath]
             val replacedAt = it[Keys.parkedAt]
             if (spot.lat != null && spot.lng != null && spot.at != null) {
                 it[Keys.parkedLat] = spot.lat
@@ -134,6 +136,15 @@ class ParkingStore(context: Context) {
                 val history = parseHistory(it[Keys.history])
                 if (history.firstOrNull()?.at == replacedAt) it[Keys.history] = encodeHistory(history.drop(1))
             }
+        }
+        // A photo taken for the undone spot belongs to nothing now.
+        if (replacedPhoto != spot.photoPath) deletePhotoFile(replacedPhoto)
+    }
+
+    /** Deletes photos left behind by an interrupted camera session or crash. */
+    fun deleteOrphanPhotos(keep: Set<String>) {
+        runCatching {
+            photoDir(context).listFiles()?.forEach { f -> if (f.absolutePath !in keep) f.delete() }
         }
     }
 

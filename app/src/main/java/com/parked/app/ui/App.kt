@@ -63,7 +63,6 @@ import com.parked.app.service.ParkingMonitorService
 import com.parked.app.util.Channels
 import com.parked.app.util.hasBluetoothPermission
 import com.parked.app.util.hasLocationPermission
-import com.parked.app.util.isLocationServicesEnabled
 
 /** Requests that arrive from a widget, the Quick Settings tile or a notification. */
 enum class AppAction { SaveSpot, FindCar, OpenSettings, OpenService }
@@ -86,10 +85,12 @@ fun ParkedRoot(pendingAction: AppAction?, onActionHandled: () -> Unit) {
     suspend fun recoverAutoPark() {
         val state = parkingStore.current()
         if (!state.monitoring) return
-        val canRecover = state.deviceAddress != null && hasLocationPermission(context) &&
-            hasBluetoothPermission(context) && isLocationServicesEnabled(context)
+        // Location being switched off for a while is fine: the service then sends a
+        // tap-to-save alert. Missing permissions or car are not recoverable.
+        val canRecover = state.deviceAddress != null && hasLocationPermission(context) && hasBluetoothPermission(context)
         if (!canRecover) {
             // Never show AutoPark as on when Android can no longer run it.
+            ParkingMonitorService.stop(context)
             parkingStore.setMonitoring(false)
         } else if (ParkingMonitorService.mode.value != AutoParkMode.Full) {
             if (!ParkingMonitorService.start(context)) parkingStore.setMonitoring(false)
@@ -287,7 +288,10 @@ private fun MainContent(
     val context = LocalContext.current
     val snackbar = LocalSnackbar.current
     var tab by rememberSaveable { mutableStateOf(AppTab.Home) }
+    // Lives across tab switches, so a save's Undo survives leaving Home.
+    val appScope = rememberCoroutineScope()
     var saveRequest by remember { mutableIntStateOf(0) }
+    var permResult by remember { mutableIntStateOf(0) }
     var openServiceRequest by remember { mutableStateOf(false) }
 
     LaunchedEffect(pendingAction) {
@@ -364,7 +368,10 @@ private fun MainContent(
 
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ -> hasPerm = hasLocationPermission(context) }
+    ) { _ ->
+        hasPerm = hasLocationPermission(context)
+        permResult++
+    }
 
     Scaffold(
         containerColor = White,
@@ -400,6 +407,9 @@ private fun MainContent(
                         live = live,
                         hasPerm = hasPerm,
                         saveRequest = saveRequest,
+                        onSaveHandled = { saveRequest = 0 },
+                        permResult = permResult,
+                        appScope = appScope,
                         requestPerm = {
                             permLauncher.launch(arrayOf(
                                 android.Manifest.permission.ACCESS_FINE_LOCATION,

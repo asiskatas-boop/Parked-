@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,7 +61,9 @@ import com.parked.app.util.haversine
 import com.parked.app.util.hasLocationPermission
 import com.parked.app.util.isLocationServicesEnabled
 import com.parked.app.widget.ParkedWidget
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -76,6 +79,9 @@ fun HomeScreen(
     live: LiveLocation?,
     hasPerm: Boolean,
     saveRequest: Int,
+    onSaveHandled: () -> Unit,
+    permResult: Int,
+    appScope: CoroutineScope,
     requestPerm: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -89,7 +95,9 @@ fun HomeScreen(
     var saving by remember { mutableStateOf(false) }
     var showNote by remember { mutableStateOf(false) }
     var showTimer by remember { mutableStateOf(false) }
-    var showPhoto by remember { mutableStateOf(false) }
+    // Saveable: the Activity is often recreated while the camera app is open.
+    var showPhoto by rememberSaveable { mutableStateOf(false) }
+    var photoTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var mapCommand by remember { mutableStateOf<MapCommand?>(null) }
     var sheetHeightPx by remember { mutableIntStateOf(0) }
 
@@ -103,10 +111,40 @@ fun HomeScreen(
         scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(text) }
     }
 
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val path = photoTarget
+        photoTarget = null
+        val file = path?.let(::File)
+        if (ok && file != null && file.length() > 0) {
+            appScope.launch { store.setPhotoPath(file.absolutePath) }
+            showPhoto = true
+        } else {
+            file?.delete()
+        }
+    }
+
+    fun takePhoto() {
+        val (file, uri) = SpotPhoto.newTarget(context)
+        photoTarget = file.absolutePath
+        runCatching { camera.launch(uri) }.onFailure { file.delete(); photoTarget = null }
+    }
+
+    // Remove photos orphaned by an interrupted camera session or an old crash.
+    // Once per process, so a photo waiting on Undo is never touched.
+    LaunchedEffect(state != null) {
+        val loaded = state ?: return@LaunchedEffect
+        if (orphanCleanupDone) return@LaunchedEffect
+        orphanCleanupDone = true
+        withContext(Dispatchers.IO) {
+            store.deleteOrphanPhotos(setOfNotNull(loaded.photoPath, photoTarget))
+        }
+    }
+
     fun doSave() {
         if (saving) return
         saving = true
-        scope.launch {
+        // App-level scope: leaving Home must not cancel the Undo offer or cleanup.
+        appScope.launch {
             val loc = currentLocation(context)
             if (loc == null) {
                 saving = false
@@ -125,18 +163,24 @@ fun HomeScreen(
             }
             // Saving replaces the previous spot. Offer Undo, because a stray tap
             // here would otherwise lose where the car really is.
-            val result = snackbar.showSnackbar(
-                message = msgSaved,
-                actionLabel = msgUndo,
-                duration = SnackbarDuration.Long,
-                withDismissAction = true,
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                store.restore(previous)
-                previous.timerEndsAt?.let { if (it > System.currentTimeMillis()) ParkingTimer.schedule(context, it) }
-                ParkedWidget.refresh(context)
-            } else {
-                store.deletePhotoFile(previous.photoPath)
+            var undone = false
+            try {
+                val result = snackbar.showSnackbar(
+                    message = msgSaved,
+                    actionLabel = msgUndo,
+                    duration = SnackbarDuration.Long,
+                    withDismissAction = true,
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    undone = true
+                    withContext(NonCancellable) {
+                        store.restore(previous)
+                        previous.timerEndsAt?.let { if (it > System.currentTimeMillis()) ParkingTimer.schedule(context, it) }
+                        ParkedWidget.refresh(context)
+                    }
+                }
+            } finally {
+                if (!undone) withContext(NonCancellable) { store.deletePhotoFile(previous.photoPath) }
             }
         }
     }
@@ -152,17 +196,21 @@ fun HomeScreen(
         }
     }
 
-    // Finish a save that was waiting for the permission dialog.
-    LaunchedEffect(hasPerm) {
-        if (hasPerm && pendingSave) {
-            pendingSave = false
-            onSaveSpot()
-        }
+    // Finish a save that was waiting for the permission dialog, or drop it if
+    // the permission was refused, so granting it later can't save by surprise.
+    LaunchedEffect(hasPerm, permResult) {
+        if (!pendingSave || permResult == 0) return@LaunchedEffect
+        pendingSave = false
+        if (hasPerm) onSaveSpot() else showMessage(msgPermission)
     }
 
     // Save requested from the widget, tile or a "tap to save" notification.
+    // Reset once handled, so coming back to Home does not save again.
     LaunchedEffect(saveRequest) {
-        if (saveRequest > 0) onSaveSpot()
+        if (saveRequest > 0) {
+            onSaveHandled()
+            onSaveSpot()
+        }
     }
 
     val s = state
@@ -240,7 +288,7 @@ fun HomeScreen(
                         onSave = onSaveSpot,
                         onShare = { shareSpot(context, s) },
                         onNote = { showNote = true },
-                        onPhoto = { showPhoto = true },
+                        onPhoto = { if (s.photoPath == null) takePhoto() else showPhoto = true },
                         onTimer = { showTimer = true },
                     )
                 }
@@ -271,15 +319,18 @@ fun HomeScreen(
             }
         )
     }
-    if (showPhoto && s != null) {
+    val photoPath = s?.photoPath
+    if (showPhoto && photoPath != null) {
         PhotoDialog(
-            path = s.photoPath,
+            path = photoPath,
             onDismiss = { showPhoto = false },
-            onNewPhoto = { path -> scope.launch { store.setPhotoPath(path) } },
+            onRetake = { takePhoto() },
             onRemove = { showPhoto = false; scope.launch { store.setPhotoPath(null) } },
         )
     }
 }
+
+private var orphanCleanupDone = false
 
 @Composable
 private fun EmptySpotContent(saving: Boolean, onSave: () -> Unit) {
@@ -524,6 +575,15 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
     var custom by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var exactAllowed by remember { mutableStateOf(ParkingTimer.canBeExact(context)) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    // Re-check when coming back from the system "Alarms & reminders" page.
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) exactAllowed = ParkingTimer.canBeExact(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val errorText = stringResource(R.string.timer_custom_error)
     val notifDenied = stringResource(R.string.timer_needs_notifications)
     val snackbar = LocalSnackbar.current
@@ -602,7 +662,6 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
                         Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
                     )
                 }
-                exactAllowed = ParkingTimer.canBeExact(context)
             }
         }
         if (endsAt != null) {
@@ -613,32 +672,11 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
 
 @Composable
 private fun PhotoDialog(
-    path: String?,
+    path: String,
     onDismiss: () -> Unit,
-    onNewPhoto: (String) -> Unit,
+    onRetake: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    val context = LocalContext.current
-    var target by remember { mutableStateOf<File?>(null) }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val file = target
-        target = null
-        if (ok && file != null && file.length() > 0) onNewPhoto(file.absolutePath) else file?.delete()
-    }
-    fun takePhoto() {
-        val (file, uri) = SpotPhoto.newTarget(context)
-        target = file
-        runCatching { camera.launch(uri) }.onFailure { file.delete(); target = null }
-    }
-
-    // No photo yet: go straight to the camera.
-    LaunchedEffect(Unit) { if (path == null) takePhoto() }
-    if (path == null) {
-        // Close once the camera returns without a photo.
-        LaunchedEffect(target) { if (target == null) { delay(300); onDismiss() } }
-        return
-    }
-
     var bitmap by remember(path) { mutableStateOf<android.graphics.Bitmap?>(null) }
     LaunchedEffect(path) { bitmap = withContext(Dispatchers.IO) { SpotPhoto.load(path, 1600) } }
 
@@ -662,7 +700,7 @@ private fun PhotoDialog(
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                SecondaryButton(stringResource(R.string.photo_retake), icon = Icons.Outlined.CameraAlt, modifier = Modifier.weight(1f)) { takePhoto() }
+                SecondaryButton(stringResource(R.string.photo_retake), icon = Icons.Outlined.CameraAlt, modifier = Modifier.weight(1f), onClick = onRetake)
                 SecondaryButton(stringResource(R.string.photo_remove), icon = Icons.Filled.Delete, modifier = Modifier.weight(1f), onClick = onRemove)
             }
             QuietButton(stringResource(R.string.close), color = White, onClick = onDismiss)

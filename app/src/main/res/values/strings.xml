@@ -81,7 +81,7 @@
     <string name="timer_custom_error">Enter between 1 and 1440 minutes</string>
     <string name="timer_start">Start timer</string>
     <string name="timer_cancel">Cancel timer</string>
-    <string name="timer_inexact">Reminders may arrive up to a minute late until you allow exact alarms.</string>
+    <string name="timer_inexact">Reminders may arrive a few minutes late until you allow exact alarms.</string>
     <string name="timer_allow_exact">Allow exact alarms</string>
     <string name="timer_needs_notifications">Allow notifications to get timer reminders</string>
     <string name="timer_ends_at">Parking ends at %1$s · %2$s left</string>

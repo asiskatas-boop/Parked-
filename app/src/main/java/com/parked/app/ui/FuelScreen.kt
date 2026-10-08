@@ -87,7 +87,7 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
         mutableFloatStateOf(if (hasSavedFuelLevel) estimatedFraction else 0.5f)
     }
     var userAdjusting by remember { mutableStateOf(false) }
-    LaunchedEffect(fuel.levelPct, fuel.levelUpdatedAt, drivenKm) {
+    LaunchedEffect(estimatedFraction, fuel.levelUpdatedAt) {
         if (hasSavedFuelLevel && !userAdjusting) sliderFraction = estimatedFraction
     }
 
