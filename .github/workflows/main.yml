@@ -40,7 +40,11 @@ jobs:
             echo "Secret length after cleanup: ${#clean} characters (expected 3556)."
             if printf '%s' "$clean" | base64 -d > /tmp/debug.keystore 2>/dev/null &&
                keytool -list -keystore /tmp/debug.keystore -storepass android -alias androiddebugkey > /dev/null 2>&1; then
-              mv /tmp/debug.keystore ~/.android/debug.keystore
+              cp /tmp/debug.keystore ~/.android/debug.keystore
+              mv /tmp/debug.keystore "$RUNNER_TEMP/parked-debug.keystore"
+              # Point the Android build at the key explicitly (app/build.gradle.kts);
+              # it does not reliably pick up ~/.android/debug.keystore on its own.
+              echo "PARKED_DEBUG_KEYSTORE=$RUNNER_TEMP/parked-debug.keystore" >> "$GITHUB_ENV"
               echo "Using the saved debug signing key."
             else
               rm -f /tmp/debug.keystore ~/.android/debug.keystore
@@ -62,6 +66,15 @@ jobs:
             echo "::error title=Build failed::${errors}"
             exit "$status"
           fi
+
+      # Shows the signing key's fingerprint on every run. It must stay the same
+      # from build to build, or Android refuses to install an update.
+      - name: Show signing fingerprint
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          fp=$("$apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -m1 'SHA-256' | awk '{print $NF}')
+          echo "Signing certificate SHA-256: $fp"
+          echo "::notice title=Signing key::SHA-256 ${fp}"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

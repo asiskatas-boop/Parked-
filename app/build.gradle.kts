@@ -16,6 +16,20 @@ android {
         versionName = "0.3.1"
     }
 
+    // CI provides a fixed debug key so every build installs over the previous
+    // one. Locally, the usual ~/.android/debug.keystore is used.
+    signingConfigs {
+        getByName("debug") {
+            val fixedKey = System.getenv("PARKED_DEBUG_KEYSTORE")?.let { file(it) }
+            if (fixedKey != null && fixedKey.exists()) {
+                storeFile = fixedKey
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
