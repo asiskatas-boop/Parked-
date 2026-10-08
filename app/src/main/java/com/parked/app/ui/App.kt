@@ -413,6 +413,7 @@ private fun MainContent(
 
     var live by remember { mutableStateOf<LiveLocation?>(null) }
     var hasPerm by remember { mutableStateOf(hasLocationPermission(context)) }
+    var locationOn by remember { mutableStateOf(com.parked.app.util.isLocationServicesEnabled(context)) }
     val lifecycleOwner = LocalLifecycleOwner.current
     var activityResumed by remember {
         mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
@@ -463,6 +464,7 @@ private fun MainContent(
                 Lifecycle.Event.ON_RESUME -> {
                     activityResumed = true
                     hasPerm = hasLocationPermission(context)
+                    locationOn = com.parked.app.util.isLocationServicesEnabled(context)
                 }
                 Lifecycle.Event.ON_PAUSE -> activityResumed = false
                 else -> Unit
@@ -515,6 +517,8 @@ private fun MainContent(
                         fuel = fuel,
                         live = live,
                         hasPerm = hasPerm,
+                        locationOn = locationOn,
+                        onOpenSettings = { tab = AppTab.Settings },
                         saveRequest = saveRequest,
                         onSaveHandled = { saveRequest = 0 },
                         permResult = permResult,

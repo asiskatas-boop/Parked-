@@ -80,6 +80,8 @@ fun HomeScreen(
     fuel: FuelStore,
     live: LiveLocation?,
     hasPerm: Boolean,
+    locationOn: Boolean,
+    onOpenSettings: () -> Unit,
     saveRequest: Int,
     onSaveHandled: () -> Unit,
     permResult: Int,
@@ -248,23 +250,45 @@ fun HomeScreen(
 
             OsmAttribution(Modifier.align(Alignment.TopEnd))
 
-            if (hasSpot) {
-                Column(
-                    Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 40.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = live != null,
-                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.8f),
-                        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.8f),
-                    ) {
-                        MapButton(Icons.Filled.ZoomOutMap, stringResource(R.string.map_show_both)) {
-                            mapCommand = MapCommand.ShowBoth((mapCommand?.id ?: 0) + 1)
+            // Tell the user why the map can't show them, and fix it in one tap.
+            val issue = when {
+                !hasPerm -> MapIssue.Permission
+                !locationOn -> MapIssue.LocationOff
+                s != null && !s.monitoring -> MapIssue.AutoParkOff
+                else -> null
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = issue != null,
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it / 2 },
+                exit = androidx.compose.animation.fadeOut(),
+                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 44.dp, start = 16.dp, end = 16.dp)
+            ) {
+                MapBanner(
+                    issue = issue ?: MapIssue.Permission,
+                    onAction = {
+                        when (issue) {
+                            MapIssue.Permission -> requestPerm()
+                            MapIssue.LocationOff -> openLocationSettings(context)
+                            MapIssue.AutoParkOff -> onOpenSettings()
+                            null -> Unit
                         }
                     }
-                    MapButton(Icons.Filled.DirectionsCar, stringResource(R.string.map_center_car)) {
-                        mapCommand = MapCommand.CenterOnCar((mapCommand?.id ?: 0) + 1)
-                    }
+                )
+            }
+
+            // One button: centre on the car, or when you're away from it, fit
+            // both you and the car on screen.
+            if (hasSpot) {
+                MapButton(
+                    icon = if (live != null && distance != null && distance >= 40) Icons.Filled.ZoomOutMap else Icons.Filled.DirectionsCar,
+                    description = stringResource(
+                        if (live != null && distance != null && distance >= 40) R.string.map_show_both else R.string.map_center_car
+                    ),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 40.dp)
+                ) {
+                    val next = (mapCommand?.id ?: 0) + 1
+                    mapCommand = if (live != null && distance != null && distance >= 40) MapCommand.ShowBoth(next)
+                    else MapCommand.CenterOnCar(next)
                 }
             }
         }
@@ -530,14 +554,45 @@ private fun TimerStatus(endsAt: Long, onClick: () -> Unit) {
     }
 }
 
+private enum class MapIssue { Permission, LocationOff, AutoParkOff }
+
 @Composable
-private fun MapButton(icon: ImageVector, description: String, onClick: () -> Unit) {
+private fun MapBanner(issue: MapIssue, onAction: () -> Unit) {
+    val (text, action) = when (issue) {
+        MapIssue.Permission -> R.string.banner_permission to R.string.banner_permission_action
+        MapIssue.LocationOff -> R.string.banner_location_off to R.string.banner_location_off_action
+        MapIssue.AutoParkOff -> R.string.banner_autopark_off to R.string.banner_autopark_off_action
+    }
+    Surface(
+        color = White,
+        shape = RoundedCornerShape(18.dp),
+        shadowElevation = 6.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                if (issue == MapIssue.AutoParkOff) Icons.Filled.Bluetooth else Icons.Filled.LocationOff,
+                contentDescription = null,
+                tint = OliveDark,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(stringResource(text), fontSize = 13.sp, lineHeight = 17.sp, color = NearBlack, modifier = Modifier.weight(1f))
+            TextButton(onClick = onAction) {
+                Text(stringResource(action), fontWeight = FontWeight.Bold, color = OliveDark)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MapButton(icon: ImageVector, description: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
         color = White,
         shadowElevation = 6.dp,
-        modifier = Modifier.size(48.dp)
+        modifier = modifier.size(52.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = description, tint = OliveDark)

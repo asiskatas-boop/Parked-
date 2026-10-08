@@ -125,20 +125,20 @@
     <string name="tile_label">Αποθήκευση σημείου</string>
 
     <!-- Fuel -->
-    <string name="fuel_current_level">τρέχουσα στάθμη</string>
+    <string name="fuel_current_level">Τρέχουσα στάθμη</string>
     <string name="fuel_level">Στάθμη καυσίμου</string>
-    <string name="fuel_approx">περίπου</string>
-    <string name="fuel_set_tank">όρισε χωρητικότητα ρεζερβουάρ</string>
-    <string name="fuel_not_set">Όρισέ τη μία φορά ώστε να ταιριάζει με το αυτοκίνητο. Μετά, διόρθωσέ τη μόνο όταν χρειάζεται.</string>
+    <string name="fuel_approx">Περίπου στο ρεζερβουάρ</string>
+    <string name="fuel_set_tank">Όρισε ρεζερβουάρ</string>
+    <string name="fuel_not_set">Όρισε τη στάθμη μία φορά όπως τη δείχνει το αυτοκίνητο. Μετά, διόρθωσέ τη μόνο όταν χρειάζεται.</string>
     <string name="fuel_updated">Ενημερώθηκε %1$s</string>
-    <string name="fuel_estimated_since">Εκτίμηση: ορίστηκε %1$s, %2$d km από τότε</string>
+    <string name="fuel_estimated_since">Εκτίμηση: %2$d km από %1$s</string>
     <string name="fuel_set_level">Ορισμός στάθμης</string>
     <string name="fuel_correct_level">Διόρθωση στάθμης</string>
     <string name="fuel_level_updated">Η στάθμη καυσίμου ενημερώθηκε</string>
     <string name="refuel">Ανεφοδιασμός</string>
     <string name="refuel_saved">Ο ανεφοδιασμός αποθηκεύτηκε</string>
     <string name="fuel_at_a_glance">Με μια ματιά</string>
-    <string name="fuel_range">Αυτονομία περίπου</string>
+    <string name="fuel_range">Αυτονομία (περίπου)</string>
     <string name="fuel_average">Μέση κατανάλωση</string>
     <string name="fuel_insights_title">Στοιχεία καυσίμου</string>
     <string name="fuel_insights_body">Μετά από δύο γεμίσματα με ενδείξεις χιλιομετρητή, το Parked! μπορεί να υπολογίσει τη μέση κατανάλωση και μια εκτίμηση αυτονομίας.</string>
@@ -160,11 +160,11 @@
 
     <string name="refuel_subtitle">Χρησιμοποίησέ το μόνο όταν βάζεις καύσιμα.</string>
     <string name="refuel_litres">Λίτρα</string>
-    <string name="refuel_total">Σύνολο (%1$s)</string>
+    <string name="refuel_total">Ποσό που πλήρωσες (%1$s)</string>
     <string name="refuel_odometer">Χιλιομετρητής (προαιρετικό)</string>
     <string name="refuel_odometer_hint">Περίπου %1$s</string>
     <string name="refuel_full_tank">Γέμισα το ρεζερβουάρ</string>
-    <string name="refuel_full_tank_hint">Απενεργοποίησέ το για μερική συμπλήρωση</string>
+    <string name="refuel_full_tank_hint">Ενεργοποίησέ το μόνο αν γέμισες μέχρι πάνω. Δύο γεμίσματα δίνουν τη μέση κατανάλωση.</string>
     <string name="save_refuel">Αποθήκευση ανεφοδιασμού</string>
     <string name="error_litres">Συμπλήρωσε τα λίτρα</string>
     <string name="error_total">Συμπλήρωσε το ποσό που πλήρωσες</string>
@@ -286,4 +286,13 @@
     <string name="crash_report">Αναφορά τελευταίου σφάλματος</string>
     <string name="crash_report_share">Κοινοποίηση</string>
     <string name="splash_skip">Πάτησε για παράλειψη</string>
+    <string name="refuel_price">Τιμή ανά λίτρο (%1$s/L)</string>
+    <string name="refuel_litres_calc">Περίπου %1$s L</string>
+    <string name="error_price">Δώσε την τιμή ανά λίτρο που δείχνει η αντλία</string>
+    <string name="banner_permission">Επίτρεψε την τοποθεσία για να βλέπεις πού είσαι στον χάρτη.</string>
+    <string name="banner_permission_action">Άδεια</string>
+    <string name="banner_location_off">Η Τοποθεσία είναι κλειστή, οπότε ο χάρτης δεν σε δείχνει.</string>
+    <string name="banner_location_off_action">Άνοιγμα</string>
+    <string name="banner_autopark_off">Το AutoPark είναι ανενεργό. Σύνδεσε το Bluetooth του αυτοκινήτου για αυτόματη αποθήκευση.</string>
+    <string name="banner_autopark_off_action">Ρύθμιση</string>
 </resources>

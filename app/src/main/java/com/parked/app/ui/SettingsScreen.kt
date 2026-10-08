@@ -340,18 +340,15 @@ private fun SettingsMain(fuel: FuelStore, store: ParkingStore, onOpenHistory: ()
         }
 
         Box(Modifier.fillMaxWidth().padding(vertical = 28.dp), contentAlignment = Alignment.Center) {
-            // The car artwork is 450×375 px. Shown at about its real size it stays
-            // sharp; stretched to the screen width it turned blocky.
-            Image(
-                bitmap = ImageBitmap.imageResource(carDrawable(fuel.accentName)),
-                contentDescription = stringResource(R.string.cd_car_preview, colourLabel(fuel.accentName)),
+            // Drawn as vector shapes, so it is sharp at any size and in every colour.
+            CarArt(
+                body = carColours.firstOrNull { it.first == fuel.accentName }?.second ?: carColours[4].second,
+                description = stringResource(R.string.cd_car_preview, colourLabel(fuel.accentName)),
                 modifier = Modifier
-                    .width(180.dp)
+                    .width(240.dp)
                     .aspectRatio(450f / 375f)
                     .clip(RoundedCornerShape(16.dp))
-                    .clickable { showAppearance = true },
-                contentScale = ContentScale.Fit,
-                filterQuality = FilterQuality.High,
+                    .clickable { showAppearance = true }
             )
         }
         Spacer(Modifier.height(18.dp))
@@ -452,19 +449,6 @@ private val carColours = listOf(
     "Purple" to Color(0xFF7E57C2),
 )
 
-private fun carDrawable(name: String): Int = when (name) {
-    "White" -> R.drawable.design_car_white
-    "Silver" -> R.drawable.design_car_silver
-    "Gray" -> R.drawable.design_car_gray
-    "Black" -> R.drawable.design_car_black
-    "Red" -> R.drawable.design_car_red
-    "Yellow" -> R.drawable.design_car_yellow
-    "Orange" -> R.drawable.design_car_orange
-    "Brown" -> R.drawable.design_car_brown
-    "Purple" -> R.drawable.design_car_purple
-    "Green" -> R.drawable.design_car_green
-    else -> R.drawable.design_car
-}
 
 /** Stored colour names stay English for compatibility; the label is translated. */
 @Composable
@@ -536,7 +520,7 @@ private fun OdometerSheet(fuel: FuelStore, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun TankSheet(fuel: FuelStore, onDismiss: () -> Unit) {
+internal fun TankSheet(fuel: FuelStore, onDismiss: () -> Unit) {
     var tank by remember { mutableStateOf(fuel.tankCapacity.takeIf { it > 0 }?.let { formatDecimal(it, 0) } ?: "") }
     var error by remember { mutableStateOf<String?>(null) }
     val eInvalid = stringResource(R.string.error_tank)

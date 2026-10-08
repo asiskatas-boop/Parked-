@@ -127,13 +127,13 @@
     <string name="tile_label">Save spot</string>
 
     <!-- Fuel -->
-    <string name="fuel_current_level">current level</string>
+    <string name="fuel_current_level">Current level</string>
     <string name="fuel_level">Fuel level</string>
-    <string name="fuel_approx">approx.</string>
-    <string name="fuel_set_tank">set tank capacity</string>
+    <string name="fuel_approx">Approx. in tank</string>
+    <string name="fuel_set_tank">Set tank size</string>
     <string name="fuel_not_set">Set it once to match your car. After that, correct it only when needed.</string>
     <string name="fuel_updated">Updated %1$s</string>
-    <string name="fuel_estimated_since">Estimated: set %1$s, %2$d km driven since</string>
+    <string name="fuel_estimated_since">Estimate: %2$d km driven since %1$s</string>
     <string name="fuel_set_level">Set level</string>
     <string name="fuel_correct_level">Correct level</string>
     <string name="fuel_level_updated">Fuel level updated</string>
@@ -162,14 +162,14 @@
 
     <string name="refuel_subtitle">Only use this when you actually add fuel.</string>
     <string name="refuel_litres">Litres added</string>
-    <string name="refuel_total">Total paid (%1$s)</string>
+    <string name="refuel_total">Amount paid (%1$s)</string>
     <string name="refuel_odometer">Odometer (optional)</string>
     <string name="refuel_odometer_hint">About %1$s</string>
     <string name="refuel_full_tank">Filled the tank</string>
-    <string name="refuel_full_tank_hint">Turn off for a partial top-up</string>
+    <string name="refuel_full_tank_hint">Turn on only if you filled it to the top. Two full fills give your average consumption.</string>
     <string name="save_refuel">Save refuel</string>
     <string name="error_litres">Enter the litres added</string>
-    <string name="error_total">Enter the total paid</string>
+    <string name="error_total">Enter the amount you paid</string>
     <string name="error_odometer">Enter a valid odometer reading</string>
     <string name="error_odometer_low">The odometer can\'t be lower than the current reading</string>
     <string name="error_refuel">Check the refuel details</string>
@@ -288,4 +288,13 @@
     <string name="crash_report">Last crash report</string>
     <string name="crash_report_share">Share</string>
     <string name="splash_skip">Tap to skip</string>
+    <string name="refuel_price">Price per litre (%1$s/L)</string>
+    <string name="refuel_litres_calc">That\'s about %1$s L</string>
+    <string name="error_price">Enter the price per litre shown on the pump</string>
+    <string name="banner_permission">Allow location to see where you are on the map.</string>
+    <string name="banner_permission_action">Allow</string>
+    <string name="banner_location_off">Location is off, so the map can\'t show you.</string>
+    <string name="banner_location_off_action">Turn on</string>
+    <string name="banner_autopark_off">AutoPark is off. Connect your car\'s Bluetooth to save spots automatically.</string>
+    <string name="banner_autopark_off_action">Set up</string>
 </resources>

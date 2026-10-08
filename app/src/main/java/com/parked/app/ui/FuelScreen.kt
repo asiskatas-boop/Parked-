@@ -6,6 +6,12 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -99,6 +105,7 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
 
     var showRefuel by remember { mutableStateOf(false) }
     var showTripCost by remember { mutableStateOf(false) }
+    var showTank by remember { mutableStateOf(false) }
     val msgLevel = stringResource(R.string.fuel_level_updated)
     val msgRefuel = stringResource(R.string.refuel_saved)
 
@@ -127,7 +134,8 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
                 fraction = sliderFraction,
                 litersInTank = litersInTank,
                 updatedText = updatedText,
-                onFractionChange = { userAdjusting = true; sliderFraction = it }
+                onFractionChange = { userAdjusting = true; sliderFraction = it },
+                onSetTank = { showTank = true },
             )
             Spacer(Modifier.height(12.dp))
             Row(
@@ -243,6 +251,7 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
         )
     }
     if (showTripCost) TripCostSheet(fuel = fuel, onDismiss = { showTripCost = false })
+    if (showTank) TankSheet(fuel = fuel, onDismiss = { showTank = false })
 }
 
 @Composable
@@ -260,6 +269,7 @@ private fun FuelGauge(
     litersInTank: Double?,
     updatedText: String,
     onFractionChange: (Float) -> Unit,
+    onSetTank: () -> Unit,
 ) {
     val normalized = fraction.coerceIn(0f, 1f)
     val pct = (normalized * 100f).roundToInt()
@@ -268,56 +278,94 @@ private fun FuelGauge(
         shape = RoundedCornerShape(22.dp),
         color = White,
     ) {
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween) {
-                Column {
+        Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 14.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
                     Text("$pct%", fontSize = 30.sp, lineHeight = 32.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
                     Text(stringResource(R.string.fuel_current_level), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        litersInTank?.let { "${formatDecimal(it, 0)} L" } ?: "—",
-                        fontSize = 18.sp, fontWeight = FontWeight.Bold, color = NearBlack
-                    )
-                    Text(
-                        stringResource(if (litersInTank != null) R.string.fuel_approx else R.string.fuel_set_tank),
-                        fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextSecondary
-                    )
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-            val levelLabel = stringResource(R.string.fuel_level)
-            Slider(
-                value = normalized,
-                onValueChange = { onFractionChange(it.coerceIn(0f, 1f)) },
-                valueRange = 0f..1f,
-                colors = SliderDefaults.colors(
-                    thumbColor = OliveDark,
-                    activeTrackColor = OliveMid,
-                    inactiveTrackColor = Hairline,
-                ),
-                modifier = Modifier.semantics {
-                    contentDescription = levelLabel
-                    stateDescription = "$pct%"
-                }
-            )
-            BoxWithConstraints(Modifier.fillMaxWidth().height(24.dp)) {
-                Text("E", Modifier.align(Alignment.CenterStart), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
-                Text("F", Modifier.align(Alignment.CenterEnd), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
-                val markerWidth = 28.dp
-                listOf(0.25f to "¼", 0.50f to "½", 0.75f to "¾").forEach { (position, label) ->
-                    Column(
-                        modifier = Modifier.offset(x = (maxWidth * position) - (markerWidth / 2f)).width(markerWidth),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(Modifier.width(1.dp).height(5.dp).background(Color(0xFF8A9185)))
-                        Spacer(Modifier.height(2.dp))
-                        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = NearBlack)
+                if (litersInTank != null) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("${formatDecimal(litersInTank, 0)} L", fontSize = 18.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold, color = NearBlack)
+                        Text(stringResource(R.string.fuel_approx), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
+                    }
+                } else {
+                    // Without a tank size there are no litres to show, so offer to set it.
+                    TextButton(onClick = onSetTank, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                        Text(stringResource(R.string.fuel_set_tank), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = OliveDark)
                     }
                 }
             }
-            Spacer(Modifier.height(4.dp))
-            Text(updatedText, fontSize = 12.sp, color = TextSecondary)
+            Spacer(Modifier.height(10.dp))
+            FuelBar(value = normalized, pct = pct, onChange = onFractionChange)
+            Spacer(Modifier.height(10.dp))
+            Text(updatedText, fontSize = 12.sp, lineHeight = 16.sp, color = TextSecondary)
+        }
+    }
+}
+
+/**
+ * Fuel gauge bar. Drawn by hand so the E, ¼, ½, ¾, F marks sit exactly under
+ * the positions the handle points to (a stock slider insets its track by an
+ * amount that varies by version, which left the labels misaligned).
+ */
+@Composable
+private fun FuelBar(value: Float, pct: Int, onChange: (Float) -> Unit) {
+    val latestChange by rememberUpdatedState(onChange)
+    val label = stringResource(R.string.fuel_level)
+    val inset = 14.dp
+    Column(Modifier.fillMaxWidth()) {
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(40.dp)
+                .pointerInput(Unit) {
+                    val insetPx = inset.toPx()
+                    fun at(x: Float) = ((x - insetPx) / (size.width - 2 * insetPx)).coerceIn(0f, 1f)
+                    detectTapGestures { latestChange(at(it.x)) }
+                }
+                .pointerInput(Unit) {
+                    val insetPx = inset.toPx()
+                    fun at(x: Float) = ((x - insetPx) / (size.width - 2 * insetPx)).coerceIn(0f, 1f)
+                    detectHorizontalDragGestures(
+                        onDragStart = { latestChange(at(it.x)) },
+                        onHorizontalDrag = { change, _ -> change.consume(); latestChange(at(change.position.x)) }
+                    )
+                }
+                .semantics {
+                    contentDescription = label
+                    stateDescription = "$pct%"
+                    progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f, steps = 19)
+                    setProgress { target -> latestChange(target.coerceIn(0f, 1f)); true }
+                }
+        ) {
+            val insetPx = inset.toPx()
+            val left = insetPx
+            val right = size.width - insetPx
+            val cy = size.height / 2f
+            val trackH = 10.dp.toPx()
+            val x = left + (right - left) * value
+            drawRoundRect(Hairline, Offset(left, cy - trackH / 2), Size(right - left, trackH), CornerRadius(trackH / 2))
+            if (x > left) drawRoundRect(OliveMid, Offset(left, cy - trackH / 2), Size(x - left, trackH), CornerRadius(trackH / 2))
+            drawCircle(White, radius = 13.dp.toPx(), center = Offset(x, cy))
+            drawCircle(OliveDark, radius = 10.dp.toPx(), center = Offset(x, cy))
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = inset).height(22.dp)) {
+            val mark = 28.dp
+            listOf(0f to "E", 0.25f to "¼", 0.5f to "½", 0.75f to "¾", 1f to "F").forEach { (position, text) ->
+                Column(
+                    Modifier.offset(x = maxWidth * position - mark / 2).width(mark),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(Modifier.width(1.dp).height(5.dp).background(Color(0xFF8A9185)))
+                    Text(
+                        text,
+                        fontSize = 12.sp,
+                        fontWeight = if (position == 0f || position == 1f) FontWeight.Medium else FontWeight.Bold,
+                        color = if (position == 0f || position == 1f) TextSecondary else NearBlack
+                    )
+                }
+            }
         }
     }
 }
@@ -545,39 +593,46 @@ private fun LevelCheckRow(log: FuelLevelLog, index: Int, label: String, onDelete
 // Sheets
 // ============================================================
 
+/**
+ * People know what they paid and the pump price, not the litres, so those are
+ * the two inputs; litres are worked out from them.
+ */
 @Composable
 private fun RefuelSheet(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> Unit) {
-    var litres by remember { mutableStateOf("") }
     var totalPaid by remember { mutableStateOf("") }
+    var price by remember { mutableStateOf(fuel.latestPricePerLitre()?.let { formatDecimal(it, 3) } ?: "") }
     // Left empty on purpose: a pre-filled GPS estimate saved unchecked would
     // become a "real" reading and skew average consumption. It is a hint instead.
     var odometer by remember { mutableStateOf("") }
-    var fullTank by remember { mutableStateOf(true) }
+    // Off by default: most stops are not a brim-full fill-up, and a wrong "full"
+    // corrupts the consumption average more than a missed one.
+    var fullTank by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
 
-    val eLitres = stringResource(R.string.error_litres)
     val eTotal = stringResource(R.string.error_total)
+    val ePrice = stringResource(R.string.error_price)
     val eOdo = stringResource(R.string.error_odometer)
     val eOdoLow = stringResource(R.string.error_odometer_low)
     val eGeneric = stringResource(R.string.error_refuel)
 
-    val litresValue = parseNumber(litres)
-    val totalValue = parseNumber(totalPaid)
-    val pricePerLitre = if (litresValue != null && litresValue > 0 && totalValue != null && totalValue >= 0) totalValue / litresValue else null
+    val paidValue = parseNumber(totalPaid)?.takeIf { it > 0 }
+    val priceValue = parseNumber(price)?.takeIf { it > 0 }
+    val litres = if (paidValue != null && priceValue != null) paidValue / priceValue else null
 
     ParkedSheet(
         title = stringResource(R.string.refuel),
         subtitle = stringResource(R.string.refuel_subtitle),
         onDismiss = onDismiss
     ) {
-        NumberField(litres, { litres = it; errorText = null }, stringResource(R.string.refuel_litres))
+        NumberField(totalPaid, { totalPaid = it; errorText = null }, stringResource(R.string.refuel_total, fuel.currency))
         Spacer(Modifier.height(10.dp))
         NumberField(
-            totalPaid, { totalPaid = it; errorText = null },
-            stringResource(R.string.refuel_total, fuel.currency),
-            supporting = pricePerLitre?.takeIf { it.isFinite() }?.let { "${fuel.currency}${formatDecimal(it, 3)} / L" }
+            price, { price = it; errorText = null },
+            stringResource(R.string.refuel_price, fuel.currency),
+            supporting = litres?.takeIf { it.isFinite() }?.let { stringResource(R.string.refuel_litres_calc, formatDecimal(it, 1)) }
+                ?: if (fuel.latestPricePerLitre() != null) stringResource(R.string.trip_price_learned) else null
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(4.dp))
         NumberField(
             odometer, { odometer = it; errorText = null },
             stringResource(R.string.refuel_odometer),
@@ -592,24 +647,22 @@ private fun RefuelSheet(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
                 .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
                 Text(stringResource(R.string.refuel_full_tank), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NearBlack)
-                Text(stringResource(R.string.refuel_full_tank_hint), fontSize = 12.sp, color = TextSecondary)
+                Text(stringResource(R.string.refuel_full_tank_hint), fontSize = 12.sp, lineHeight = 16.sp, color = TextSecondary)
             }
             ParkedSwitch(checked = fullTank, onCheckedChange = null)
         }
         ErrorText(errorText)
         Spacer(Modifier.height(16.dp))
         PrimaryButton(text = stringResource(R.string.save_refuel), onClick = {
-            val l = parseNumber(litres)
-            val c = parseNumber(totalPaid)
             val o = if (odometer.isBlank()) 0.0 else parseNumber(odometer)
             errorText = when {
-                l == null || l <= 0 -> eLitres
-                c == null || c < 0 -> eTotal
+                paidValue == null -> eTotal
+                priceValue == null || priceValue > 20 -> ePrice
                 o == null || o < 0 -> eOdo
                 o > 0 && fuel.currentOdo > 0 && o + 1.0 < fuel.currentOdo -> eOdoLow
-                !fuel.logRefuel(litres = l, cost = c, odometer = o, tankFull = fullTank) -> eGeneric
+                !fuel.logRefuel(litres = paidValue / priceValue, cost = paidValue, odometer = o, tankFull = fullTank) -> eGeneric
                 else -> { onSaved(); null }
             }
         })
