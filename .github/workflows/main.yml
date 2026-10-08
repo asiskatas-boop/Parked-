@@ -34,8 +34,18 @@ jobs:
         run: |
           if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
             mkdir -p ~/.android
-            echo "$DEBUG_KEYSTORE_BASE64" | base64 -d > ~/.android/debug.keystore
-            echo "Using the saved debug signing key."
+            # Pasting into the GitHub form often adds spaces, line breaks or quotes;
+            # keep only base64 characters before decoding.
+            clean=$(printf '%s' "$DEBUG_KEYSTORE_BASE64" | tr -cd 'A-Za-z0-9+/=')
+            echo "Secret length after cleanup: ${#clean} characters (expected 3556)."
+            if printf '%s' "$clean" | base64 -d > /tmp/debug.keystore 2>/dev/null &&
+               keytool -list -keystore /tmp/debug.keystore -storepass android -alias androiddebugkey > /dev/null 2>&1; then
+              mv /tmp/debug.keystore ~/.android/debug.keystore
+              echo "Using the saved debug signing key."
+            else
+              rm -f /tmp/debug.keystore ~/.android/debug.keystore
+              echo "::warning::DEBUG_KEYSTORE_BASE64 is set but is not a valid debug keystore (${#clean} base64 characters after cleanup, expected 3556). Building with a temporary key instead. Re-paste the whole contents of DEBUG_KEYSTORE_BASE64.txt."
+            fi
           else
             echo "::warning::DEBUG_KEYSTORE_BASE64 is not set, so this APK has a new signing key and cannot install over a previous build."
           fi
