@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.1
+
+- Video splash on launch (tap to skip); it was hidden behind the window before.
+- Map fills only the visible area, so the car marker shows without zooming; one
+  map button centres on the car, or fits you and the car when you're away.
+- A banner on the map explains when location permission, Location or AutoPark is
+  off, with a button to fix it.
+- Fixed a crash when leaving Home while the map was updating.
+- Service reminders: the Add button was missing on an empty list.
+- Refuels take the amount paid and price per litre; litres are calculated.
+  "Filled the tank" is off by default.
+- Fuel gauge marks line up with the handle; "Set tank size" replaces a dash.
+- Car preview redrawn as sharp vector art in every colour.
+- Readable text on the second intro page; equal-size Save and Share buttons;
+  no grey bar under the tabs.
+- Smoother transitions between tabs and pages.
+- The last crash is kept on the phone and can be shared from Settings.
+
 ## 0.3.0
 
 ### New

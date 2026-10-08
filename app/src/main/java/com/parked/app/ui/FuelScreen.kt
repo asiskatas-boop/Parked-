@@ -321,12 +321,18 @@ private fun FuelBar(value: Float, pct: Int, onChange: (Float) -> Unit) {
                 .height(40.dp)
                 .pointerInput(Unit) {
                     val insetPx = inset.toPx()
-                    fun at(x: Float) = ((x - insetPx) / (size.width - 2 * insetPx)).coerceIn(0f, 1f)
+                    fun at(x: Float): Float {
+                        val span = size.width - 2 * insetPx
+                        return if (span <= 0f) value else ((x - insetPx) / span).coerceIn(0f, 1f)
+                    }
                     detectTapGestures { latestChange(at(it.x)) }
                 }
                 .pointerInput(Unit) {
                     val insetPx = inset.toPx()
-                    fun at(x: Float) = ((x - insetPx) / (size.width - 2 * insetPx)).coerceIn(0f, 1f)
+                    fun at(x: Float): Float {
+                        val span = size.width - 2 * insetPx
+                        return if (span <= 0f) value else ((x - insetPx) / span).coerceIn(0f, 1f)
+                    }
                     detectHorizontalDragGestures(
                         onDragStart = { latestChange(at(it.x)) },
                         onHorizontalDrag = { change, _ -> change.consume(); latestChange(at(change.position.x)) }
