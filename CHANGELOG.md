@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.2
+
+- Every build is now signed with the same key, so updates install over the
+  previous version (one last uninstall needed after 0.3.1).
+- UX audit fixes: readable header text, "Set up AutoPark" at the end of the
+  intro and from the map tip (which can now be dismissed), faster splash after the
+  first launch, a quieter "Save here" that asks before replacing a far-away spot,
+  fuel level saved on release with Undo, odometer required for full fills, photo
+  error state, portrait only, labelled tabs, chips that show what's saved, and one
+  type scale and page-title style across the app.
+
 ## 0.3.1
 
 - Video splash on launch (tap to skip); it was hidden behind the window before.
