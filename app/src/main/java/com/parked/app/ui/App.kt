@@ -249,8 +249,8 @@ private class SplashVideoView(context: Context, private val onEnd: () -> Unit) :
                 setVolume(0f, 0f)
                 isLooping = false
                 setOnPreparedListener { mp ->
-                    videoWidth = mp.videoWidth
-                    videoHeight = mp.videoHeight
+                    this@SplashVideoView.videoWidth = mp.videoWidth
+                    this@SplashVideoView.videoHeight = mp.videoHeight
                     applyCenterCrop()
                     mp.start()
                 }
