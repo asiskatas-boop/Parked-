@@ -62,7 +62,12 @@ import com.parked.app.util.isLocationServicesEnabled
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(fuel: FuelStore, store: ParkingStore) {
+fun SettingsScreen(
+    fuel: FuelStore,
+    store: ParkingStore,
+    autoParkRequest: Int = 0,
+    onAutoParkRequestHandled: () -> Unit = {},
+) {
     var showHistory by rememberSaveable { mutableStateOf(false) }
     if (showHistory) BackHandler { showHistory = false }
     androidx.compose.animation.AnimatedContent(
@@ -71,12 +76,24 @@ fun SettingsScreen(fuel: FuelStore, store: ParkingStore) {
         label = "settingsPages"
     ) { history ->
         if (history) ParkingHistoryPage(store = store, onBack = { showHistory = false })
-        else SettingsMain(fuel = fuel, store = store, onOpenHistory = { showHistory = true })
+        else SettingsMain(
+            fuel = fuel,
+            store = store,
+            onOpenHistory = { showHistory = true },
+            autoParkRequest = autoParkRequest,
+            onAutoParkRequestHandled = onAutoParkRequestHandled,
+        )
     }
 }
 
 @Composable
-private fun SettingsMain(fuel: FuelStore, store: ParkingStore, onOpenHistory: () -> Unit) {
+private fun SettingsMain(
+    fuel: FuelStore,
+    store: ParkingStore,
+    onOpenHistory: () -> Unit,
+    autoParkRequest: Int,
+    onAutoParkRequestHandled: () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = LocalSnackbar.current
@@ -226,6 +243,16 @@ private fun SettingsMain(fuel: FuelStore, store: ParkingStore, onOpenHistory: ()
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // "Set up AutoPark" from onboarding or the map banner starts the same flow
+    // as the switch: permissions, Bluetooth, car choice, then on.
+    LaunchedEffect(autoParkRequest) {
+        if (autoParkRequest > 0) {
+            onAutoParkRequestHandled()
+            val saved = store.current()
+            if (!saved.monitoring) beginAutoPark(deviceReady = saved.deviceAddress != null)
+        }
+    }
+
     val notificationsChecked = fuel.notificationsEnabled && systemNotificationsAllowed
     var hasCrashReport by remember { mutableStateOf(ParkedApplication.crashFile(context).exists()) }
 
@@ -235,11 +262,11 @@ private fun SettingsMain(fuel: FuelStore, store: ParkingStore, onOpenHistory: ()
                 .fillMaxWidth()
                 .background(HeaderGradient)
                 .statusBarsPadding()
-                .padding(top = 18.dp, bottom = 24.dp, start = 20.dp, end = 20.dp)
+                .padding(top = 16.dp, bottom = 24.dp, start = 20.dp, end = 20.dp)
         ) {
-            Text(stringResource(R.string.tab_settings), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = White, letterSpacing = (-0.5).sp)
+            PageTitle(stringResource(R.string.tab_settings), modifier = Modifier.padding(start = 4.dp))
             Spacer(Modifier.height(20.dp))
-            SectionTitle(stringResource(R.string.settings_vehicle), color = White, modifier = Modifier.padding(start = 4.dp, bottom = 10.dp))
+            SectionTitle(stringResource(R.string.settings_vehicle), color = White, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
             SettingsCard {
                 ToggleRow(
                     label = stringResource(R.string.autopark),
@@ -280,7 +307,7 @@ private fun SettingsMain(fuel: FuelStore, store: ParkingStore, onOpenHistory: ()
                 ) { showTank = true }
             }
 
-            SectionTitle(stringResource(R.string.settings_preferences), color = White, modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 10.dp))
+            SectionTitle(stringResource(R.string.settings_preferences), color = White, modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 12.dp))
             SettingsCard {
                 ToggleRow(
                     label = stringResource(R.string.parking_alerts),
@@ -351,7 +378,7 @@ private fun SettingsMain(fuel: FuelStore, store: ParkingStore, onOpenHistory: ()
                     .clickable { showAppearance = true }
             )
         }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(16.dp))
     }
 
     if (showOdo) OdometerSheet(fuel = fuel, onDismiss = { showOdo = false })
@@ -412,7 +439,7 @@ private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, Strin
                 when {
                     !canRead -> Text(stringResource(R.string.bluetooth_permission_needed))
                     devices.isEmpty() -> Text(stringResource(R.string.no_paired_devices))
-                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(devices, key = { it.address }) { device ->
                             val name = runCatching { device.name }.getOrNull()
                             Surface(
@@ -422,8 +449,8 @@ private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, Strin
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(Modifier.padding(12.dp)) {
-                                    Text(name ?: stringResource(R.string.unnamed_device), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NearBlack)
-                                    Text(device.address, fontSize = 12.sp, color = TextSecondary)
+                                    Text(name ?: stringResource(R.string.unnamed_device), fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack)
+                                    Text(device.address, fontSize = TypeScale.Caption, color = TextSecondary)
                                 }
                             }
                         }
@@ -476,9 +503,9 @@ private fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
         title = { Text(stringResource(R.string.car_appearance), fontWeight = FontWeight.ExtraBold, color = NearBlack) },
         text = {
             Column {
-                Text(stringResource(R.string.appearance_hint), fontSize = 13.sp, color = TextSecondary)
-                Spacer(Modifier.height(10.dp))
-                LazyColumn(Modifier.heightIn(max = 430.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(stringResource(R.string.appearance_hint), fontSize = TypeScale.Supporting, color = TextSecondary)
+                Spacer(Modifier.height(12.dp))
+                LazyColumn(Modifier.heightIn(max = 430.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(carColours, key = { it.first }) { (name, swatch) ->
                         val selected = fuel.accentName == name
                         Surface(
@@ -487,10 +514,10 @@ private fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(Modifier.padding(horizontal = 13.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(24.dp).clip(CircleShape).background(Hairline).padding(1.dp).clip(CircleShape).background(swatch))
                                 Spacer(Modifier.width(12.dp))
-                                Text(colourLabel(name), modifier = Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = NearBlack)
+                                Text(colourLabel(name), modifier = Modifier.weight(1f), fontSize = TypeScale.Label, fontWeight = FontWeight.SemiBold, color = NearBlack)
                                 if (selected) Text("✓", color = OliveDark, fontWeight = FontWeight.Bold)
                             }
                         }
@@ -594,10 +621,10 @@ private fun ParkingHistoryPage(store: ParkingStore, onBack: () -> Unit) {
 @Composable
 private fun HistoryRow(entry: ParkingHistoryEntry, label: String, onOpen: () -> Unit, onDelete: () -> Unit) {
     Surface(onClick = onOpen, color = White) {
-        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NearBlack)
-                if (!entry.note.isNullOrBlank()) Text(entry.note, fontSize = 13.sp, color = TextSecondary)
+                Text(label, fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack)
+                if (!entry.note.isNullOrBlank()) Text(entry.note, fontSize = TypeScale.Supporting, color = TextSecondary)
             }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete), tint = GrayIcon)

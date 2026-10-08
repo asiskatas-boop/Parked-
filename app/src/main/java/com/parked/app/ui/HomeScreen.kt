@@ -35,12 +35,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,7 +83,7 @@ fun HomeScreen(
     live: LiveLocation?,
     hasPerm: Boolean,
     locationOn: Boolean,
-    onOpenSettings: () -> Unit,
+    onSetUpAutoPark: () -> Unit,
     saveRequest: Int,
     onSaveHandled: () -> Unit,
     permResult: Int,
@@ -104,6 +106,9 @@ fun HomeScreen(
     var photoTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var mapCommand by remember { mutableStateOf<MapCommand?>(null) }
     var sheetHeightPx by remember { mutableIntStateOf(0) }
+    var confirmReplace by remember { mutableStateOf(false) }
+    val uiPrefs = remember { context.getSharedPreferences("parked_ui", Context.MODE_PRIVATE) }
+    var autoParkTipDismissedFor by remember { mutableLongStateOf(uiPrefs.getLong("autopark_tip_dismissed_for", -1L)) }
 
     val msgSaved = stringResource(R.string.spot_saved)
     val msgUndo = stringResource(R.string.undo)
@@ -254,7 +259,8 @@ fun HomeScreen(
             val issue = when {
                 !hasPerm -> MapIssue.Permission
                 !locationOn -> MapIssue.LocationOff
-                s != null && !s.monitoring -> MapIssue.AutoParkOff
+                // "Not now" hides the AutoPark tip until the next spot is saved.
+                s != null && !s.monitoring && autoParkTipDismissedFor != (s.parkedAt ?: 0L) -> MapIssue.AutoParkOff
                 else -> null
             }
             androidx.compose.animation.AnimatedVisibility(
@@ -265,11 +271,16 @@ fun HomeScreen(
             ) {
                 MapBanner(
                     issue = issue ?: MapIssue.Permission,
+                    onDismiss = {
+                        val key = s?.parkedAt ?: 0L
+                        uiPrefs.edit().putLong("autopark_tip_dismissed_for", key).apply()
+                        autoParkTipDismissedFor = key
+                    },
                     onAction = {
                         when (issue) {
                             MapIssue.Permission -> requestPerm()
                             MapIssue.LocationOff -> openLocationSettings(context)
-                            MapIssue.AutoParkOff -> onOpenSettings()
+                            MapIssue.AutoParkOff -> onSetUpAutoPark()
                             null -> Unit
                         }
                     }
@@ -304,7 +315,8 @@ fun HomeScreen(
         ) {
             Column(
                 Modifier
-                    .heightIn(max = 460.dp)
+                    // Never more than about half the screen, so the map stays usable.
+                    .heightIn(max = minOf(460.dp, (LocalConfiguration.current.screenHeightDp * 0.55f).dp))
                     .animateContentSize(tween(260))
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp, vertical = 20.dp)
@@ -329,7 +341,10 @@ fun HomeScreen(
                                 distance = distance,
                                 saving = saving,
                                 onDirections = { openDirections(context, s) },
-                                onSave = onSaveSpot,
+                                onSave = {
+                                    // Far from the saved car, saving here is probably a mistake: ask first.
+                                    if (distance != null && distance > 50) confirmReplace = true else onSaveSpot()
+                                },
                                 onShare = { shareSpot(context, s) },
                                 onNote = { showNote = true },
                                 onPhoto = { if (s.photoPath == null) takePhoto() else showPhoto = true },
@@ -341,6 +356,16 @@ fun HomeScreen(
             }
         }
     }
+
+    ConfirmDialog(
+        visible = confirmReplace,
+        title = stringResource(R.string.replace_spot_title),
+        message = stringResource(R.string.replace_spot_body, distance?.let { formatDistance(it) } ?: ""),
+        confirmLabel = stringResource(R.string.replace_spot_confirm),
+        destructive = false,
+        onDismiss = { confirmReplace = false },
+        onConfirm = { confirmReplace = false; onSaveSpot() }
+    )
 
     if (showNote && s != null) {
         NoteSheet(
@@ -382,13 +407,13 @@ private var orphanCleanupDone = false
 private fun EmptySpotContent(saving: Boolean, onSave: () -> Unit) {
     Text(
         stringResource(R.string.home_empty_title),
-        fontSize = 26.sp, fontWeight = FontWeight.ExtraBold,
+        fontSize = TypeScale.PageTitle, fontWeight = FontWeight.ExtraBold,
         color = NearBlack, letterSpacing = (-0.5).sp,
         modifier = Modifier.semantics { heading() }
     )
-    Spacer(Modifier.height(6.dp))
-    Text(stringResource(R.string.home_empty_body), fontSize = 14.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
-    Spacer(Modifier.height(18.dp))
+    Spacer(Modifier.height(8.dp))
+    Text(stringResource(R.string.home_empty_body), fontSize = TypeScale.Label, color = TextSecondary, fontWeight = FontWeight.Medium)
+    Spacer(Modifier.height(16.dp))
     PrimaryButton(
         text = stringResource(if (saving) R.string.saving else R.string.save_parking_spot),
         icon = Icons.Filled.Bookmark,
@@ -413,18 +438,18 @@ private fun SavedSpotContent(
     val context = LocalContext.current
     Text(
         stringResource(if (isAtCar) R.string.home_at_car else R.string.home_saved_title),
-        fontSize = 26.sp, fontWeight = FontWeight.ExtraBold,
+        fontSize = TypeScale.PageTitle, fontWeight = FontWeight.ExtraBold,
         color = NearBlack, letterSpacing = (-0.5).sp,
         modifier = Modifier.semantics { heading() }
     )
-    Spacer(Modifier.height(6.dp))
+    Spacer(Modifier.height(8.dp))
     val parked = state.parkedAt?.let { parkedAtLabel(context, it) } ?: stringResource(R.string.parked_recently)
     val away = if (distance != null && !isAtCar) {
         stringResource(R.string.distance_walk, formatDistance(distance), walkingMinutes(distance))
     } else null
     Text(
         listOfNotNull(parked, away).joinToString(" · "),
-        fontSize = 14.sp, color = TextSecondary, fontWeight = FontWeight.Medium
+        fontSize = TypeScale.Label, color = TextSecondary, fontWeight = FontWeight.Medium
     )
     Text(
         stringResource(
@@ -434,7 +459,7 @@ private fun SavedSpotContent(
                 else -> R.string.autopark_on
             }
         ),
-        fontSize = 13.sp, color = TextSecondary
+        fontSize = TypeScale.Supporting, color = TextSecondary
     )
 
     if (!state.note.isNullOrBlank()) {
@@ -442,80 +467,112 @@ private fun SavedSpotContent(
         Surface(onClick = onNote, color = SurfaceTint, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.EditNote, contentDescription = null, tint = OliveDark)
-                Spacer(Modifier.width(10.dp))
-                Text(state.note, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NearBlack)
+                Spacer(Modifier.width(12.dp))
+                Text(state.note, fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack)
             }
         }
     }
 
     val timerEnds = state.timerEndsAt?.takeIf { it > System.currentTimeMillis() - 60 * 60_000L }
     if (timerEnds != null) {
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         TimerStatus(endsAt = timerEnds, onClick = onTimer)
     }
 
-    Spacer(Modifier.height(14.dp))
+    Spacer(Modifier.height(16.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
         SpotChip(
             icon = Icons.Outlined.EditNote,
             label = stringResource(if (state.note.isNullOrBlank()) R.string.chip_add_note else R.string.chip_edit_note),
+            active = !state.note.isNullOrBlank(),
             modifier = Modifier.weight(1f),
             onClick = onNote
         )
         SpotChip(
             icon = Icons.Outlined.CameraAlt,
             label = stringResource(if (state.photoPath == null) R.string.chip_add_photo else R.string.chip_view_photo),
+            active = state.photoPath != null,
             modifier = Modifier.weight(1f),
             onClick = onPhoto
         )
         SpotChip(
             icon = Icons.Outlined.Timer,
             label = stringResource(if (timerEnds == null) R.string.chip_timer else R.string.chip_timer_edit),
+            active = timerEnds != null,
             modifier = Modifier.weight(1f),
             onClick = onTimer
         )
     }
 
-    Spacer(Modifier.height(14.dp))
+    Spacer(Modifier.height(16.dp))
     PrimaryButton(text = stringResource(R.string.get_directions), icon = Icons.Filled.Navigation, onClick = onDirections)
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(12.dp))
     // Both buttons always share the taller one's height, even when a longer
     // translation wraps onto two lines.
     Row(
         Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        SecondaryButton(
-            text = stringResource(if (saving) R.string.saving else R.string.save_current_spot),
-            icon = Icons.Filled.Bookmark,
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-            onClick = onSave
-        )
         SecondaryButton(
             text = stringResource(R.string.share_spot),
             icon = Icons.Filled.Share,
             modifier = Modifier.weight(1f).fillMaxHeight(),
             onClick = onShare
         )
+        // Replacing the saved spot is the risky action here, so it gets the
+        // quietest style instead of matching Share.
+        OutlinedButton(
+            onClick = onSave,
+            modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 50.dp),
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, OliveDark),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(Icons.Filled.Bookmark, contentDescription = null, tint = OliveDark, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                stringResource(if (saving) R.string.saving else R.string.save_current_spot),
+                fontSize = TypeScale.Supporting, fontWeight = FontWeight.Bold, color = OliveDark,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        }
     }
 }
 
 @Composable
-private fun SpotChip(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+private fun SpotChip(icon: ImageVector, label: String, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val saved = stringResource(R.string.cd_has_content)
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        color = SurfaceTint,
-        modifier = modifier.heightIn(min = 48.dp)
+        // A filled chip means something is saved there (a note, a photo, a timer).
+        color = if (active) SurfaceSelected else SurfaceTint,
+        border = if (active) androidx.compose.foundation.BorderStroke(1.5.dp, OliveMid) else null,
+        modifier = modifier
+            .heightIn(min = 56.dp)
+            .semantics { if (active) stateDescription = saved }
     ) {
         Column(
-            Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+            Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(icon, contentDescription = null, tint = OliveDark, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.height(2.dp))
-            Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = NearBlack, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Box {
+                Icon(icon, contentDescription = null, tint = OliveDark, modifier = Modifier.size(20.dp))
+                if (active) {
+                    Icon(
+                        Icons.Filled.CheckCircle, contentDescription = null, tint = OliveMid,
+                        modifier = Modifier.size(12.dp).align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp)
+                            .background(White, CircleShape)
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                label, fontSize = TypeScale.Caption, fontWeight = FontWeight.SemiBold, color = NearBlack,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         }
     }
 }
@@ -548,8 +605,8 @@ private fun TimerStatus(endsAt: Long, onClick: () -> Unit) {
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Timer, contentDescription = null, tint = if (expired) WarnAmber else OliveDark)
-            Spacer(Modifier.width(10.dp))
-            Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (expired) WarnAmber else NearBlack)
+            Spacer(Modifier.width(12.dp))
+            Text(text, fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = if (expired) WarnAmber else NearBlack)
         }
     }
 }
@@ -557,7 +614,7 @@ private fun TimerStatus(endsAt: Long, onClick: () -> Unit) {
 private enum class MapIssue { Permission, LocationOff, AutoParkOff }
 
 @Composable
-private fun MapBanner(issue: MapIssue, onAction: () -> Unit) {
+private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Unit) {
     val (text, action) = when (issue) {
         MapIssue.Permission -> R.string.banner_permission to R.string.banner_permission_action
         MapIssue.LocationOff -> R.string.banner_location_off to R.string.banner_location_off_action
@@ -576,8 +633,13 @@ private fun MapBanner(issue: MapIssue, onAction: () -> Unit) {
                 tint = OliveDark,
                 modifier = Modifier.size(20.dp)
             )
-            Spacer(Modifier.width(10.dp))
-            Text(stringResource(text), fontSize = 13.sp, lineHeight = 17.sp, color = NearBlack, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(12.dp))
+            Text(stringResource(text), fontSize = TypeScale.Supporting, lineHeight = 17.sp, color = NearBlack, modifier = Modifier.weight(1f))
+            if (issue == MapIssue.AutoParkOff) {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.banner_not_now), color = TextSecondary)
+                }
+            }
             TextButton(onClick = onAction) {
                 Text(stringResource(action), fontWeight = FontWeight.Bold, color = OliveDark)
             }
@@ -602,22 +664,18 @@ private fun MapButton(icon: ImageVector, description: String, modifier: Modifier
 
 @Composable
 private fun OsmAttribution(modifier: Modifier) {
-    val context = LocalContext.current
+    // Credit only, not a link: a tiny tap target here sat right next to the map
+    // banner and was easy to hit by accident.
     Text(
         stringResource(R.string.osm_attribution),
-        fontSize = 11.sp,
+        fontSize = TypeScale.Caption,
         color = NearBlack,
         modifier = modifier
             .statusBarsPadding()
-            .padding(top = 6.dp, end = 8.dp)
+            .padding(top = 8.dp, end = 8.dp)
             .clip(RoundedCornerShape(6.dp))
             .background(White.copy(alpha = 0.88f))
-            .clickable {
-                runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.openstreetmap.org/copyright")))
-                }
-            }
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     )
 }
 
@@ -701,7 +759,7 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
         if (endsAt != null) {
             Text(
                 stringResource(R.string.timer_current, clockTime(context, endsAt)),
-                fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NearBlack
+                fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack
             )
             Spacer(Modifier.height(12.dp))
         }
@@ -722,7 +780,7 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
                 }
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(16.dp))
         NumberField(
             value = custom,
             onValueChange = { custom = it; error = null },
@@ -737,7 +795,7 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
         })
         if (!exactAllowed && Build.VERSION.SDK_INT >= 31) {
             Spacer(Modifier.height(12.dp))
-            Text(stringResource(R.string.timer_inexact), fontSize = 12.sp, lineHeight = 16.sp, color = TextSecondary)
+            Text(stringResource(R.string.timer_inexact), fontSize = TypeScale.Caption, lineHeight = 16.sp, color = TextSecondary)
             QuietButton(text = stringResource(R.string.timer_allow_exact), color = OliveDark) {
                 runCatching {
                     context.startActivity(
@@ -760,7 +818,11 @@ private fun PhotoDialog(
     onRemove: () -> Unit,
 ) {
     var bitmap by remember(path) { mutableStateOf<android.graphics.Bitmap?>(null) }
-    LaunchedEffect(path) { bitmap = withContext(Dispatchers.IO) { SpotPhoto.load(path, 1600) } }
+    var failed by remember(path) { mutableStateOf(false) }
+    LaunchedEffect(path) {
+        bitmap = withContext(Dispatchers.IO) { SpotPhoto.load(path, 1600) }
+        failed = bitmap == null
+    }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
@@ -776,12 +838,15 @@ private fun PhotoDialog(
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
                     )
+                } else if (failed) {
+                    // The file is gone or unreadable: say so instead of spinning forever.
+                    Text(stringResource(R.string.photo_load_failed), color = White, fontSize = TypeScale.Body)
                 } else {
                     CircularProgressIndicator(color = LimeBright)
                 }
             }
             Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 SecondaryButton(stringResource(R.string.photo_retake), icon = Icons.Outlined.CameraAlt, modifier = Modifier.weight(1f), onClick = onRetake)
                 SecondaryButton(stringResource(R.string.photo_remove), icon = Icons.Filled.Delete, modifier = Modifier.weight(1f), onClick = onRemove)
             }

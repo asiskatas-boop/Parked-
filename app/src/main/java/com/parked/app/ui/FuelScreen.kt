@@ -106,7 +106,6 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
     var showRefuel by remember { mutableStateOf(false) }
     var showTripCost by remember { mutableStateOf(false) }
     var showTank by remember { mutableStateOf(false) }
-    val msgLevel = stringResource(R.string.fuel_level_updated)
     val msgRefuel = stringResource(R.string.refuel_saved)
 
     val litersInTank = configuredTank?.times(sliderFraction)
@@ -125,59 +124,60 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
                 .fillMaxWidth()
                 .background(HeaderGradient, RoundedCornerShape(bottomStart = 58.dp, bottomEnd = 58.dp))
                 .statusBarsPadding()
-                .padding(top = 12.dp, bottom = 18.dp),
+                .padding(top = 12.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(stringResource(R.string.tab_fuel), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = White)
+            PageTitle(stringResource(R.string.tab_fuel), modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp))
             Spacer(Modifier.height(12.dp))
             FuelGauge(
                 fraction = sliderFraction,
                 litersInTank = litersInTank,
                 updatedText = updatedText,
                 onFractionChange = { userAdjusting = true; sliderFraction = it },
+                // Saved as soon as you let go, with Undo, so a change is never
+                // lost by leaving the tab before pressing a button.
+                onCommit = {
+                    val before = Triple(fuel.levelPct, fuel.odoForLevel, fuel.levelUpdatedAt)
+                    val hadLevel = before.third > 0L
+                    fuel.setLevel(sliderFraction * 100.0)
+                    userAdjusting = false
+                    val pct = (sliderFraction * 100).roundToInt()
+                    scope.launch {
+                        snackbar.currentSnackbarData?.dismiss()
+                        val result = snackbar.showSnackbar(
+                            context.getString(R.string.fuel_level_set_to, pct),
+                            actionLabel = if (hadLevel) context.getString(R.string.undo) else null,
+                            withDismissAction = true,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            fuel.restoreLevel(before.first, before.second, before.third)
+                        }
+                    }
+                },
                 onSetTank = { showTank = true },
             )
             Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            Button(
+                onClick = { showRefuel = true },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).heightIn(min = 48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = White, contentColor = OliveDark)
             ) {
-                Button(
-                    onClick = {
-                        fuel.setLevel(sliderFraction * 100.0)
-                        userAdjusting = false
-                        scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(msgLevel) }
-                    },
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3C3A3F), contentColor = White)
-                ) {
-                    Text(
-                        stringResource(if (hasSavedFuelLevel) R.string.fuel_correct_level else R.string.fuel_set_level),
-                        fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center
-                    )
-                }
-                Button(
-                    onClick = { showRefuel = true },
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = White, contentColor = OliveDark)
-                ) {
-                    Icon(Icons.Filled.LocalGasStation, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(7.dp))
-                    Text(stringResource(R.string.refuel), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                }
+                Icon(Icons.Filled.LocalGasStation, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.refuel), fontSize = TypeScale.Label, fontWeight = FontWeight.Bold)
             }
         }
 
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             SectionTitle(stringResource(R.string.fuel_at_a_glance))
             Surface(shape = RoundedCornerShape(18.dp), color = SurfaceTint, modifier = Modifier.fillMaxWidth()) {
                 if (averageConsumption != null && rangeFromCurrentLevel != null) {
                     Row(
                         Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         FuelStat(stringResource(R.string.fuel_range), "~${formatKm(rangeFromCurrentLevel)}", Modifier.weight(1f))
@@ -186,9 +186,9 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
                     }
                 } else {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 15.dp)) {
-                        Text(stringResource(R.string.fuel_insights_title), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
-                        Spacer(Modifier.height(3.dp))
-                        Text(stringResource(R.string.fuel_insights_body), fontSize = 13.sp, lineHeight = 18.sp, color = TextSecondary)
+                        Text(stringResource(R.string.fuel_insights_title), fontSize = TypeScale.Body, fontWeight = FontWeight.Bold, color = NearBlack)
+                        Spacer(Modifier.height(4.dp))
+                        Text(stringResource(R.string.fuel_insights_body), fontSize = TypeScale.Supporting, lineHeight = 18.sp, color = TextSecondary)
                     }
                 }
             }
@@ -257,9 +257,9 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
 @Composable
 private fun FuelStat(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier) {
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
-        Spacer(Modifier.height(3.dp))
-        Text(value, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
+        Text(label, fontSize = TypeScale.Caption, fontWeight = FontWeight.Medium, color = TextSecondary)
+        Spacer(Modifier.height(4.dp))
+        Text(value, fontSize = TypeScale.Section, fontWeight = FontWeight.ExtraBold, color = NearBlack)
     }
 }
 
@@ -269,6 +269,7 @@ private fun FuelGauge(
     litersInTank: Double?,
     updatedText: String,
     onFractionChange: (Float) -> Unit,
+    onCommit: () -> Unit,
     onSetTank: () -> Unit,
 ) {
     val normalized = fraction.coerceIn(0f, 1f)
@@ -278,28 +279,28 @@ private fun FuelGauge(
         shape = RoundedCornerShape(22.dp),
         color = White,
     ) {
-        Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 14.dp)) {
+        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
-                    Text("$pct%", fontSize = 30.sp, lineHeight = 32.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
-                    Text(stringResource(R.string.fuel_current_level), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
+                    Text("$pct%", fontSize = TypeScale.BigNumber, lineHeight = 32.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
+                    Text(stringResource(R.string.fuel_current_level), fontSize = TypeScale.Caption, fontWeight = FontWeight.Medium, color = TextSecondary)
                 }
                 if (litersInTank != null) {
                     Column(horizontalAlignment = Alignment.End) {
-                        Text("${formatDecimal(litersInTank, 0)} L", fontSize = 18.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold, color = NearBlack)
-                        Text(stringResource(R.string.fuel_approx), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
+                        Text("${formatDecimal(litersInTank, 0)} L", fontSize = TypeScale.Section, lineHeight = 32.sp, fontWeight = FontWeight.Bold, color = NearBlack)
+                        Text(stringResource(R.string.fuel_approx), fontSize = TypeScale.Caption, fontWeight = FontWeight.Medium, color = TextSecondary)
                     }
                 } else {
                     // Without a tank size there are no litres to show, so offer to set it.
                     TextButton(onClick = onSetTank, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                        Text(stringResource(R.string.fuel_set_tank), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = OliveDark)
+                        Text(stringResource(R.string.fuel_set_tank), fontSize = TypeScale.Supporting, fontWeight = FontWeight.Bold, color = OliveDark)
                     }
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            FuelBar(value = normalized, pct = pct, onChange = onFractionChange)
-            Spacer(Modifier.height(10.dp))
-            Text(updatedText, fontSize = 12.sp, lineHeight = 16.sp, color = TextSecondary)
+            Spacer(Modifier.height(12.dp))
+            FuelBar(value = normalized, pct = pct, onChange = onFractionChange, onCommit = onCommit)
+            Spacer(Modifier.height(12.dp))
+            Text(updatedText, fontSize = TypeScale.Caption, lineHeight = 16.sp, color = TextSecondary)
         }
     }
 }
@@ -310,8 +311,9 @@ private fun FuelGauge(
  * amount that varies by version, which left the labels misaligned).
  */
 @Composable
-private fun FuelBar(value: Float, pct: Int, onChange: (Float) -> Unit) {
+private fun FuelBar(value: Float, pct: Int, onChange: (Float) -> Unit, onCommit: () -> Unit) {
     val latestChange by rememberUpdatedState(onChange)
+    val latestCommit by rememberUpdatedState(onCommit)
     val label = stringResource(R.string.fuel_level)
     val inset = 14.dp
     Column(Modifier.fillMaxWidth()) {
@@ -325,7 +327,7 @@ private fun FuelBar(value: Float, pct: Int, onChange: (Float) -> Unit) {
                         val span = size.width - 2 * insetPx
                         return if (span <= 0f) value else ((x - insetPx) / span).coerceIn(0f, 1f)
                     }
-                    detectTapGestures { latestChange(at(it.x)) }
+                    detectTapGestures { latestChange(at(it.x)); latestCommit() }
                 }
                 .pointerInput(Unit) {
                     val insetPx = inset.toPx()
@@ -335,14 +337,16 @@ private fun FuelBar(value: Float, pct: Int, onChange: (Float) -> Unit) {
                     }
                     detectHorizontalDragGestures(
                         onDragStart = { latestChange(at(it.x)) },
-                        onHorizontalDrag = { change, _ -> change.consume(); latestChange(at(change.position.x)) }
+                        onHorizontalDrag = { change, _ -> change.consume(); latestChange(at(change.position.x)) },
+                        onDragEnd = { latestCommit() },
+                        onDragCancel = { latestCommit() }
                     )
                 }
                 .semantics {
                     contentDescription = label
                     stateDescription = "$pct%"
                     progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f, steps = 19)
-                    setProgress { target -> latestChange(target.coerceIn(0f, 1f)); true }
+                    setProgress { target -> latestChange(target.coerceIn(0f, 1f)); latestCommit(); true }
                 }
         ) {
             val insetPx = inset.toPx()
@@ -366,7 +370,7 @@ private fun FuelBar(value: Float, pct: Int, onChange: (Float) -> Unit) {
                     Box(Modifier.width(1.dp).height(5.dp).background(Color(0xFF8A9185)))
                     Text(
                         text,
-                        fontSize = 12.sp,
+                        fontSize = TypeScale.Caption,
                         fontWeight = if (position == 0f || position == 1f) FontWeight.Medium else FontWeight.Bold,
                         color = if (position == 0f || position == 1f) TextSecondary else NearBlack
                     )
@@ -390,7 +394,7 @@ private fun SpendingCard(fuel: FuelStore) {
 
     Surface(shape = RoundedCornerShape(18.dp), color = SurfaceTint, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text(stringResource(R.string.spend_title), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
+            Text(stringResource(R.string.spend_title), fontSize = TypeScale.Body, fontWeight = FontWeight.Bold, color = NearBlack)
             Spacer(Modifier.height(2.dp))
             Text(
                 stringResource(
@@ -399,7 +403,7 @@ private fun SpendingCard(fuel: FuelStore) {
                     formatMoney(fuel.currency, current.cost),
                     formatDecimal(current.litres, 0)
                 ),
-                fontSize = 13.sp, color = TextSecondary
+                fontSize = TypeScale.Supporting, color = TextSecondary
             )
             Spacer(Modifier.height(12.dp))
             SpendBars(months = months, selected = selected, currency = fuel.currency, onSelect = { selected = it })
@@ -434,7 +438,7 @@ private fun SpendBars(months: List<MonthlySpend>, selected: Int, currency: Strin
             ) {
                 Text(
                     if (isSelected && m.cost > 0) formatMoney(currency, m.cost) else "",
-                    fontSize = 11.sp, fontWeight = FontWeight.Bold, color = NearBlack, maxLines = 1
+                    fontSize = TypeScale.Caption, fontWeight = FontWeight.Bold, color = NearBlack, maxLines = 1
                 )
                 Spacer(Modifier.height(4.dp))
                 val fraction = (m.cost / max).toFloat()
@@ -457,10 +461,10 @@ private fun SpendBars(months: List<MonthlySpend>, selected: Int, currency: Strin
                     // Baseline hairline.
                     drawLine(Hairline, Offset(-size.width, size.height), Offset(size.width * 2, size.height), 1.dp.toPx())
                 }
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     monthName(m.year, m.month),
-                    fontSize = 12.sp,
+                    fontSize = TypeScale.Caption,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     color = if (isSelected) NearBlack else TextSecondary
                 )
@@ -512,20 +516,20 @@ private fun RefuelRow(entry: Refuel, currency: String, index: Int, onDelete: () 
         Modifier
             .fillMaxWidth()
             .background(if (index % 2 == 0) SurfaceSelected else White)
-            .padding(start = 24.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+            .padding(start = 24.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(shortDateYear(entry.date), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NearBlack)
+            Text(shortDateYear(entry.date), fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack)
             val details = listOfNotNull(
                 entry.odometer.takeIf { it > 0 }?.let { formatKm(it) },
                 stringResource(if (entry.tankFull) R.string.refuel_full else R.string.refuel_partial)
             ).joinToString(" · ")
-            Text(details, fontSize = 12.sp, color = TextSecondary)
+            Text(details, fontSize = TypeScale.Caption, color = TextSecondary)
         }
         Column(horizontalAlignment = Alignment.End) {
-            Text("${formatDecimal(entry.litres, 1)} L", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
-            Text(formatMoney(currency, entry.cost), fontSize = 12.sp, color = TextSecondary)
+            Text("${formatDecimal(entry.litres, 1)} L", fontSize = TypeScale.Body, fontWeight = FontWeight.Bold, color = NearBlack)
+            Text(formatMoney(currency, entry.cost), fontSize = TypeScale.Caption, color = TextSecondary)
         }
         IconButton(onClick = onDelete) {
             Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete_refuel_title), tint = GrayIcon)
@@ -581,14 +585,14 @@ private fun LevelCheckRow(log: FuelLevelLog, index: Int, label: String, onDelete
         Modifier
             .fillMaxWidth()
             .background(if (index % 2 == 0) SurfaceSelected else White)
-            .padding(start = 24.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+            .padding(start = 24.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NearBlack)
-            if (log.odometer > 0) Text(formatKm(log.odometer), fontSize = 12.sp, color = TextSecondary)
+            Text(label, fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack)
+            if (log.odometer > 0) Text(formatKm(log.odometer), fontSize = TypeScale.Caption, color = TextSecondary)
         }
-        Text("${log.levelPct.roundToInt()}%", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack)
+        Text("${log.levelPct.roundToInt()}%", fontSize = TypeScale.Emphasis, fontWeight = FontWeight.ExtraBold, color = NearBlack)
         IconButton(onClick = onDelete) {
             Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete), tint = GrayIcon)
         }
@@ -619,6 +623,7 @@ private fun RefuelSheet(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
     val ePrice = stringResource(R.string.error_price)
     val eOdo = stringResource(R.string.error_odometer)
     val eOdoLow = stringResource(R.string.error_odometer_low)
+    val eOdoFull = stringResource(R.string.error_odometer_full)
     val eGeneric = stringResource(R.string.error_refuel)
 
     val paidValue = parseNumber(totalPaid)?.takeIf { it > 0 }
@@ -631,7 +636,7 @@ private fun RefuelSheet(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
         onDismiss = onDismiss
     ) {
         NumberField(totalPaid, { totalPaid = it; errorText = null }, stringResource(R.string.refuel_total, fuel.currency))
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         NumberField(
             price, { price = it; errorText = null },
             stringResource(R.string.refuel_price, fuel.currency),
@@ -641,7 +646,8 @@ private fun RefuelSheet(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
         Spacer(Modifier.height(4.dp))
         NumberField(
             odometer, { odometer = it; errorText = null },
-            stringResource(R.string.refuel_odometer),
+            // A full fill-up is only useful for the average with a reading.
+            stringResource(if (fullTank) R.string.refuel_odometer_required else R.string.refuel_odometer),
             decimal = false,
             placeholder = fuel.currentOdo.takeIf { it > 0 }?.let { stringResource(R.string.refuel_odometer_hint, formatKm(it)) },
         )
@@ -650,12 +656,12 @@ private fun RefuelSheet(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
             Modifier
                 .fillMaxWidth()
                 .clickable(role = Role.Switch) { fullTank = !fullTank }
-                .padding(vertical = 6.dp),
+                .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                Text(stringResource(R.string.refuel_full_tank), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NearBlack)
-                Text(stringResource(R.string.refuel_full_tank_hint), fontSize = 12.sp, lineHeight = 16.sp, color = TextSecondary)
+                Text(stringResource(R.string.refuel_full_tank), fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack)
+                Text(stringResource(R.string.refuel_full_tank_hint), fontSize = TypeScale.Caption, lineHeight = 16.sp, color = TextSecondary)
             }
             ParkedSwitch(checked = fullTank, onCheckedChange = null)
         }
@@ -667,6 +673,7 @@ private fun RefuelSheet(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
                 paidValue == null -> eTotal
                 priceValue == null || priceValue > 20 -> ePrice
                 o == null || o < 0 -> eOdo
+                fullTank && o <= 0 -> eOdoFull
                 o > 0 && fuel.currentOdo > 0 && o + 1.0 < fuel.currentOdo -> eOdoLow
                 !fuel.logRefuel(litres = paidValue / priceValue, cost = paidValue, odometer = o, tankFull = fullTank) -> eGeneric
                 else -> { onSaved(); null }
@@ -697,7 +704,7 @@ private fun TripCostSheet(fuel: FuelStore, onDismiss: () -> Unit) {
         onDismiss = onDismiss
     ) {
         NumberField(distance, { distance = it }, stringResource(R.string.trip_distance))
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         NumberField(
             consumption, { consumption = it }, stringResource(R.string.trip_consumption),
             supporting = stringResource(if (learnedConsumption != null) R.string.trip_consumption_learned else R.string.trip_consumption_enter)
@@ -709,22 +716,22 @@ private fun TripCostSheet(fuel: FuelStore, onDismiss: () -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Row(
-            Modifier.fillMaxWidth().clickable(role = Role.Switch) { roundTrip = !roundTrip }.padding(vertical = 6.dp),
+            Modifier.fillMaxWidth().clickable(role = Role.Switch) { roundTrip = !roundTrip }.padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(stringResource(R.string.trip_round), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NearBlack, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.trip_round), fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack, modifier = Modifier.weight(1f))
             ParkedSwitch(checked = roundTrip, onCheckedChange = null)
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(16.dp))
         Surface(shape = RoundedCornerShape(18.dp), color = SurfaceTint, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.trip_estimated), fontSize = 13.sp, color = TextSecondary)
+                Text(stringResource(R.string.trip_estimated), fontSize = TypeScale.Supporting, color = TextSecondary)
                 Text(
                     tripCost?.let { formatMoney(fuel.currency, it) } ?: "—",
-                    fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, color = NearBlack
+                    fontSize = TypeScale.BigNumber, fontWeight = FontWeight.ExtraBold, color = NearBlack
                 )
                 if (litresNeeded != null && tripDistance != null) {
-                    Text("${formatKm(tripDistance)} · ~${formatDecimal(litresNeeded, 1)} L", fontSize = 13.sp, color = TextSecondary)
+                    Text("${formatKm(tripDistance)} · ~${formatDecimal(litresNeeded, 1)} L", fontSize = TypeScale.Supporting, color = TextSecondary)
                 }
             }
         }
@@ -758,7 +765,7 @@ private fun ServiceRemindersPage(fuel: FuelStore, onBack: () -> Unit) {
                 item {
                     Text(
                         stringResource(R.string.service_needs_odometer),
-                        fontSize = 13.sp, color = TextSecondary,
+                        fontSize = TypeScale.Supporting, color = TextSecondary,
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
                     )
                 }
@@ -831,7 +838,7 @@ private fun ReminderRow(fuel: FuelStore, reminder: ServiceReminder, onEdit: () -
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text(reminder.name, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = NearBlack)
+                Text(reminder.name, fontSize = TypeScale.Body, fontWeight = FontWeight.Bold, color = NearBlack)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // Status is spelled out, never colour alone.
                     Icon(
@@ -843,12 +850,12 @@ private fun ReminderRow(fuel: FuelStore, reminder: ServiceReminder, onEdit: () -
                         contentDescription = null, tint = statusColor, modifier = Modifier.size(14.dp)
                     )
                     Spacer(Modifier.width(4.dp))
-                    Text(statusText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = statusColor)
+                    Text(statusText, fontSize = TypeScale.Supporting, fontWeight = FontWeight.SemiBold, color = statusColor)
                 }
-                Text(detail, fontSize = 13.sp, color = TextSecondary)
+                Text(detail, fontSize = TypeScale.Supporting, color = TextSecondary)
                 Text(
                     stringResource(R.string.service_last_done, shortDateYear(reminder.lastDoneAt)),
-                    fontSize = 12.sp, color = TextSecondary
+                    fontSize = TypeScale.Caption, color = TextSecondary
                 )
             }
             if (p.status != ReminderStatus.Ok) {
@@ -906,7 +913,7 @@ private fun ReminderSheet(
                     )
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
         }
         OutlinedTextField(
             value = name,
@@ -915,18 +922,18 @@ private fun ReminderSheet(
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             NumberField(km, { km = it; error = null }, stringResource(R.string.service_every_km), Modifier.weight(1f), decimal = false)
             NumberField(months, { months = it; error = null }, stringResource(R.string.service_every_months), Modifier.weight(1f), decimal = false)
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         NumberField(
             lastOdo, { lastOdo = it }, stringResource(R.string.service_last_odo), decimal = false,
             supporting = stringResource(R.string.service_last_odo_hint)
         )
         ErrorText(error)
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(16.dp))
         PrimaryButton(text = stringResource(R.string.save), onClick = {
             val k = km.trim().toIntOrNull()?.takeIf { it > 0 }
             val m = months.trim().toIntOrNull()?.takeIf { it in 1..120 }

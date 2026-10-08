@@ -8,12 +8,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import com.parked.app.R
 
 // Brand
 val OliveDark = Color(0xFF2B4A23)
 val OliveMid = Color(0xFF4E8F27)
 val LimeBright = Color(0xFF6EC436)
+
+/** End colour of the header gradient; white text on it measures 5.2:1. */
+val HeaderEnd = Color(0xFF3F7A22)
 
 // Neutrals
 val White = Color(0xFFFFFFFF)
@@ -32,6 +36,24 @@ val TextSecondary = Color(0xFF6B6F68)
 // Status
 val ErrorRed = Color(0xFFB91C1C)
 val WarnAmber = Color(0xFF8A5A00)
+
+/**
+ * Type scale. Every text size in the app comes from here, so screens stay
+ * consistent: 12 caption, 13 supporting, 14 label, 15 body, 17 emphasis,
+ * 18 section, 22 sheet title, 26 page title, 30 big number, 46 display.
+ */
+object TypeScale {
+    val Caption = 12.sp
+    val Supporting = 13.sp
+    val Label = 14.sp
+    val Body = 15.sp
+    val Emphasis = 17.sp
+    val Section = 18.sp
+    val SheetTitle = 22.sp
+    val PageTitle = 26.sp
+    val BigNumber = 30.sp
+    val Display = 46.sp
+}
 
 val InterFamily = FontFamily(
     Font(R.font.inter_regular, FontWeight.Normal),

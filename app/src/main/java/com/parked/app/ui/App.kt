@@ -74,7 +74,7 @@ import com.parked.app.util.hasBluetoothPermission
 import com.parked.app.util.hasLocationPermission
 
 /** Requests that arrive from a widget, the Quick Settings tile or a notification. */
-enum class AppAction { SaveSpot, FindCar, OpenSettings, OpenService }
+enum class AppAction { SaveSpot, FindCar, OpenSettings, OpenService, SetUpAutoPark }
 
 @Composable
 fun ParkedRoot(pendingAction: AppAction?, onActionHandled: () -> Unit) {
@@ -134,6 +134,8 @@ private fun ParkedApp(
     val uiPrefs = remember { context.getSharedPreferences("parked_ui", Context.MODE_PRIVATE) }
     var showOnboarding by remember { mutableStateOf(!uiPrefs.getBoolean("onboarding_done", false)) }
     var onboardingPage by remember { mutableIntStateOf(0) }
+    // Actions raised inside the app (e.g. "Set up AutoPark" at the end of onboarding).
+    var internalAction by remember { mutableStateOf<AppAction?>(null) }
 
     // A widget or tile tap on first launch should not be swallowed by onboarding.
     LaunchedEffect(pendingAction) {
@@ -145,6 +147,7 @@ private fun ParkedApp(
 
     // The brand video plays on every cold start, except when the app was opened
     // for a quick action (widget, tile, notification) or animations are off.
+    val splashSeenBefore = remember { uiPrefs.getBoolean("splash_seen", false) }
     var showSplash by rememberSaveable {
         mutableStateOf(pendingAction == null && ValueAnimator.areAnimatorsEnabled())
     }
@@ -160,7 +163,15 @@ private fun ParkedApp(
         label = "appStage"
     ) { current ->
         when (current) {
-            Stage.Splash -> VideoSplash(onFinished = { showSplash = false })
+            Stage.Splash -> VideoSplash(
+                // Full speed the first time; after that the same animation at
+                // double speed, so it doesn't hold you up when you need the car.
+                fast = splashSeenBefore,
+                onFinished = {
+                    uiPrefs.edit().putBoolean("splash_seen", true).apply()
+                    showSplash = false
+                }
+            )
             Stage.Onboarding -> AnimatedContent(
                 targetState = onboardingPage,
                 modifier = Modifier.fillMaxSize(),
@@ -172,16 +183,22 @@ private fun ParkedApp(
             ) { page ->
                 OnboardingPage(
                     page = page,
-                    onNext = {
+                    onNext = { setUp ->
                         if (page == 0) onboardingPage = 1
                         else {
                             uiPrefs.edit().putBoolean("onboarding_done", true).apply()
+                            if (setUp) internalAction = AppAction.SetUpAutoPark
                             showOnboarding = false
                         }
                     }
                 )
             }
-            Stage.Main -> MainContent(fuel = fuel, store = store, pendingAction = pendingAction, onActionHandled = onActionHandled)
+            Stage.Main -> MainContent(
+                fuel = fuel,
+                store = store,
+                pendingAction = pendingAction ?: internalAction,
+                onActionHandled = { internalAction = null; onActionHandled() }
+            )
         }
     }
 }
@@ -198,7 +215,7 @@ private enum class Stage { Splash, Onboarding, Main }
  * background hid it completely. Tap anywhere to skip.
  */
 @Composable
-private fun VideoSplash(onFinished: () -> Unit) {
+private fun VideoSplash(fast: Boolean, onFinished: () -> Unit) {
     val finish by rememberUpdatedState(onFinished)
     var done by remember { mutableStateOf(false) }
     val end: () -> Unit = {
@@ -209,7 +226,7 @@ private fun VideoSplash(onFinished: () -> Unit) {
     }
     // Never get stuck here if the video can't play.
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(6_000L)
+        kotlinx.coroutines.delay(if (fast) 3_500L else 6_000L)
         end()
     }
     val skipLabel = stringResource(R.string.splash_skip)
@@ -221,13 +238,24 @@ private fun VideoSplash(onFinished: () -> Unit) {
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = { ctx -> SplashVideoView(ctx, onEnd = { end() }) },
+            factory = { ctx -> SplashVideoView(ctx, speed = if (fast) 2f else 1f, onEnd = { end() }) },
             onRelease = { it.release() }
+        )
+        Text(
+            skipLabel,
+            fontSize = TypeScale.Supporting,
+            fontWeight = FontWeight.SemiBold,
+            color = White.copy(alpha = 0.85f),
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 32.dp)
         )
     }
 }
 
-private class SplashVideoView(context: Context, private val onEnd: () -> Unit) : TextureView(context),
+private class SplashVideoView(
+    context: Context,
+    private val speed: Float,
+    private val onEnd: () -> Unit,
+) : TextureView(context),
     TextureView.SurfaceTextureListener {
     private var player: MediaPlayer? = null
     private var surface: Surface? = null
@@ -253,6 +281,7 @@ private class SplashVideoView(context: Context, private val onEnd: () -> Unit) :
                     this@SplashVideoView.videoHeight = mp.videoHeight
                     applyCenterCrop()
                     mp.start()
+                    if (speed != 1f) runCatching { mp.playbackParams = mp.playbackParams.setSpeed(speed) }
                 }
                 setOnCompletionListener { onEnd() }
                 setOnErrorListener { _, _, _ -> onEnd(); true }
@@ -294,7 +323,7 @@ private class SplashVideoView(context: Context, private val onEnd: () -> Unit) :
 // ============================================================
 
 @Composable
-private fun OnboardingPage(page: Int, onNext: () -> Unit) {
+private fun OnboardingPage(page: Int, onNext: (setUpAutoPark: Boolean) -> Unit) {
     val bg = if (page == 0) OliveDark else LimeBright
     val fg = if (page == 0) White else OliveDark
     val headline = stringResource(if (page == 0) R.string.onboarding_1_title else R.string.onboarding_2_title)
@@ -305,7 +334,8 @@ private fun OnboardingPage(page: Int, onNext: () -> Unit) {
         Modifier
             .fillMaxSize()
             .background(bg)
-            .clickable(role = Role.Button, onClickLabel = action) { onNext() }
+            // The first page is a tap-anywhere intro; the second has real buttons.
+            .then(if (page == 0) Modifier.clickable(role = Role.Button, onClickLabel = action) { onNext(false) } else Modifier)
     ) {
         if (page == 0) {
             // The splash video has just played; show its final logo still.
@@ -340,7 +370,7 @@ private fun OnboardingPage(page: Int, onNext: () -> Unit) {
             ) {
                 Text(
                     stringResource(R.string.app_name),
-                    fontSize = 46.sp,
+                    fontSize = TypeScale.Display,
                     fontWeight = FontWeight.ExtraBold,
                     color = fg,
                     letterSpacing = (-1.5).sp
@@ -348,24 +378,39 @@ private fun OnboardingPage(page: Int, onNext: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
                 Text(
                     headline,
-                    fontSize = 25.sp,
+                    fontSize = TypeScale.PageTitle,
                     lineHeight = 31.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = fg,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.widthIn(max = 330.dp)
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
                 Text(
                     body,
-                    fontSize = 15.sp,
+                    fontSize = TypeScale.Body,
                     lineHeight = 22.sp,
                     color = fg,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.widthIn(max = 330.dp)
                 )
-                Spacer(Modifier.height(22.dp))
-                Text(action, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg)
+                Spacer(Modifier.height(24.dp))
+                if (page == 0) {
+                    Text(action, fontSize = TypeScale.Label, fontWeight = FontWeight.Bold, color = fg)
+                } else {
+                    // The page explains AutoPark, so let people set it up right here.
+                    Button(
+                        onClick = { onNext(true) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = OliveDark, contentColor = White),
+                    ) {
+                        Text(stringResource(R.string.onboarding_setup_autopark), fontSize = TypeScale.Body, fontWeight = FontWeight.Bold)
+                    }
+                    TextButton(onClick = { onNext(false) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.onboarding_later), fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = OliveDark)
+                    }
+                }
             }
         }
     }
@@ -399,6 +444,7 @@ private fun MainContent(
     var saveRequest by remember { mutableIntStateOf(0) }
     var permResult by remember { mutableIntStateOf(0) }
     var openServiceRequest by remember { mutableStateOf(false) }
+    var autoParkRequest by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(pendingAction) {
         when (pendingAction) {
@@ -406,6 +452,7 @@ private fun MainContent(
             AppAction.FindCar -> tab = AppTab.Home
             AppAction.OpenSettings -> tab = AppTab.Settings
             AppAction.OpenService -> { tab = AppTab.Fuel; openServiceRequest = true }
+            AppAction.SetUpAutoPark -> { tab = AppTab.Settings; autoParkRequest++ }
             null -> return@LaunchedEffect
         }
         onActionHandled()
@@ -518,7 +565,7 @@ private fun MainContent(
                         live = live,
                         hasPerm = hasPerm,
                         locationOn = locationOn,
-                        onOpenSettings = { tab = AppTab.Settings },
+                        onSetUpAutoPark = { tab = AppTab.Settings; autoParkRequest++ },
                         saveRequest = saveRequest,
                         onSaveHandled = { saveRequest = 0 },
                         permResult = permResult,
@@ -535,7 +582,12 @@ private fun MainContent(
                         openServiceRequest = openServiceRequest,
                         onServiceRequestHandled = { openServiceRequest = false }
                     )
-                    AppTab.Settings -> SettingsScreen(fuel = fuel, store = store)
+                    AppTab.Settings -> SettingsScreen(
+                        fuel = fuel,
+                        store = store,
+                        autoParkRequest = autoParkRequest,
+                        onAutoParkRequestHandled = { autoParkRequest = 0 }
+                    )
                 }
             }
         }
@@ -551,34 +603,40 @@ private fun BottomNav(tab: AppTab, onChange: (AppTab) -> Unit) {
         ) {
             AppTab.entries.forEach { t ->
                 val selected = tab == t
-                val label = stringResource(t.labelRes)
+                val bg by androidx.compose.animation.animateColorAsState(
+                    if (selected) OliveDark else Color.Transparent, tween(220), label = "tabBg"
+                )
                 Box(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .clickable(role = Role.Tab) { onChange(t) }
-                        .semantics {
-                            this.selected = selected
-                            contentDescription = label
-                        },
+                        .semantics { this.selected = selected },
                     contentAlignment = Alignment.BottomCenter
                 ) {
-                    Box(
+                    Column(
                         Modifier
                             .fillMaxWidth()
-                            .height(if (selected) 64.dp else 58.dp)
-                            .clip(
-                                if (selected) RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)
-                                else RoundedCornerShape(0.dp)
-                            )
-                            .background(if (selected) OliveDark else Color.Transparent),
-                        contentAlignment = Alignment.Center
+                            .height(64.dp)
+                            .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
+                            .background(bg),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             if (selected) t.filled else t.outlined,
                             contentDescription = null,
                             tint = if (selected) LimeBright else GrayIcon,
-                            modifier = Modifier.size(25.dp)
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        // Labels: the icons alone didn't say what each tab holds.
+                        Text(
+                            stringResource(t.labelRes),
+                            fontSize = TypeScale.Caption,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (selected) White else GrayIcon,
+                            maxLines = 1
                         )
                     }
                 }

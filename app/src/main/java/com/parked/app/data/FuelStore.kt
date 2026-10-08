@@ -222,6 +222,18 @@ class FuelStore(context: Context) {
             .apply()
     }
 
+    /** Puts back a level, its odometer anchor and timestamp exactly; used by Undo. */
+    fun restoreLevel(pct: Double, odo: Double, updatedAt: Long) {
+        levelPct = pct
+        odoForLevel = odo
+        levelUpdatedAt = updatedAt
+        prefs.edit()
+            .putFloat("levelPct", pct.toFloat())
+            .putFloat("odoForLevel", odo.toFloat())
+            .putLong("levelUpdatedAt", updatedAt)
+            .apply()
+    }
+
     fun deleteFuelLog(date: Long) {
         val updated = fuelLogs.filterNot { it.date == date }
         if (updated.size == fuelLogs.size) return

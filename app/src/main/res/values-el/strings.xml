@@ -57,8 +57,8 @@
     <string name="chip_edit_note">Σημείωση</string>
     <string name="chip_add_photo">Φωτογραφία</string>
     <string name="chip_view_photo">Φωτογραφία</string>
-    <string name="chip_timer">Χρονόμετρο</string>
-    <string name="chip_timer_edit">Χρονόμετρο</string>
+    <string name="chip_timer">Λήξη στάθμευσης</string>
+    <string name="chip_timer_edit">Λήξη στάθμευσης</string>
 
     <string name="note_title">Σημείωση σημείου</string>
     <string name="note_subtitle">Όροφος, σειρά ή κάποιο ορόσημο για να βρεις το αυτοκίνητο.</string>
@@ -72,7 +72,7 @@
     <string name="cd_spot_photo">Φωτογραφία του σημείου στάθμευσης</string>
 
     <!-- Parking timer -->
-    <string name="timer_title">Χρονόμετρο στάθμευσης</string>
+    <string name="timer_title">Λήξη στάθμευσης</string>
     <string name="timer_subtitle">Θα λάβεις υπενθύμιση %1$d λεπτά πριν λήξει ο χρόνος και μία ακόμη όταν λήξει.</string>
     <string name="timer_current">Λήγει στις %1$s</string>
     <string name="timer_custom_label">Άλλη διάρκεια (λεπτά)</string>
@@ -129,7 +129,7 @@
     <string name="fuel_level">Στάθμη καυσίμου</string>
     <string name="fuel_approx">Περίπου στο ρεζερβουάρ</string>
     <string name="fuel_set_tank">Όρισε ρεζερβουάρ</string>
-    <string name="fuel_not_set">Όρισε τη στάθμη μία φορά όπως τη δείχνει το αυτοκίνητο. Μετά, διόρθωσέ τη μόνο όταν χρειάζεται.</string>
+    <string name="fuel_not_set">Σύρε την μπάρα ώστε να ταιριάζει με τον δείκτη του αυτοκινήτου. Αποθηκεύεται μόλις αφήσεις.</string>
     <string name="fuel_updated">Ενημερώθηκε %1$s</string>
     <string name="fuel_estimated_since">Εκτίμηση: %2$d km από %1$s</string>
     <string name="fuel_set_level">Ορισμός στάθμης</string>
@@ -164,7 +164,7 @@
     <string name="refuel_odometer">Χιλιομετρητής (προαιρετικό)</string>
     <string name="refuel_odometer_hint">Περίπου %1$s</string>
     <string name="refuel_full_tank">Γέμισα το ρεζερβουάρ</string>
-    <string name="refuel_full_tank_hint">Ενεργοποίησέ το μόνο αν γέμισες μέχρι πάνω. Δύο γεμίσματα δίνουν τη μέση κατανάλωση.</string>
+    <string name="refuel_full_tank_hint">Ενεργοποίησέ το μόνο αν γέμισες μέχρι πάνω. Δύο γεμίσματα με ένδειξη χιλιομετρητή δίνουν τη μέση κατανάλωση.</string>
     <string name="save_refuel">Αποθήκευση ανεφοδιασμού</string>
     <string name="error_litres">Συμπλήρωσε τα λίτρα</string>
     <string name="error_total">Συμπλήρωσε το ποσό που πλήρωσες</string>
@@ -295,4 +295,16 @@
     <string name="banner_location_off_action">Άνοιγμα</string>
     <string name="banner_autopark_off">Το AutoPark είναι ανενεργό. Σύνδεσε το Bluetooth του αυτοκινήτου για αυτόματη αποθήκευση.</string>
     <string name="banner_autopark_off_action">Ρύθμιση</string>
+    <!-- 0.3.2 -->
+    <string name="onboarding_setup_autopark">Ρύθμιση AutoPark</string>
+    <string name="onboarding_later">Αργότερα</string>
+    <string name="replace_spot_title">Αντικατάσταση του σημείου;</string>
+    <string name="replace_spot_body">Το αυτοκίνητό σου είναι αποθηκευμένο %1$s από εδώ. Αν αποθηκεύσεις τώρα, θα αντικατασταθεί με το σημείο όπου βρίσκεσαι.</string>
+    <string name="replace_spot_confirm">Αποθήκευση εδώ</string>
+    <string name="banner_not_now">Όχι τώρα</string>
+    <string name="fuel_level_set_to">Η στάθμη ορίστηκε στο %1$d%%</string>
+    <string name="refuel_odometer_required">Χιλιομετρητής (απαραίτητος για γέμισμα)</string>
+    <string name="error_odometer_full">Πρόσθεσε την ένδειξη χιλιομετρητή. Χωρίς αυτήν, το γέμισμα δεν μετρά στη μέση κατανάλωση.</string>
+    <string name="photo_load_failed">Δεν ήταν δυνατό να ανοίξει η φωτογραφία.</string>
+    <string name="cd_has_content">αποθηκευμένο</string>
 </resources>

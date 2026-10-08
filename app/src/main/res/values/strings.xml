@@ -55,12 +55,12 @@
     <string name="share_text">I parked here: %1$s</string>
     <string name="share_text_note">I parked here (%1$s): %2$s</string>
 
-    <string name="chip_add_note">Add note</string>
-    <string name="chip_edit_note">Edit note</string>
-    <string name="chip_add_photo">Add photo</string>
+    <string name="chip_add_note">Note</string>
+    <string name="chip_edit_note">Note</string>
+    <string name="chip_add_photo">Photo</string>
     <string name="chip_view_photo">Photo</string>
-    <string name="chip_timer">Timer</string>
-    <string name="chip_timer_edit">Timer</string>
+    <string name="chip_timer">Parking time</string>
+    <string name="chip_timer_edit">Parking time</string>
 
     <string name="note_title">Spot note</string>
     <string name="note_subtitle">A level, row or landmark to help you find the car.</string>
@@ -74,7 +74,7 @@
     <string name="cd_spot_photo">Photo of the parking spot</string>
 
     <!-- Parking timer -->
-    <string name="timer_title">Parking timer</string>
+    <string name="timer_title">Parking time</string>
     <string name="timer_subtitle">You\'ll get a reminder %1$d minutes before the time is up, and another when it ends.</string>
     <string name="timer_current">Ends at %1$s</string>
     <string name="timer_custom_label">Other length (minutes)</string>
@@ -131,7 +131,7 @@
     <string name="fuel_level">Fuel level</string>
     <string name="fuel_approx">Approx. in tank</string>
     <string name="fuel_set_tank">Set tank size</string>
-    <string name="fuel_not_set">Set it once to match your car. After that, correct it only when needed.</string>
+    <string name="fuel_not_set">Drag the bar to match your car\'s gauge. It saves when you let go.</string>
     <string name="fuel_updated">Updated %1$s</string>
     <string name="fuel_estimated_since">Estimate: %2$d km driven since %1$s</string>
     <string name="fuel_set_level">Set level</string>
@@ -166,7 +166,7 @@
     <string name="refuel_odometer">Odometer (optional)</string>
     <string name="refuel_odometer_hint">About %1$s</string>
     <string name="refuel_full_tank">Filled the tank</string>
-    <string name="refuel_full_tank_hint">Turn on only if you filled it to the top. Two full fills give your average consumption.</string>
+    <string name="refuel_full_tank_hint">Turn on only if you filled it to the top. Two full fills with odometer readings give your average consumption.</string>
     <string name="save_refuel">Save refuel</string>
     <string name="error_litres">Enter the litres added</string>
     <string name="error_total">Enter the amount you paid</string>
@@ -297,4 +297,16 @@
     <string name="banner_location_off_action">Turn on</string>
     <string name="banner_autopark_off">AutoPark is off. Connect your car\'s Bluetooth to save spots automatically.</string>
     <string name="banner_autopark_off_action">Set up</string>
+    <!-- 0.3.2 -->
+    <string name="onboarding_setup_autopark">Set up AutoPark</string>
+    <string name="onboarding_later">Later</string>
+    <string name="replace_spot_title">Replace your saved spot?</string>
+    <string name="replace_spot_body">Your car is saved %1$s from here. Saving now replaces that spot with where you are.</string>
+    <string name="replace_spot_confirm">Save here</string>
+    <string name="banner_not_now">Not now</string>
+    <string name="fuel_level_set_to">Fuel level set to %1$d%%</string>
+    <string name="refuel_odometer_required">Odometer (needed for a full tank)</string>
+    <string name="error_odometer_full">Add the odometer reading. A full tank without it can\'t be used for your average.</string>
+    <string name="photo_load_failed">Couldn\'t open the photo.</string>
+    <string name="cd_has_content">saved</string>
 </resources>

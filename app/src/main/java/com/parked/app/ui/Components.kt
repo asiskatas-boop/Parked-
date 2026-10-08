@@ -41,12 +41,30 @@ import com.parked.app.R
 /** One snackbar host for the whole app, so every confirmation looks the same. */
 val LocalSnackbar = compositionLocalOf<SnackbarHostState> { error("No snackbar host") }
 
+/**
+ * Header background. It stops at a mid green rather than lime: white text on
+ * lime measured about 2.2:1; on HeaderEnd it is at least 5.2:1.
+ */
 val HeaderGradient: Brush
     get() = Brush.linearGradient(
-        colors = listOf(OliveDark, OliveMid, LimeBright),
+        colors = listOf(OliveDark, HeaderEnd),
         start = Offset.Zero,
-        end = Offset(900f, 900f)
+        end = Offset(1100f, 1100f)
     )
+
+/** Page title used by every screen header, so titles match across tabs. */
+@Composable
+fun PageTitle(text: String, color: Color = White, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        fontSize = TypeScale.PageTitle,
+        lineHeight = TypeScale.PageTitle * 1.15f,
+        fontWeight = FontWeight.ExtraBold,
+        color = color,
+        letterSpacing = (-0.5).sp,
+        modifier = modifier.semantics { heading() }
+    )
+}
 
 /**
  * Main call to action. Uses a minimum height rather than a fixed one so the
@@ -68,9 +86,9 @@ fun PrimaryButton(
     ) {
         if (icon != null) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
         }
-        Text(text, fontSize = 17.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(text, fontSize = TypeScale.Emphasis, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     }
 }
 
@@ -90,16 +108,16 @@ fun SecondaryButton(
     ) {
         if (icon != null) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(8.dp))
         }
-        Text(text, fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(text, fontSize = TypeScale.Supporting, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     }
 }
 
 @Composable
 fun QuietButton(text: String, modifier: Modifier = Modifier, color: Color = TextSecondary, onClick: () -> Unit) {
     TextButton(onClick = onClick, modifier = modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-        Text(text, fontSize = 15.sp, color = color, fontWeight = FontWeight.SemiBold)
+        Text(text, fontSize = TypeScale.Body, color = color, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -130,14 +148,14 @@ fun ParkedSheet(
         ) {
             Text(
                 title,
-                fontSize = 22.sp,
+                fontSize = TypeScale.SheetTitle,
                 fontWeight = FontWeight.ExtraBold,
                 color = NearBlack,
                 modifier = Modifier.semantics { heading() }
             )
             if (subtitle != null) {
                 Spacer(Modifier.height(4.dp))
-                Text(subtitle, fontSize = 13.sp, lineHeight = 18.sp, color = TextSecondary)
+                Text(subtitle, fontSize = TypeScale.Supporting, lineHeight = 18.sp, color = TextSecondary)
             }
             Spacer(Modifier.height(16.dp))
             content()
@@ -167,13 +185,7 @@ fun SubPage(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = White)
             }
             Spacer(Modifier.width(4.dp))
-            Text(
-                title,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = White,
-                modifier = Modifier.weight(1f).semantics { heading() }
-            )
+            PageTitle(title, modifier = Modifier.weight(1f))
             actions()
         }
         LazyColumn(Modifier.fillMaxSize()) {
@@ -208,14 +220,14 @@ fun ActionRow(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 14.dp),
+            Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(icon, contentDescription = null, tint = OliveDark)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NearBlack)
-                if (subtitle != null) Text(subtitle, fontSize = 12.sp, lineHeight = 16.sp, color = TextSecondary)
+                Text(title, fontSize = TypeScale.Body, fontWeight = FontWeight.Bold, color = NearBlack)
+                if (subtitle != null) Text(subtitle, fontSize = TypeScale.Caption, lineHeight = 16.sp, color = TextSecondary)
             }
             if (trailing != null) trailing() else {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = OliveDark)
@@ -230,7 +242,7 @@ fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
         color = White,
         shape = RoundedCornerShape(16.dp),
         shadowElevation = 2.dp,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 22.dp)
+        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
     ) { Column(content = content) }
 }
 
@@ -257,12 +269,12 @@ fun ToggleRow(label: String, checked: Boolean, supporting: String? = null, onTog
         Modifier
             .fillMaxWidth()
             .toggleableRow(checked, onToggle)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NearBlack)
-            if (supporting != null) Text(supporting, fontSize = 12.sp, lineHeight = 16.sp, color = TextSecondary)
+            Text(label, fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack)
+            if (supporting != null) Text(supporting, fontSize = TypeScale.Caption, lineHeight = 16.sp, color = TextSecondary)
         }
         ParkedSwitch(checked = checked, onCheckedChange = null)
     }
@@ -277,12 +289,12 @@ private fun Modifier.toggleableRow(checked: Boolean, onToggle: (Boolean) -> Unit
 fun TextRow(label: String, value: String, onClick: () -> Unit) {
     Surface(onClick = onClick, color = Color.Transparent) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 18.dp, vertical = 14.dp),
+            Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = NearBlack, modifier = Modifier.weight(1f))
+            Text(label, fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(12.dp))
-            Text(value, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = OliveDark, textAlign = TextAlign.End)
+            Text(value, fontSize = TypeScale.Label, fontWeight = FontWeight.Medium, color = OliveDark, textAlign = TextAlign.End)
         }
     }
 }
@@ -323,7 +335,7 @@ fun ConfirmDialog(
 fun SectionTitle(text: String, color: Color = NearBlack, modifier: Modifier = Modifier) {
     Text(
         text,
-        fontSize = 18.sp,
+        fontSize = TypeScale.Section,
         fontWeight = FontWeight.ExtraBold,
         color = color,
         modifier = modifier.semantics { heading() }
@@ -333,8 +345,8 @@ fun SectionTitle(text: String, color: Color = NearBlack, modifier: Modifier = Mo
 @Composable
 fun ErrorText(text: String?) {
     if (text == null) return
-    Spacer(Modifier.height(6.dp))
-    Text(text, fontSize = 13.sp, color = ErrorRed)
+    Spacer(Modifier.height(8.dp))
+    Text(text, fontSize = TypeScale.Supporting, color = ErrorRed)
 }
 
 @Composable
