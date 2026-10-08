@@ -31,6 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -43,6 +46,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.parked.app.ParkedApplication
 import com.parked.app.R
 import com.parked.app.data.FuelStore
 import com.parked.app.data.ParkingHistoryEntry
@@ -60,11 +64,14 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(fuel: FuelStore, store: ParkingStore) {
     var showHistory by rememberSaveable { mutableStateOf(false) }
-    if (showHistory) {
-        BackHandler { showHistory = false }
-        ParkingHistoryPage(store = store, onBack = { showHistory = false })
-    } else {
-        SettingsMain(fuel = fuel, store = store, onOpenHistory = { showHistory = true })
+    if (showHistory) BackHandler { showHistory = false }
+    androidx.compose.animation.AnimatedContent(
+        targetState = showHistory,
+        transitionSpec = { pageTransition(forward = targetState) },
+        label = "settingsPages"
+    ) { history ->
+        if (history) ParkingHistoryPage(store = store, onBack = { showHistory = false })
+        else SettingsMain(fuel = fuel, store = store, onOpenHistory = { showHistory = true })
     }
 }
 
@@ -220,6 +227,7 @@ private fun SettingsMain(fuel: FuelStore, store: ParkingStore, onOpenHistory: ()
     }
 
     val notificationsChecked = fuel.notificationsEnabled && systemNotificationsAllowed
+    var hasCrashReport by remember { mutableStateOf(ParkedApplication.crashFile(context).exists()) }
 
     Column(Modifier.fillMaxSize().background(White).verticalScroll(rememberScrollState())) {
         Column(
@@ -321,18 +329,29 @@ private fun SettingsMain(fuel: FuelStore, store: ParkingStore, onOpenHistory: ()
                 }
                 DividerRow()
                 TextRow(stringResource(R.string.car_appearance), colourLabel(fuel.accentName)) { showAppearance = true }
+                if (hasCrashReport) {
+                    DividerRow()
+                    TextRow(stringResource(R.string.crash_report), stringResource(R.string.crash_report_share)) {
+                        shareCrashReport(context)
+                        hasCrashReport = false
+                    }
+                }
             }
         }
 
-        Box(Modifier.fillMaxWidth().heightIn(min = 250.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().padding(vertical = 28.dp), contentAlignment = Alignment.Center) {
+            // The car artwork is 450×375 px. Shown at about its real size it stays
+            // sharp; stretched to the screen width it turned blocky.
             Image(
-                painter = painterResource(carDrawable(fuel.accentName)),
+                bitmap = ImageBitmap.imageResource(carDrawable(fuel.accentName)),
                 contentDescription = stringResource(R.string.cd_car_preview, colourLabel(fuel.accentName)),
                 modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .height(248.dp)
+                    .width(180.dp)
+                    .aspectRatio(450f / 375f)
+                    .clip(RoundedCornerShape(16.dp))
                     .clickable { showAppearance = true },
-                contentScale = ContentScale.Fit
+                contentScale = ContentScale.Fit,
+                filterQuality = FilterQuality.High,
             )
         }
         Spacer(Modifier.height(18.dp))
@@ -601,4 +620,18 @@ private fun HistoryRow(entry: ParkingHistoryEntry, label: String, onOpen: () -> 
             }
         }
     }
+}
+
+private fun shareCrashReport(context: android.content.Context) {
+    val file = ParkedApplication.crashFile(context)
+    val text = runCatching { file.readText() }.getOrNull() ?: return
+    runCatching {
+        context.startActivity(
+            Intent.createChooser(
+                Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text),
+                context.getString(R.string.crash_report)
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+    file.delete()
 }

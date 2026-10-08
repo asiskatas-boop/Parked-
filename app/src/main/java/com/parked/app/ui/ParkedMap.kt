@@ -13,9 +13,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.parked.app.util.haversine
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 
@@ -26,6 +28,10 @@ sealed interface MapCommand {
     data class ShowBoth(override val id: Int) : MapCommand
 }
 
+/**
+ * The OSM map. It is sized by the caller to the area that is actually visible
+ * (above the bottom sheet), so "centre" really means the visible centre.
+ */
 @Composable
 fun ParkedMap(
     parkedLat: Double?, parkedLng: Double?,
@@ -35,7 +41,7 @@ fun ParkedMap(
     parkedLabel: String,
     liveLabel: String,
     command: MapCommand?,
-    bottomPaddingPx: Int,
+    modifier: Modifier = Modifier,
 ) {
     var hasCenteredOnParked by remember { mutableStateOf(false) }
     var hasCenteredOnLive by remember { mutableStateOf(false) }
@@ -57,28 +63,56 @@ fun ParkedMap(
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            mapView?.onPause()
-            mapView?.onDetach()
-            mapView = null
-        }
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     AndroidView(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         factory = { ctx ->
             MapView(ctx).apply {
                 setTileSource(TileSourceFactory.MAPNIK)
                 setMultiTouchControls(true)
-                zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
+                zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+                isTilesScaledToDpi = true
                 controller.setZoom(16.0)
                 contentDescription = parkedLabel
+                // Markers are created once and only moved afterwards.
+                overlays.add(Marker(this).apply {
+                    id = MARKER_CAR
+                    title = parkedLabel
+                    icon = parkedMarkerIcon
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    setInfoWindow(null)
+                    isEnabled = false
+                })
+                overlays.add(Marker(this).apply {
+                    id = MARKER_YOU
+                    title = liveLabel
+                    icon = liveMarkerIcon
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    setInfoWindow(null)
+                    isEnabled = false
+                })
                 mapView = this
                 if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) onResume()
             }
         },
         update = { map ->
+            // Compose can still update the view while Home animates out; a map
+            // that has been released must not be touched.
+            if (mapView !== map) return@AndroidView
+            val car = map.overlays.firstOrNull { (it as? Marker)?.id == MARKER_CAR } as? Marker
+            val you = map.overlays.firstOrNull { (it as? Marker)?.id == MARKER_YOU } as? Marker
+
+            if (parkedLat != null && parkedLng != null) {
+                car?.position = GeoPoint(parkedLat, parkedLng)
+                car?.isEnabled = true
+            } else car?.isEnabled = false
+            if (liveLat != null && liveLng != null) {
+                you?.position = GeoPoint(liveLat, liveLng)
+                you?.isEnabled = true
+            } else you?.isEnabled = false
+
             if (!hasCenteredOnParked && parkedLat != null && parkedLng != null) {
                 map.controller.setZoom(17.0)
                 map.controller.setCenter(GeoPoint(parkedLat, parkedLng))
@@ -91,56 +125,62 @@ fun ParkedMap(
             }
             if (command != null && command.id != handledCommand) {
                 handledCommand = command.id
-                when (command) {
-                    is MapCommand.CenterOnCar -> if (parkedLat != null && parkedLng != null) {
-                        map.controller.animateTo(GeoPoint(parkedLat, parkedLng), 17.5, 400L)
-                    }
-                    is MapCommand.ShowBoth -> if (parkedLat != null && parkedLng != null && liveLat != null && liveLng != null) {
-                        val box = BoundingBox.fromGeoPoints(
-                            listOf(GeoPoint(parkedLat, parkedLng), GeoPoint(liveLat, liveLng))
-                        )
-                        // Keep both markers clear of the bottom sheet.
-                        map.post { map.zoomToBoundingBox(box.increaseByScale(1.6f), true, bottomPaddingPx / 2) }
+                runCatching {
+                    when (command) {
+                        is MapCommand.CenterOnCar -> if (parkedLat != null && parkedLng != null) {
+                            map.controller.animateTo(GeoPoint(parkedLat, parkedLng), 17.5, 450L)
+                        }
+                        is MapCommand.ShowBoth -> showBoth(map, parkedLat, parkedLng, liveLat, liveLng)
                     }
                 }
             }
-            map.overlays.removeAll { it is Marker }
-            if (parkedLat != null && parkedLng != null) {
-                map.overlays.add(Marker(map).apply {
-                    position = GeoPoint(parkedLat, parkedLng)
-                    title = parkedLabel
-                    icon = parkedMarkerIcon
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                })
-            }
-            if (liveLat != null && liveLng != null) {
-                map.overlays.add(Marker(map).apply {
-                    position = GeoPoint(liveLat, liveLng)
-                    title = liveLabel
-                    icon = liveMarkerIcon
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                })
-            }
             map.invalidate()
+        },
+        onRelease = { map ->
+            mapView = null
+            map.onPause()
+            map.onDetach()
         }
     )
 }
 
+private fun showBoth(map: MapView, parkedLat: Double?, parkedLng: Double?, liveLat: Double?, liveLng: Double?) {
+    if (parkedLat == null || parkedLng == null || liveLat == null || liveLng == null) return
+    val distance = haversine(parkedLat, parkedLng, liveLat, liveLng)
+    if (distance < 40) {
+        // Practically the same place: a bounding box would be zero-sized.
+        map.controller.animateTo(GeoPoint((parkedLat + liveLat) / 2, (parkedLng + liveLng) / 2), 18.5, 450L)
+        return
+    }
+    val box = BoundingBox.fromGeoPoints(listOf(GeoPoint(parkedLat, parkedLng), GeoPoint(liveLat, liveLng)))
+    val border = (minOf(map.width, map.height) * 0.18f).toInt().coerceAtLeast(48)
+    map.post {
+        if (map.isAttachedToWindow && map.width > 0 && map.height > 0) {
+            runCatching { map.zoomToBoundingBox(box, true, border) }
+        }
+    }
+}
+
+private const val MARKER_CAR = "car"
+private const val MARKER_YOU = "you"
+
 fun makeParkedMarker(ctx: Context): BitmapDrawable {
-    val size = 260
+    val density = ctx.resources.displayMetrics.density
+    val size = (64 * density).toInt()
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val c = Canvas(bmp)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val cx = size / 2f
     val cy = size / 2f
+    val r = size / 2f
     paint.color = 0x306EC436
-    c.drawCircle(cx, cy, 118f, paint)
-    paint.color = 0x186EC436
-    c.drawCircle(cx, cy, 130f, paint)
+    c.drawCircle(cx, cy, r * 0.92f, paint)
+    paint.color = 0xFFFFFFFF.toInt()
+    c.drawCircle(cx, cy, r * 0.66f, paint)
     paint.color = 0xFF2B4A23.toInt()
-    c.drawCircle(cx, cy, 82f, paint)
+    c.drawCircle(cx, cy, r * 0.58f, paint)
     paint.color = android.graphics.Color.WHITE
-    paint.textSize = 100f
+    paint.textSize = r * 0.78f
     paint.textAlign = Paint.Align.CENTER
     paint.typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
     val yOffset = (paint.descent() + paint.ascent()) / 2f
@@ -149,17 +189,19 @@ fun makeParkedMarker(ctx: Context): BitmapDrawable {
 }
 
 fun makeLiveMarker(ctx: Context): BitmapDrawable {
-    val size = 80
+    val density = ctx.resources.displayMetrics.density
+    val size = (28 * density).toInt()
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val c = Canvas(bmp)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val cx = size / 2f
     val cy = size / 2f
+    val r = size / 2f
     paint.color = 0x330A84FF
-    c.drawCircle(cx, cy, 36f, paint)
+    c.drawCircle(cx, cy, r, paint)
     paint.color = android.graphics.Color.WHITE
-    c.drawCircle(cx, cy, 20f, paint)
+    c.drawCircle(cx, cy, r * 0.56f, paint)
     paint.color = 0xFF0A84FF.toInt()
-    c.drawCircle(cx, cy, 14f, paint)
+    c.drawCircle(cx, cy, r * 0.4f, paint)
     return BitmapDrawable(ctx.resources, bmp)
 }

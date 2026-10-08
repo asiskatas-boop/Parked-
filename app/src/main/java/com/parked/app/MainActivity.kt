@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
@@ -22,7 +23,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Don't replay a widget/notification action after a configuration change.
         if (savedInstanceState == null) pendingAction = actionFrom(intent)
-        enableEdgeToEdge()
+        // Transparent system bars: the white tab bar shows through instead of the
+        // grey scrim Android adds by default under the navigation buttons.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+        )
+        if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
         Configuration.getInstance().apply {
             load(applicationContext, getSharedPreferences("osmdroid", Context.MODE_PRIVATE))

@@ -1,5 +1,13 @@
 package com.parked.app.ui
 
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -169,15 +177,16 @@ fun SubPage(
             actions()
         }
         LazyColumn(Modifier.fillMaxSize()) {
+            // The empty message goes above the content, not instead of it, so
+            // actions such as "Add reminder" stay reachable on an empty page.
             if (emptyText != null) {
                 item {
-                    Box(Modifier.fillMaxWidth().height(260.dp).padding(24.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.fillMaxWidth().heightIn(min = 200.dp).padding(24.dp), contentAlignment = Alignment.Center) {
                         Text(emptyText, color = TextSecondary, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
                     }
                 }
-            } else {
-                content()
             }
+            content()
             item { Spacer(Modifier.navigationBarsPadding().height(24.dp)) }
         }
     }
@@ -351,4 +360,19 @@ fun NumberField(
         ),
         modifier = modifier.fillMaxWidth()
     )
+}
+
+/**
+ * Moving into a sub-page slides it in from the end edge; going back reverses it.
+ * Short and eased so it reads as navigation, not decoration.
+ */
+fun pageTransition(forward: Boolean): ContentTransform {
+    val spec = tween<androidx.compose.ui.unit.IntOffset>(300, easing = FastOutSlowInEasing)
+    return if (forward) {
+        (slideInHorizontally(spec) { it / 4 } + fadeIn(tween(240, delayMillis = 40)))
+            .togetherWith(slideOutHorizontally(spec) { -it / 10 } + fadeOut(tween(150)))
+    } else {
+        (slideInHorizontally(spec) { -it / 10 } + fadeIn(tween(240, delayMillis = 40)))
+            .togetherWith(slideOutHorizontally(spec) { it / 4 } + fadeOut(tween(150)))
+    }
 }

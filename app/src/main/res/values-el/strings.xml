@@ -255,7 +255,7 @@
     <string name="alerts_not_enabled">Οι ειδοποιήσεις δεν ενεργοποιήθηκαν</string>
     <string name="alerts_enable_in_settings">Ενεργοποίησε τις Ειδοποιήσεις στάθμευσης στις ρυθμίσεις του Android</string>
 
-    <string name="history_toggle">Ιστορικό στάθμευσης</string>
+    <string name="history_toggle">Διατήρηση ιστορικού</string>
     <string name="history_toggle_supporting">Ανενεργό από προεπιλογή. Κρατά τα τελευταία 50 σημεία μόνο σε αυτό το κινητό.</string>
     <string name="history_title">Ιστορικό στάθμευσης</string>
     <string name="history_empty">Τα σημεία που θα αποθηκεύεις από εδώ και πέρα θα εμφανίζονται εδώ.</string>
@@ -281,4 +281,9 @@
     <string name="colour_orange">Πορτοκαλί</string>
     <string name="colour_brown">Καφέ</string>
     <string name="colour_purple">Μωβ</string>
+
+    <!-- 0.3.1 -->
+    <string name="crash_report">Αναφορά τελευταίου σφάλματος</string>
+    <string name="crash_report_share">Κοινοποίηση</string>
+    <string name="splash_skip">Πάτησε για παράλειψη</string>
 </resources>

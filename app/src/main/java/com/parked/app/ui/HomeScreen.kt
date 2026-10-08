@@ -8,6 +8,8 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -224,38 +226,45 @@ fun HomeScreen(
     val parkedMarkerIcon = remember { makeParkedMarker(context) }
     val liveMarkerIcon = remember { makeLiveMarker(context) }
 
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    // The map fills only the area the sheet leaves visible (plus the sheet's
+    // rounded corner), so the car marker and "centre" are never hidden under it.
+    val sheetHeight = with(density) { sheetHeightPx.toDp() }
+    val mapBottom = (sheetHeight - 28.dp).coerceAtLeast(0.dp)
+
     Box(Modifier.fillMaxSize()) {
-        ParkedMap(
-            parkedLat = if (hasSpot) s?.parkedLat else null,
-            parkedLng = if (hasSpot) s?.parkedLng else null,
-            liveLat = live?.lat,
-            liveLng = live?.lng,
-            parkedMarkerIcon = parkedMarkerIcon,
-            liveMarkerIcon = liveMarkerIcon,
-            parkedLabel = stringResource(R.string.map_parked_car),
-            liveLabel = stringResource(R.string.map_you),
-            command = mapCommand,
-            bottomPaddingPx = sheetHeightPx,
-        )
+        Box(Modifier.fillMaxSize().padding(bottom = mapBottom)) {
+            ParkedMap(
+                parkedLat = if (hasSpot) s?.parkedLat else null,
+                parkedLng = if (hasSpot) s?.parkedLng else null,
+                liveLat = live?.lat,
+                liveLng = live?.lng,
+                parkedMarkerIcon = parkedMarkerIcon,
+                liveMarkerIcon = liveMarkerIcon,
+                parkedLabel = stringResource(R.string.map_parked_car),
+                liveLabel = stringResource(R.string.map_you),
+                command = mapCommand,
+            )
 
-        OsmAttribution(Modifier.align(Alignment.TopEnd))
+            OsmAttribution(Modifier.align(Alignment.TopEnd))
 
-        // Map buttons sit just above the sheet.
-        if (hasSpot) {
-            val density = androidx.compose.ui.platform.LocalDensity.current
-            Column(
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = with(density) { sheetHeightPx.toDp() } + 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (live != null) {
-                    MapButton(Icons.Filled.ZoomOutMap, stringResource(R.string.map_show_both)) {
-                        mapCommand = MapCommand.ShowBoth((mapCommand?.id ?: 0) + 1)
+            if (hasSpot) {
+                Column(
+                    Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 40.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = live != null,
+                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.8f),
+                        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.8f),
+                    ) {
+                        MapButton(Icons.Filled.ZoomOutMap, stringResource(R.string.map_show_both)) {
+                            mapCommand = MapCommand.ShowBoth((mapCommand?.id ?: 0) + 1)
+                        }
                     }
-                }
-                MapButton(Icons.Filled.DirectionsCar, stringResource(R.string.map_center_car)) {
-                    mapCommand = MapCommand.CenterOnCar((mapCommand?.id ?: 0) + 1)
+                    MapButton(Icons.Filled.DirectionsCar, stringResource(R.string.map_center_car)) {
+                        mapCommand = MapCommand.CenterOnCar((mapCommand?.id ?: 0) + 1)
+                    }
                 }
             }
         }
@@ -271,26 +280,39 @@ fun HomeScreen(
         ) {
             Column(
                 Modifier
-                    .heightIn(max = 520.dp)
+                    .heightIn(max = 460.dp)
+                    .animateContentSize(tween(260))
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 22.dp)
+                    .padding(horizontal = 24.dp, vertical = 20.dp)
             ) {
-                when {
-                    s == null -> Spacer(Modifier.height(120.dp))
-                    !hasSpot -> EmptySpotContent(saving = saving, onSave = onSaveSpot)
-                    else -> SavedSpotContent(
-                        state = s,
-                        autoParkMode = autoParkMode,
-                        isAtCar = isAtCar,
-                        distance = distance,
-                        saving = saving,
-                        onDirections = { openDirections(context, s) },
-                        onSave = onSaveSpot,
-                        onShare = { shareSpot(context, s) },
-                        onNote = { showNote = true },
-                        onPhoto = { if (s.photoPath == null) takePhoto() else showPhoto = true },
-                        onTimer = { showTimer = true },
-                    )
+                androidx.compose.animation.Crossfade(
+                    targetState = when {
+                        s == null -> 0
+                        !hasSpot -> 1
+                        else -> 2
+                    },
+                    animationSpec = tween(220),
+                    label = "homeSheet"
+                ) { mode ->
+                    Column {
+                        when {
+                            mode == 0 || s == null -> Spacer(Modifier.height(120.dp))
+                            mode == 1 -> EmptySpotContent(saving = saving, onSave = onSaveSpot)
+                            else -> SavedSpotContent(
+                                state = s,
+                                autoParkMode = autoParkMode,
+                                isAtCar = isAtCar,
+                                distance = distance,
+                                saving = saving,
+                                onDirections = { openDirections(context, s) },
+                                onSave = onSaveSpot,
+                                onShare = { shareSpot(context, s) },
+                                onNote = { showNote = true },
+                                onPhoto = { if (s.photoPath == null) takePhoto() else showPhoto = true },
+                                onTimer = { showTimer = true },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -433,17 +455,22 @@ private fun SavedSpotContent(
     Spacer(Modifier.height(14.dp))
     PrimaryButton(text = stringResource(R.string.get_directions), icon = Icons.Filled.Navigation, onClick = onDirections)
     Spacer(Modifier.height(10.dp))
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    // Both buttons always share the taller one's height, even when a longer
+    // translation wraps onto two lines.
+    Row(
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
         SecondaryButton(
             text = stringResource(if (saving) R.string.saving else R.string.save_current_spot),
             icon = Icons.Filled.Bookmark,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
             onClick = onSave
         )
         SecondaryButton(
             text = stringResource(R.string.share_spot),
             icon = Icons.Filled.Share,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
             onClick = onShare
         )
     }

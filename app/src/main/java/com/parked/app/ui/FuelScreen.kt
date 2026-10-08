@@ -63,11 +63,17 @@ fun FuelScreen(fuel: FuelStore, openServiceRequest: Boolean, onServiceRequestHan
     }
 
     if (page != FuelPage.Main) BackHandler { page = FuelPage.Main }
-    when (page) {
-        FuelPage.Main -> FuelMain(fuel, onOpen = { page = it })
-        FuelPage.Refuels -> RefuelHistoryPage(fuel, onBack = { page = FuelPage.Main })
-        FuelPage.LevelChecks -> LevelChecksPage(fuel, onBack = { page = FuelPage.Main })
-        FuelPage.Service -> ServiceRemindersPage(fuel, onBack = { page = FuelPage.Main })
+    androidx.compose.animation.AnimatedContent(
+        targetState = page,
+        transitionSpec = { pageTransition(forward = targetState != FuelPage.Main) },
+        label = "fuelPages"
+    ) { current ->
+        when (current) {
+            FuelPage.Main -> FuelMain(fuel, onOpen = { page = it })
+            FuelPage.Refuels -> RefuelHistoryPage(fuel, onBack = { page = FuelPage.Main })
+            FuelPage.LevelChecks -> LevelChecksPage(fuel, onBack = { page = FuelPage.Main })
+            FuelPage.Service -> ServiceRemindersPage(fuel, onBack = { page = FuelPage.Main })
+        }
     }
 }
 

@@ -4,7 +4,16 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.net.Uri
 import android.os.Looper
-import android.widget.VideoView
+import android.graphics.Matrix
+import android.graphics.SurfaceTexture
+import android.media.MediaPlayer
+import android.view.Surface
+import android.view.TextureView
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -134,16 +143,31 @@ private fun ParkedApp(
         }
     }
 
+    // The brand video plays on every cold start, except when the app was opened
+    // for a quick action (widget, tile, notification) or animations are off.
+    var showSplash by rememberSaveable {
+        mutableStateOf(pendingAction == null && ValueAnimator.areAnimatorsEnabled())
+    }
+    val stage = when {
+        showSplash -> Stage.Splash
+        showOnboarding -> Stage.Onboarding
+        else -> Stage.Main
+    }
+
     AnimatedContent(
-        targetState = showOnboarding,
-        transitionSpec = { fadeIn(tween(450)) togetherWith fadeOut(tween(350)) },
-        label = "splashOnboard"
-    ) { onboard ->
-        if (onboard) {
-            AnimatedContent(
+        targetState = stage,
+        transitionSpec = { fadeIn(tween(420, easing = LinearOutSlowInEasing)) togetherWith fadeOut(tween(300)) },
+        label = "appStage"
+    ) { current ->
+        when (current) {
+            Stage.Splash -> VideoSplash(onFinished = { showSplash = false })
+            Stage.Onboarding -> AnimatedContent(
                 targetState = onboardingPage,
                 modifier = Modifier.fillMaxSize(),
-                transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(400)) },
+                transitionSpec = {
+                    (fadeIn(tween(380, delayMillis = 80)) + slideInHorizontally(tween(380)) { it / 8 })
+                        .togetherWith(fadeOut(tween(200)) + slideOutHorizontally(tween(300)) { -it / 8 })
+                },
                 label = "onboardPages"
             ) { page ->
                 OnboardingPage(
@@ -157,9 +181,111 @@ private fun ParkedApp(
                     }
                 )
             }
-        } else {
-            MainContent(fuel = fuel, store = store, pendingAction = pendingAction, onActionHandled = onActionHandled)
+            Stage.Main -> MainContent(fuel = fuel, store = store, pendingAction = pendingAction, onActionHandled = onActionHandled)
         }
+    }
+}
+
+private enum class Stage { Splash, Onboarding, Main }
+
+// ============================================================
+// Splash video
+// ============================================================
+
+/**
+ * Plays res/raw/onboarding_car.mp4 once, full screen. Uses a TextureView: a
+ * VideoView draws on a surface behind the window, where the screen's own
+ * background hid it completely. Tap anywhere to skip.
+ */
+@Composable
+private fun VideoSplash(onFinished: () -> Unit) {
+    val finish by rememberUpdatedState(onFinished)
+    var done by remember { mutableStateOf(false) }
+    val end: () -> Unit = {
+        if (!done) {
+            done = true
+            finish()
+        }
+    }
+    // Never get stuck here if the video can't play.
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(6_000L)
+        end()
+    }
+    val skipLabel = stringResource(R.string.splash_skip)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(OliveDark)
+            .clickable(role = Role.Button, onClickLabel = skipLabel) { end() }
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { ctx -> SplashVideoView(ctx, onEnd = { end() }) },
+            onRelease = { it.release() }
+        )
+    }
+}
+
+private class SplashVideoView(context: Context, private val onEnd: () -> Unit) : TextureView(context),
+    TextureView.SurfaceTextureListener {
+    private var player: MediaPlayer? = null
+    private var surface: Surface? = null
+    private var videoWidth = 0
+    private var videoHeight = 0
+
+    init {
+        surfaceTextureListener = this
+        isOpaque = false
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
+        val s = Surface(texture).also { surface = it }
+        runCatching {
+            player = MediaPlayer().apply {
+                setDataSource(context, Uri.parse("android.resource://${context.packageName}/${R.raw.onboarding_car}"))
+                setSurface(s)
+                setVolume(0f, 0f)
+                isLooping = false
+                setOnPreparedListener { mp ->
+                    videoWidth = mp.videoWidth
+                    videoHeight = mp.videoHeight
+                    applyCenterCrop()
+                    mp.start()
+                }
+                setOnCompletionListener { onEnd() }
+                setOnErrorListener { _, _, _ -> onEnd(); true }
+                prepareAsync()
+            }
+        }.onFailure { onEnd() }
+    }
+
+    override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) = applyCenterCrop()
+
+    override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
+        release()
+        return true
+    }
+
+    override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
+
+    /** Fill the screen without stretching: scale up and crop the overflow. */
+    private fun applyCenterCrop() {
+        if (videoWidth == 0 || videoHeight == 0 || width == 0 || height == 0) return
+        val viewW = width.toFloat()
+        val viewH = height.toFloat()
+        val scale = maxOf(viewW / videoWidth, viewH / videoHeight)
+        val sx = videoWidth * scale / viewW
+        val sy = videoHeight * scale / viewH
+        setTransform(Matrix().apply { setScale(sx, sy, viewW / 2f, viewH / 2f) })
+    }
+
+    fun release() {
+        runCatching { player?.release() }
+        player = null
+        runCatching { surface?.release() }
+        surface = null
     }
 }
 
@@ -182,87 +308,67 @@ private fun OnboardingPage(page: Int, onNext: () -> Unit) {
             .clickable(role = Role.Button, onClickLabel = action) { onNext() }
     ) {
         if (page == 0) {
-            OnboardingLogoVideo(Modifier.fillMaxSize())
+            // The splash video has just played; show its final logo still.
+            Image(
+                painter = painterResource(R.drawable.ic_parked_logo),
+                contentDescription = null,
+                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 72.dp).size(240.dp),
+                contentScale = ContentScale.Fit
+            )
         } else {
             Image(
                 painter = painterResource(R.drawable.splash_lime),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.FillBounds
+                contentScale = ContentScale.Crop
             )
         }
 
-        Column(
-            Modifier
+        // On the patterned page the text sits on a solid lime panel, so the cars
+        // in the wallpaper never run behind the words.
+        Surface(
+            color = if (page == 0) Color.Transparent else LimeBright,
+            shape = RoundedCornerShape(28.dp),
+            modifier = Modifier
                 .align(if (page == 0) Alignment.BottomCenter else Alignment.Center)
-                .then(if (page == 1) Modifier.offset(y = 72.dp) else Modifier)
                 .navigationBarsPadding()
-                .padding(horizontal = 34.dp, vertical = if (page == 0) 42.dp else 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(horizontal = 20.dp, vertical = if (page == 0) 42.dp else 24.dp)
         ) {
-            Text(
-                stringResource(R.string.app_name),
-                fontSize = 46.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = fg,
-                letterSpacing = (-1.5).sp
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                headline,
-                fontSize = 25.sp,
-                lineHeight = 31.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = fg,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.widthIn(max = 330.dp)
-            )
-            Spacer(Modifier.height(10.dp))
-            Text(
-                body,
-                fontSize = 15.sp,
-                lineHeight = 22.sp,
-                color = fg,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.widthIn(max = 330.dp)
-            )
-            Spacer(Modifier.height(22.dp))
-            Text(action, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg)
-        }
-    }
-}
-
-@Composable
-private fun OnboardingLogoVideo(modifier: Modifier = Modifier) {
-    val motionEnabled = remember { ValueAnimator.areAnimatorsEnabled() }
-    if (!motionEnabled) {
-        Box(modifier.background(OliveDark), contentAlignment = Alignment.TopCenter) {
-            Image(
-                painter = painterResource(R.drawable.ic_parked_logo),
-                contentDescription = null,
-                modifier = Modifier.padding(top = 120.dp).size(250.dp),
-                contentScale = ContentScale.Fit
-            )
-        }
-        return
-    }
-    AndroidView(
-        modifier = modifier.background(OliveDark),
-        factory = { ctx ->
-            VideoView(ctx).apply {
-                setBackgroundColor(android.graphics.Color.rgb(43, 74, 35))
-                isClickable = false
-                isFocusable = false
-                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                setOnPreparedListener { player ->
-                    player.isLooping = false
-                    player.setVolume(0f, 0f)
-                    start()
-                }
-                setVideoURI(Uri.parse("android.resource://${ctx.packageName}/${R.raw.onboarding_car}"))
+            Column(
+                Modifier.padding(horizontal = 18.dp, vertical = if (page == 0) 0.dp else 26.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    stringResource(R.string.app_name),
+                    fontSize = 46.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = fg,
+                    letterSpacing = (-1.5).sp
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    headline,
+                    fontSize = 25.sp,
+                    lineHeight = 31.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = fg,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.widthIn(max = 330.dp)
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    body,
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                    color = fg,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.widthIn(max = 330.dp)
+                )
+                Spacer(Modifier.height(22.dp))
+                Text(action, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = fg)
             }
         }
-    )
+    }
 }
 
 // ============================================================
@@ -394,9 +500,12 @@ private fun MainContent(
             AnimatedContent(
                 targetState = tab,
                 modifier = Modifier.fillMaxSize(),
+                // Material "fade through": the old tab fades out quickly, the new one
+                // fades and settles in, so switching feels calm rather than jumpy.
                 transitionSpec = {
-                    (slideInVertically(tween(260)) { it / 14 } + fadeIn(tween(220)))
-                        .togetherWith(slideOutVertically(tween(220)) { -it / 14 } + fadeOut(tween(180)))
+                    (fadeIn(tween(220, delayMillis = 70, easing = LinearOutSlowInEasing)) +
+                        scaleIn(tween(220, delayMillis = 70, easing = LinearOutSlowInEasing), initialScale = 0.97f))
+                        .togetherWith(fadeOut(tween(90, easing = FastOutLinearInEasing)))
                 },
                 label = "tabContent"
             ) { t ->
