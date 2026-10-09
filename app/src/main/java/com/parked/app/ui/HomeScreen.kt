@@ -111,6 +111,7 @@ fun HomeScreen(
     var autoParkTipDismissedFor by remember { mutableLongStateOf(uiPrefs.getLong("autopark_tip_dismissed_for", -1L)) }
 
     val msgSaved = stringResource(R.string.spot_saved)
+    val msgPhotoSaved = stringResource(R.string.photo_saved)
     val msgUndo = stringResource(R.string.undo)
     val msgLocationOff = stringResource(R.string.turn_on_location)
     val msgNoFix = stringResource(R.string.error_no_location)
@@ -125,7 +126,11 @@ fun HomeScreen(
         photoTarget = null
         val file = path?.let(::File)
         if (ok && file != null && file.length() > 0) {
-            appScope.launch { store.setPhotoPath(file.absolutePath) }
+            appScope.launch {
+                store.setPhotoPath(file.absolutePath)
+                snackbar.currentSnackbarData?.dismiss()
+                snackbar.showSnackbar(msgPhotoSaved)
+            }
             showPhoto = true
         } else {
             file?.delete()
@@ -696,7 +701,19 @@ private fun NoteSheet(initial: String, onDismiss: () -> Unit, onSave: (String?) 
             onValueChange = { text = it.take(140) },
             label = { Text(stringResource(R.string.note_label)) },
             placeholder = { Text(stringResource(R.string.note_placeholder), color = TextSecondary) },
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Sentences,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Done
+            ),
+            // The keyboard often covered the Save button, so the keyboard's
+            // Done key and the tick in the field both save as well.
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onSave(text) }),
+            trailingIcon = {
+                IconButton(onClick = { onSave(text) }) {
+                    Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.save_note), tint = OliveDark)
+                }
+            },
             supportingText = { Text("${text.length}/140") },
             modifier = Modifier.fillMaxWidth()
         )

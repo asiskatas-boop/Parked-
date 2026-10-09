@@ -142,8 +142,8 @@
     <string name="fuel_at_a_glance">At a glance</string>
     <string name="fuel_range">Approx. range</string>
     <string name="fuel_average">Average</string>
-    <string name="fuel_insights_title">Fuel insights</string>
-    <string name="fuel_insights_body">After two full-tank refuels with odometer readings, Parked! can calculate your average consumption and an approximate range.</string>
+    <string name="fuel_insights_title">Average consumption and range</string>
+    <string name="fuel_insights_body">These appear here after two full-tank refuels with odometer readings.</string>
 
     <string name="spend_title">Fuel spending</string>
     <string name="spend_month_summary">%1$s: %2$s · %3$s L</string>
@@ -309,4 +309,5 @@
     <string name="error_odometer_full">Add the odometer reading. A full tank without it can\'t be used for your average.</string>
     <string name="photo_load_failed">Couldn\'t open the photo.</string>
     <string name="cd_has_content">saved</string>
+    <string name="photo_saved">Photo saved</string>
 </resources>

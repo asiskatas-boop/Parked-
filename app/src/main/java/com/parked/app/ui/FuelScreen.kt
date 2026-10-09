@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -173,8 +174,9 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             SectionTitle(stringResource(R.string.fuel_at_a_glance))
+            if (averageConsumption != null && rangeFromCurrentLevel != null) {
             Surface(shape = RoundedCornerShape(18.dp), color = SurfaceTint, modifier = Modifier.fillMaxWidth()) {
-                if (averageConsumption != null && rangeFromCurrentLevel != null) {
+                run {
                     Row(
                         Modifier.padding(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -184,9 +186,19 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
                         Box(Modifier.width(1.dp).height(42.dp).background(Hairline))
                         FuelStat(stringResource(R.string.fuel_average), "${formatDecimal(averageConsumption, 1)} L/100 km", Modifier.weight(1f))
                     }
-                } else {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 15.dp)) {
-                        Text(stringResource(R.string.fuel_insights_title), fontSize = TypeScale.Body, fontWeight = FontWeight.Bold, color = NearBlack)
+                }
+            }
+            if (averageConsumption == null || rangeFromCurrentLevel == null) {
+                // Information only, so it is plain text with an info icon, not a
+                // filled card that looks tappable.
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
+                    Icon(
+                        Icons.Outlined.Info, contentDescription = null, tint = TextSecondary,
+                        modifier = Modifier.padding(top = 2.dp).size(18.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.fuel_insights_title), fontSize = TypeScale.Label, fontWeight = FontWeight.SemiBold, color = NearBlack)
                         Spacer(Modifier.height(4.dp))
                         Text(stringResource(R.string.fuel_insights_body), fontSize = TypeScale.Supporting, lineHeight = 18.sp, color = TextSecondary)
                     }

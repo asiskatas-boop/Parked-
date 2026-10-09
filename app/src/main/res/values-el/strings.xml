@@ -140,8 +140,8 @@
     <string name="fuel_at_a_glance">Με μια ματιά</string>
     <string name="fuel_range">Αυτονομία (περίπου)</string>
     <string name="fuel_average">Μέση κατανάλωση</string>
-    <string name="fuel_insights_title">Στοιχεία καυσίμου</string>
-    <string name="fuel_insights_body">Μετά από δύο γεμίσματα με ενδείξεις χιλιομετρητή, το Parked! μπορεί να υπολογίσει τη μέση κατανάλωση και μια εκτίμηση αυτονομίας.</string>
+    <string name="fuel_insights_title">Μέση κατανάλωση και αυτονομία</string>
+    <string name="fuel_insights_body">Θα εμφανιστούν εδώ μετά από δύο γεμίσματα ρεζερβουάρ με ένδειξη χιλιομετρητή.</string>
 
     <string name="spend_title">Έξοδα καυσίμων</string>
     <string name="spend_month_summary">%1$s: %2$s · %3$s L</string>
@@ -307,4 +307,5 @@
     <string name="error_odometer_full">Πρόσθεσε την ένδειξη χιλιομετρητή. Χωρίς αυτήν, το γέμισμα δεν μετρά στη μέση κατανάλωση.</string>
     <string name="photo_load_failed">Δεν ήταν δυνατό να ανοίξει η φωτογραφία.</string>
     <string name="cd_has_content">αποθηκευμένο</string>
+    <string name="photo_saved">Η φωτογραφία αποθηκεύτηκε</string>
 </resources>
