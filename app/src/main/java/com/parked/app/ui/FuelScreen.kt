@@ -175,8 +175,7 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
         ) {
             SectionTitle(stringResource(R.string.fuel_at_a_glance))
             if (averageConsumption != null && rangeFromCurrentLevel != null) {
-            Surface(shape = RoundedCornerShape(18.dp), color = SurfaceTint, modifier = Modifier.fillMaxWidth()) {
-                run {
+                Surface(shape = RoundedCornerShape(18.dp), color = SurfaceTint, modifier = Modifier.fillMaxWidth()) {
                     Row(
                         Modifier.padding(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -187,8 +186,7 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
                         FuelStat(stringResource(R.string.fuel_average), "${formatDecimal(averageConsumption, 1)} L/100 km", Modifier.weight(1f))
                     }
                 }
-            }
-            if (averageConsumption == null || rangeFromCurrentLevel == null) {
+            } else {
                 // Information only, so it is plain text with an info icon, not a
                 // filled card that looks tappable.
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
