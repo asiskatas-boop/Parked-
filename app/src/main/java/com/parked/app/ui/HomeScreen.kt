@@ -496,6 +496,7 @@ private fun SpotCell(
     active: Boolean,
     modifier: Modifier,
     labelColor: Color = Paper,
+    detail: String? = null,
     onClick: () -> Unit,
 ) {
     val saved = stringResource(R.string.cd_has_content)
@@ -509,10 +510,17 @@ private fun SpotCell(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Icon(icon, contentDescription = null, tint = if (active) Accent else Paper, modifier = Modifier.size(24.dp))
-        Text(label, fontSize = TypeScale.Label, lineHeight = 20.sp, color = labelColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Column {
+            Text(label, fontSize = TypeScale.Label, lineHeight = 20.sp, color = labelColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (detail != null) Text(detail, fontSize = TypeScale.Caption, lineHeight = 18.sp, color = labelColor.takeIf { it != Paper } ?: Muted)
+        }
     }
 }
 
+/**
+ * Parking time: the end time and the time left. It turns amber in the last
+ * ParkingTimer.WARNING_MINUTES and after the end, as before.
+ */
 @Composable
 private fun TimerCell(endsAt: Long?, modifier: Modifier, onClick: () -> Unit) {
     val context = LocalContext.current
@@ -523,17 +531,25 @@ private fun TimerCell(endsAt: Long?, modifier: Modifier, onClick: () -> Unit) {
             delay(15_000L)
         }
     }
-    val expired = endsAt != null && endsAt <= now
+    val minutesLeft = endsAt?.let { kotlin.math.ceil((it - now) / 60_000.0).toInt() }
+    val expired = minutesLeft != null && minutesLeft <= 0
+    val warn = minutesLeft != null && minutesLeft <= ParkingTimer.WARNING_MINUTES
     val label = when {
         endsAt == null -> stringResource(R.string.chip_timer)
         expired -> stringResource(R.string.timer_short_ended, clockTime(context, endsAt))
         else -> stringResource(R.string.timer_short_ends, clockTime(context, endsAt))
     }
+    val detail = if (minutesLeft != null && !expired) {
+        val left = if (minutesLeft >= 60) stringResource(R.string.duration_hm, minutesLeft / 60, minutesLeft % 60)
+        else stringResource(R.string.duration_m, minutesLeft)
+        stringResource(R.string.timer_left, left)
+    } else null
     SpotCell(
         icon = Ph.timer,
         label = label,
+        detail = detail,
         active = endsAt != null,
-        labelColor = if (expired) Warn else Paper,
+        labelColor = if (warn) Warn else Paper,
         modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
         onClick = onClick
     )

@@ -130,7 +130,8 @@ fun PrimaryButton(
                 Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(12.dp))
             }
-            Text(text, fontSize = TypeScale.Emphasis, fontWeight = FontWeight.Medium)
+            // weight(fill = false) keeps the arrow visible when a long label wraps.
+            Text(text, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
             Spacer(Modifier.width(10.dp))
             AccentArrow()
         }
@@ -180,7 +181,7 @@ fun LinkButton(
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, fontSize = TypeScale.Emphasis, color = color)
+        Text(text, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = color, modifier = Modifier.weight(1f, fill = false))
         Spacer(Modifier.width(10.dp))
         AccentArrow(icon = icon ?: Ph.arrowRight)
     }

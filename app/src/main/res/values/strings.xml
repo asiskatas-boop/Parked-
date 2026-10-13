@@ -299,4 +299,6 @@
     <string name="home_distance">%1$s · %2$d min</string>
     <string name="timer_short_ends">Ends %1$s</string>
     <string name="timer_short_ended">Ended %1$s</string>
+    <string name="duration_hm">%1$d h %2$d min</string>
+    <string name="timer_left">%1$s left</string>
 </resources>

@@ -26,6 +26,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
@@ -305,14 +307,18 @@ private class SplashVideoView(
 @Composable
 private fun OnboardingPage(onNext: (setUpAutoPark: Boolean) -> Unit) {
     val context = LocalContext.current
+    // Scrolls when large text or a short screen doesn't fit; otherwise the
+    // title sits at the top and the actions at the bottom.
+    BoxWithConstraints(Modifier.fillMaxSize().background(Ink).systemBarsPadding()) {
     Column(
         Modifier
-            .fillMaxSize()
-            .background(Ink)
-            .systemBarsPadding()
-            .padding(start = 24.dp, end = 24.dp, top = 48.dp, bottom = 32.dp)
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .heightIn(min = maxHeight)
+            .padding(start = 24.dp, end = 24.dp, top = 48.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+        Column(Modifier.padding(top = 24.dp, bottom = 48.dp)) {
             Text(
                 stringResource(R.string.intro_title),
                 fontSize = TypeScale.Display,
@@ -329,6 +335,7 @@ private fun OnboardingPage(onNext: (setUpAutoPark: Boolean) -> Unit) {
                 letterSpacing = (-1).sp,
             )
         }
+        Column {
         Text(
             stringResource(R.string.intro_body),
             fontSize = TypeScale.Emphasis,
@@ -349,6 +356,8 @@ private fun OnboardingPage(onNext: (setUpAutoPark: Boolean) -> Unit) {
         PrimaryButton(stringResource(R.string.onboarding_setup_autopark)) { onNext(true) }
         Spacer(Modifier.height(8.dp))
         LinkButton(stringResource(R.string.onboarding_later)) { onNext(false) }
+        }
+    }
     }
 }
 

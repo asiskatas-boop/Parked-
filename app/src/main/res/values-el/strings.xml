@@ -296,4 +296,6 @@
     <string name="home_distance">%1$s · %2$d λεπτά</string>
     <string name="timer_short_ends">Λήγει %1$s</string>
     <string name="timer_short_ended">Έληξε %1$s</string>
+    <string name="duration_hm">%1$d ώρ. %2$d λεπτά</string>
+    <string name="timer_left">απομένουν %1$s</string>
 </resources>
