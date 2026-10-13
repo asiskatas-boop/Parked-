@@ -23,36 +23,27 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.LocalGasStation
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.LocalGasStation
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -133,7 +124,6 @@ private fun ParkedApp(
     val context = LocalContext.current
     val uiPrefs = remember { context.getSharedPreferences("parked_ui", Context.MODE_PRIVATE) }
     var showOnboarding by remember { mutableStateOf(!uiPrefs.getBoolean("onboarding_done", false)) }
-    var onboardingPage by remember { mutableIntStateOf(0) }
     // Actions raised inside the app (e.g. "Set up AutoPark" at the end of onboarding).
     var internalAction by remember { mutableStateOf<AppAction?>(null) }
 
@@ -172,27 +162,13 @@ private fun ParkedApp(
                     showSplash = false
                 }
             )
-            Stage.Onboarding -> AnimatedContent(
-                targetState = onboardingPage,
-                modifier = Modifier.fillMaxSize(),
-                transitionSpec = {
-                    (fadeIn(tween(380, delayMillis = 80)) + slideInHorizontally(tween(380)) { it / 8 })
-                        .togetherWith(fadeOut(tween(200)) + slideOutHorizontally(tween(300)) { -it / 8 })
-                },
-                label = "onboardPages"
-            ) { page ->
-                OnboardingPage(
-                    page = page,
-                    onNext = { setUp ->
-                        if (page == 0) onboardingPage = 1
-                        else {
-                            uiPrefs.edit().putBoolean("onboarding_done", true).apply()
-                            if (setUp) internalAction = AppAction.SetUpAutoPark
-                            showOnboarding = false
-                        }
-                    }
-                )
-            }
+            Stage.Onboarding -> OnboardingPage(
+                onNext = { setUp ->
+                    uiPrefs.edit().putBoolean("onboarding_done", true).apply()
+                    if (setUp) internalAction = AppAction.SetUpAutoPark
+                    showOnboarding = false
+                }
+            )
             Stage.Main -> MainContent(
                 fuel = fuel,
                 store = store,
@@ -233,7 +209,7 @@ private fun VideoSplash(fast: Boolean, onFinished: () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(OliveDark)
+            .background(Ink)
             .clickable(role = Role.Button, onClickLabel = skipLabel) { end() }
     ) {
         AndroidView(
@@ -244,8 +220,7 @@ private fun VideoSplash(fast: Boolean, onFinished: () -> Unit) {
         Text(
             skipLabel,
             fontSize = TypeScale.Supporting,
-            fontWeight = FontWeight.SemiBold,
-            color = White.copy(alpha = 0.85f),
+            color = Muted,
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 32.dp)
         )
     }
@@ -319,100 +294,76 @@ private class SplashVideoView(
 }
 
 // ============================================================
-// Onboarding
+// Intro
 // ============================================================
 
+/**
+ * One black intro screen: the name, what the app does, and the choice to set
+ * up AutoPark now or later. The language row opens Android's per-app language
+ * setting, which exists from Android 13.
+ */
 @Composable
-private fun OnboardingPage(page: Int, onNext: (setUpAutoPark: Boolean) -> Unit) {
-    val bg = if (page == 0) OliveDark else LimeBright
-    val fg = if (page == 0) White else OliveDark
-    val headline = stringResource(if (page == 0) R.string.onboarding_1_title else R.string.onboarding_2_title)
-    val body = stringResource(if (page == 0) R.string.onboarding_1_body else R.string.onboarding_2_body)
-    val action = stringResource(if (page == 0) R.string.onboarding_continue else R.string.onboarding_start)
-
-    Box(
+private fun OnboardingPage(onNext: (setUpAutoPark: Boolean) -> Unit) {
+    val context = LocalContext.current
+    Column(
         Modifier
             .fillMaxSize()
-            .background(bg)
-            // The first page is a tap-anywhere intro; the second has real buttons.
-            .then(if (page == 0) Modifier.clickable(role = Role.Button, onClickLabel = action) { onNext(false) } else Modifier)
+            .background(Ink)
+            .systemBarsPadding()
+            .padding(start = 24.dp, end = 24.dp, top = 48.dp, bottom = 32.dp)
     ) {
-        if (page == 0) {
-            // The splash video has just played; show its final logo still.
-            Image(
-                painter = painterResource(R.drawable.ic_parked_logo),
-                contentDescription = null,
-                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 72.dp).size(240.dp),
-                contentScale = ContentScale.Fit
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Text(
+                stringResource(R.string.intro_title),
+                fontSize = TypeScale.Display,
+                lineHeight = TypeScale.Display * 1.05f,
+                color = Paper,
+                letterSpacing = (-1).sp,
+                modifier = Modifier.semantics { heading() }
             )
-        } else {
-            Image(
-                painter = painterResource(R.drawable.splash_lime),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+            Text(
+                stringResource(R.string.intro_tagline),
+                fontSize = TypeScale.Display,
+                lineHeight = TypeScale.Display * 1.05f,
+                color = Accent,
+                letterSpacing = (-1).sp,
             )
         }
+        Text(
+            stringResource(R.string.intro_body),
+            fontSize = TypeScale.Emphasis,
+            lineHeight = 26.sp,
+            color = Paper,
+            modifier = Modifier.widthIn(max = 320.dp).padding(bottom = 24.dp)
+        )
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            DividerRow()
+            TextRow(
+                label = stringResource(R.string.intro_language),
+                value = currentLanguageName(context),
+                onClick = { openAppLanguageSettings(context) }
+            )
+            DividerRow()
+            Spacer(Modifier.height(16.dp))
+        }
+        PrimaryButton(stringResource(R.string.onboarding_setup_autopark)) { onNext(true) }
+        Spacer(Modifier.height(8.dp))
+        LinkButton(stringResource(R.string.onboarding_later)) { onNext(false) }
+    }
+}
 
-        // On the patterned page the text sits on a solid lime panel, so the cars
-        // in the wallpaper never run behind the words.
-        Surface(
-            color = if (page == 0) Color.Transparent else LimeBright,
-            shape = RoundedCornerShape(28.dp),
-            modifier = Modifier
-                .align(if (page == 0) Alignment.BottomCenter else Alignment.Center)
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = if (page == 0) 42.dp else 24.dp)
-        ) {
-            Column(
-                Modifier.padding(horizontal = 18.dp, vertical = if (page == 0) 0.dp else 26.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    stringResource(R.string.app_name),
-                    fontSize = TypeScale.Display,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = fg,
-                    letterSpacing = (-1.5).sp
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    headline,
-                    fontSize = TypeScale.PageTitle,
-                    lineHeight = 31.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = fg,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.widthIn(max = 330.dp)
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    body,
-                    fontSize = TypeScale.Body,
-                    lineHeight = 22.sp,
-                    color = fg,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.widthIn(max = 330.dp)
-                )
-                Spacer(Modifier.height(24.dp))
-                if (page == 0) {
-                    Text(action, fontSize = TypeScale.Label, fontWeight = FontWeight.Bold, color = fg)
-                } else {
-                    // The page explains AutoPark, so let people set it up right here.
-                    Button(
-                        onClick = { onNext(true) },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = OliveDark, contentColor = White),
-                    ) {
-                        Text(stringResource(R.string.onboarding_setup_autopark), fontSize = TypeScale.Body, fontWeight = FontWeight.Bold)
-                    }
-                    TextButton(onClick = { onNext(false) }, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text(stringResource(R.string.onboarding_later), fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = OliveDark)
-                    }
-                }
-            }
-        }
+private fun currentLanguageName(context: Context): String {
+    val locale = context.resources.configuration.locales[0]
+    return locale.getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) }
+}
+
+internal fun openAppLanguageSettings(context: Context) {
+    if (android.os.Build.VERSION.SDK_INT < 33) return
+    runCatching {
+        context.startActivity(
+            android.content.Intent(android.provider.Settings.ACTION_APP_LOCALE_SETTINGS)
+                .setData(Uri.fromParts("package", context.packageName, null))
+        )
     }
 }
 
@@ -420,10 +371,10 @@ private fun OnboardingPage(page: Int, onNext: (setUpAutoPark: Boolean) -> Unit) 
 // Tabs
 // ============================================================
 
-enum class AppTab(val labelRes: Int, val filled: ImageVector, val outlined: ImageVector) {
-    Home(R.string.tab_home, Icons.Filled.Home, Icons.Outlined.Home),
-    Fuel(R.string.tab_fuel, Icons.Filled.LocalGasStation, Icons.Outlined.LocalGasStation),
-    Settings(R.string.tab_settings, Icons.Filled.Settings, Icons.Outlined.Settings),
+enum class AppTab(val labelRes: Int, val icon: Int) {
+    Home(R.string.tab_home, R.drawable.ph_squares_four),
+    Fuel(R.string.tab_fuel, R.drawable.ph_gas_pump),
+    Settings(R.string.tab_settings, R.drawable.ph_sliders),
 }
 
 /** The phone's live position while Home is visible. */
@@ -529,17 +480,17 @@ private fun MainContent(
     }
 
     Scaffold(
-        containerColor = White,
+        containerColor = Ink,
         contentWindowInsets = WindowInsets(0),
         snackbarHost = {
             SnackbarHost(snackbar) { data ->
                 Snackbar(
                     snackbarData = data,
-                    containerColor = NearBlack,
-                    contentColor = White,
-                    actionColor = LimeBright,
-                    dismissActionContentColor = White,
-                    shape = RoundedCornerShape(14.dp),
+                    containerColor = Panel,
+                    contentColor = Paper,
+                    actionColor = Accent,
+                    dismissActionContentColor = Paper,
+                    shape = RectangleShape,
                 )
             }
         },
@@ -594,52 +545,41 @@ private fun MainContent(
     }
 }
 
+/**
+ * Icon-only tab bar, as in the reference: no labels, no border, the active
+ * tab in orange. Each tab still announces its name to screen readers.
+ */
 @Composable
 private fun BottomNav(tab: AppTab, onChange: (AppTab) -> Unit) {
-    Surface(color = White, shadowElevation = 8.dp) {
-        Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().height(72.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            AppTab.entries.forEach { t ->
-                val selected = tab == t
-                val bg by androidx.compose.animation.animateColorAsState(
-                    if (selected) OliveDark else Color.Transparent, tween(220), label = "tabBg"
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Ink)
+            .navigationBarsPadding()
+            .height(72.dp)
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.SpaceAround,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AppTab.entries.forEach { t ->
+            val selected = tab == t
+            val tint by androidx.compose.animation.animateColorAsState(
+                if (selected) Accent else Paper, tween(200), label = "tabTint"
+            )
+            val label = stringResource(t.labelRes)
+            Box(
+                Modifier
+                    .size(width = 72.dp, height = 56.dp)
+                    .selectable(selected = selected, role = Role.Tab) { onChange(t) }
+                    .semantics { contentDescription = label },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    ImageVector.vectorResource(t.icon),
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier.size(28.dp)
                 )
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clickable(role = Role.Tab) { onChange(t) }
-                        .semantics { this.selected = selected },
-                    contentAlignment = Alignment.BottomCenter
-                ) {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(64.dp)
-                            .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-                            .background(bg),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            if (selected) t.filled else t.outlined,
-                            contentDescription = null,
-                            tint = if (selected) LimeBright else GrayIcon,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        // Labels: the icons alone didn't say what each tab holds.
-                        Text(
-                            stringResource(t.labelRes),
-                            fontSize = TypeScale.Caption,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selected) White else GrayIcon,
-                            maxLines = 1
-                        )
-                    }
-                }
             }
         }
     }

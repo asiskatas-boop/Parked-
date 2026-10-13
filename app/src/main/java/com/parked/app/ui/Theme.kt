@@ -1,110 +1,138 @@
+@file:OptIn(ExperimentalTextApi::class)
+
 package com.parked.app.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.parked.app.R
 
-// Brand
-val OliveDark = Color(0xFF2B4A23)
-val OliveMid = Color(0xFF4E8F27)
-val LimeBright = Color(0xFF6EC436)
-
-/** End colour of the header gradient; white text on it measures 5.2:1. */
-val HeaderEnd = Color(0xFF3F7A22)
-
-// Neutrals
-val White = Color(0xFFFFFFFF)
-val NearBlack = Color(0xFF08090B)
-val SurfaceTint = Color(0xFFF5F7F3)
-val SurfaceSelected = Color(0xFFE8F3E0)
-val Hairline = Color(0xFFDDE2D9)
-val GrayIcon = Color(0xFF4D4D4D)
-
-/**
- * Secondary text. The previous #909090 measured 3.2:1 on white, below the
- * WCAG AA minimum of 4.5:1 for body-size text; this measures 5.1:1.
+/*
+ * 0.4 design: dark only, one accent. Contrast on Ink (#000000):
+ * Paper 21:1, Muted 7.4:1, Accent 7.0:1, Danger 7.6:1, Warn 12:1.
+ * Black text on Accent (the active switch track) is 3:1; it carries no text.
  */
-val TextSecondary = Color(0xFF6B6F68)
 
-// Status
-val ErrorRed = Color(0xFFB91C1C)
-val WarnAmber = Color(0xFF8A5A00)
+/** Page background. */
+val Ink = Color(0xFF000000)
+
+/** Raised panels: the car panel, sheets, dialogs, the tab bar. */
+val Panel = Color(0xFF1A1A1A)
+
+/** Input fields and pressed rows. */
+val Field = Color(0xFF262626)
+
+/** Hairline dividers and field outlines. */
+val Line = Color(0xFF333333)
+
+/** Primary text and the primary button. */
+val Paper = Color(0xFFFFFFFF)
+
+/** Secondary text. 7.4:1 on Ink, 6.2:1 on Panel. */
+val Muted = Color(0xFF9A9A9A)
+
+/** The single accent: arrows, active tab, distance, progress, switches. */
+val Accent = Color(0xFFFF7500)
+
+/** Errors and destructive actions. */
+val Danger = Color(0xFFFF6B5E)
+
+/** Warnings such as a due service. */
+val Warn = Color(0xFFFFC14D)
 
 /**
- * Type scale. Every text size in the app comes from here, so screens stay
- * consistent: 12 caption, 13 supporting, 14 label, 15 body, 17 emphasis,
- * 18 section, 22 sheet title, 26 page title, 30 big number, 46 display.
+ * Type scale. Every text size comes from here. Body copy is 15-17 sp with a
+ * line height of at least 1.5; headings are large and light, as in the
+ * reference.
  */
 object TypeScale {
-    val Caption = 12.sp
-    val Supporting = 13.sp
-    val Label = 14.sp
-    val Body = 15.sp
+    val Caption = 13.sp
+    val Supporting = 14.sp
+    val Label = 15.sp
+    val Body = 16.sp
     val Emphasis = 17.sp
-    val Section = 18.sp
-    val SheetTitle = 22.sp
-    val PageTitle = 26.sp
-    val BigNumber = 30.sp
-    val Display = 46.sp
+    val Section = 20.sp
+    val SheetTitle = 26.sp
+    val PageTitle = 34.sp
+    val Hero = 40.sp
+    val BigNumber = 56.sp
+    val Display = 60.sp
 }
 
-val InterFamily = FontFamily(
-    Font(R.font.inter_regular, FontWeight.Normal),
-    Font(R.font.inter_medium, FontWeight.Medium),
-    Font(R.font.inter_semibold, FontWeight.SemiBold),
-    Font(R.font.inter_bold, FontWeight.Bold),
-    Font(R.font.inter_extrabold, FontWeight.ExtraBold),
+/** Sofia Sans, one variable file with a 1-1000 weight axis and full Greek. */
+private fun sofia(weight: FontWeight) = Font(
+    R.font.sofia_sans,
+    weight,
+    variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
 )
 
-private fun interTypography(): Typography {
+val SofiaSans = FontFamily(
+    sofia(FontWeight.Light),
+    sofia(FontWeight.Normal),
+    sofia(FontWeight.Medium),
+    sofia(FontWeight.SemiBold),
+    sofia(FontWeight.Bold),
+)
+
+private fun sofiaTypography(): Typography {
     val base = Typography()
+    fun TextStyle.s() = copy(fontFamily = SofiaSans)
     return base.copy(
-        displayLarge = base.displayLarge.copy(fontFamily = InterFamily),
-        displayMedium = base.displayMedium.copy(fontFamily = InterFamily),
-        displaySmall = base.displaySmall.copy(fontFamily = InterFamily),
-        headlineLarge = base.headlineLarge.copy(fontFamily = InterFamily),
-        headlineMedium = base.headlineMedium.copy(fontFamily = InterFamily),
-        headlineSmall = base.headlineSmall.copy(fontFamily = InterFamily),
-        titleLarge = base.titleLarge.copy(fontFamily = InterFamily),
-        titleMedium = base.titleMedium.copy(fontFamily = InterFamily),
-        titleSmall = base.titleSmall.copy(fontFamily = InterFamily),
-        bodyLarge = base.bodyLarge.copy(fontFamily = InterFamily),
-        bodyMedium = base.bodyMedium.copy(fontFamily = InterFamily),
-        bodySmall = base.bodySmall.copy(fontFamily = InterFamily),
-        labelLarge = base.labelLarge.copy(fontFamily = InterFamily),
-        labelMedium = base.labelMedium.copy(fontFamily = InterFamily),
-        labelSmall = base.labelSmall.copy(fontFamily = InterFamily),
+        displayLarge = base.displayLarge.s(),
+        displayMedium = base.displayMedium.s(),
+        displaySmall = base.displaySmall.s(),
+        headlineLarge = base.headlineLarge.s(),
+        headlineMedium = base.headlineMedium.s(),
+        headlineSmall = base.headlineSmall.s(),
+        titleLarge = base.titleLarge.s(),
+        titleMedium = base.titleMedium.s(),
+        titleSmall = base.titleSmall.s(),
+        bodyLarge = base.bodyLarge.s(),
+        bodyMedium = base.bodyMedium.s(),
+        bodySmall = base.bodySmall.s(),
+        labelLarge = base.labelLarge.s(),
+        labelMedium = base.labelMedium.s(),
+        labelSmall = base.labelSmall.s(),
     )
 }
 
 @Composable
 fun ParkedTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = lightColorScheme(
-            primary = OliveDark,
-            onPrimary = White,
-            secondary = LimeBright,
-            onSecondary = NearBlack,
-            background = White,
-            onBackground = NearBlack,
-            surface = White,
-            onSurface = NearBlack,
-            surfaceVariant = Color(0xFFF5F5F5),
-            onSurfaceVariant = TextSecondary,
-            surfaceContainerLow = White,
-            inverseSurface = NearBlack,
-            inverseOnSurface = White,
-            inversePrimary = LimeBright,
-            error = ErrorRed,
+        colorScheme = darkColorScheme(
+            primary = Accent,
+            onPrimary = Ink,
+            secondary = Paper,
+            onSecondary = Ink,
+            background = Ink,
+            onBackground = Paper,
+            surface = Ink,
+            onSurface = Paper,
+            surfaceVariant = Field,
+            onSurfaceVariant = Muted,
+            surfaceContainerLowest = Ink,
+            surfaceContainerLow = Panel,
+            surfaceContainer = Panel,
+            surfaceContainerHigh = Panel,
+            surfaceContainerHighest = Field,
+            outline = Line,
+            outlineVariant = Line,
+            inverseSurface = Paper,
+            inverseOnSurface = Ink,
+            inversePrimary = Accent,
+            error = Danger,
+            onError = Ink,
         ),
-        typography = interTypography(),
+        typography = sofiaTypography(),
         content = content
     )
 }

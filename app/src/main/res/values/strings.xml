@@ -18,18 +18,11 @@
     <string name="tab_settings">Settings</string>
 
     <!-- Onboarding -->
-    <string name="onboarding_1_title">Never wonder where you parked.</string>
-    <string name="onboarding_1_body">Park. Walk away. Parked! remembers the spot, so it\'s waiting when you need your car.</string>
-    <string name="onboarding_2_title">Connect once. We\'ll handle the rest.</string>
-    <string name="onboarding_2_body">Choose your car\'s Bluetooth and turn on AutoPark. When you disconnect, Parked! saves the spot automatically.</string>
-    <string name="onboarding_continue">Tap to continue</string>
-    <string name="onboarding_start">Tap to get started</string>
 
     <!-- Home -->
     <string name="home_empty_title">Save where you parked</string>
     <string name="home_empty_body">Save this spot now. AutoPark can handle it next time.</string>
-    <string name="home_saved_title">Your parking spot is saved</string>
-    <string name="home_at_car">Your car is here!</string>
+    <string name="home_at_car">You\'re at your car.</string>
     <string name="save_parking_spot">Save parking spot</string>
     <string name="save_current_spot">Save current spot</string>
     <string name="share_spot">Share spot</string>
@@ -40,14 +33,13 @@
     <string name="parked_today">Parked today at %1$s</string>
     <string name="parked_yesterday">Parked yesterday at %1$s</string>
     <string name="parked_on">Parked %1$s at %2$s</string>
-    <string name="distance_walk">%1$s away · %2$d min walk</string>
     <string name="autopark_on">AutoPark is on</string>
     <string name="autopark_off">AutoPark is off</string>
     <string name="autopark_on_limited">AutoPark will ask you to save</string>
     <string name="turn_on_location">Turn on Location, then try again</string>
     <string name="error_no_location">Couldn\'t find your location. Try again outdoors.</string>
     <string name="error_location_permission">Location permission required</string>
-    <string name="osm_attribution">© OpenStreetMap contributors</string>
+    <string name="osm_attribution">© OpenStreetMap © CARTO</string>
     <string name="map_parked_car">Parked car</string>
     <string name="map_you">You are here</string>
     <string name="map_center_car">Show my car</string>
@@ -56,11 +48,8 @@
     <string name="share_text_note">I parked here (%1$s): %2$s</string>
 
     <string name="chip_add_note">Note</string>
-    <string name="chip_edit_note">Note</string>
     <string name="chip_add_photo">Photo</string>
-    <string name="chip_view_photo">Photo</string>
     <string name="chip_timer">Parking time</string>
-    <string name="chip_timer_edit">Parking time</string>
 
     <string name="note_title">Spot note</string>
     <string name="note_subtitle">A level, row or landmark to help you find the car.</string>
@@ -84,14 +73,11 @@
     <string name="timer_inexact">Reminders may arrive a few minutes late until you allow exact alarms.</string>
     <string name="timer_allow_exact">Allow exact alarms</string>
     <string name="timer_needs_notifications">Allow notifications to get timer reminders</string>
-    <string name="timer_ends_at">Parking ends at %1$s · %2$s left</string>
-    <string name="timer_expired_at">Parking time ended at %1$s</string>
     <string name="timer_warning_title">Parking ends in %1$d minutes</string>
     <string name="timer_end_title">Parking time is up</string>
     <string name="timer_body">Tap to find your car.</string>
     <string name="duration_m">%1$d min</string>
     <string name="duration_h">%1$d h</string>
-    <string name="duration_hm">%1$d h %2$d min</string>
 
     <!-- AutoPark service -->
     <string name="autopark">AutoPark</string>
@@ -134,9 +120,6 @@
     <string name="fuel_not_set">Drag the bar to match your car\'s gauge. It saves when you let go.</string>
     <string name="fuel_updated">Updated %1$s</string>
     <string name="fuel_estimated_since">Estimate: %2$d km driven since %1$s</string>
-    <string name="fuel_set_level">Set level</string>
-    <string name="fuel_correct_level">Correct level</string>
-    <string name="fuel_level_updated">Fuel level updated</string>
     <string name="refuel">Refuel</string>
     <string name="refuel_saved">Refuel saved</string>
     <string name="fuel_at_a_glance">At a glance</string>
@@ -161,14 +144,12 @@
     <string name="export_subject">Parked! refuels</string>
 
     <string name="refuel_subtitle">Only use this when you actually add fuel.</string>
-    <string name="refuel_litres">Litres added</string>
     <string name="refuel_total">Amount paid (%1$s)</string>
     <string name="refuel_odometer">Odometer (optional)</string>
     <string name="refuel_odometer_hint">About %1$s</string>
     <string name="refuel_full_tank">Filled the tank</string>
     <string name="refuel_full_tank_hint">Turn on only if you filled it to the top. Two full fills with odometer readings give your average consumption.</string>
     <string name="save_refuel">Save refuel</string>
-    <string name="error_litres">Enter the litres added</string>
     <string name="error_total">Enter the amount you paid</string>
     <string name="error_odometer">Enter a valid odometer reading</string>
     <string name="error_odometer_low">The odometer can\'t be lower than the current reading</string>
@@ -193,7 +174,7 @@
 
     <!-- Service reminders -->
     <string name="service_title">Service reminders</string>
-    <string name="service_row_empty">Oil, tyres, inspection — get reminded by km or date</string>
+    <string name="service_row_empty">Oil, tyres and inspection, by km or by date</string>
     <string name="service_row_ok">Nothing due</string>
     <string name="service_empty">No reminders yet. Add one for oil changes, tyres or the yearly inspection.</string>
     <string name="service_needs_odometer">Set your odometer in Settings so kilometre reminders can count down.</string>
@@ -228,7 +209,6 @@
     </plurals>
 
     <!-- Settings -->
-    <string name="settings_vehicle">Vehicle</string>
     <string name="settings_preferences">Preferences</string>
     <string name="car_bluetooth">Car Bluetooth</string>
     <string name="odometer">Odometer</string>
@@ -240,7 +220,7 @@
     <string name="error_tank">Enter a valid tank capacity</string>
     <string name="error_tank_high">That looks too high</string>
     <string name="parking_alerts">Parking alerts</string>
-    <string name="car_appearance">Car appearance</string>
+    <string name="car_appearance">Car colour</string>
     <string name="appearance_hint">Choose the closest colour.</string>
     <string name="cd_car_preview">Car preview, %1$s</string>
     <string name="choose_your_car">Choose your car</string>
@@ -310,4 +290,13 @@
     <string name="photo_load_failed">Couldn\'t open the photo.</string>
     <string name="cd_has_content">saved</string>
     <string name="photo_saved">Photo saved</string>
+    <!-- 0.4 intro -->
+    <string name="intro_title" translatable="false">Parked.</string>
+    <string name="intro_tagline">Know where you parked.</string>
+    <string name="intro_body">When your car\'s Bluetooth disconnects, Parked! keeps the spot for you.</string>
+    <string name="intro_language">Language</string>
+    <string name="home_car_title">Your car</string>
+    <string name="home_distance">%1$s · %2$d min</string>
+    <string name="timer_short_ends">Ends %1$s</string>
+    <string name="timer_short_ended">Ended %1$s</string>
 </resources>

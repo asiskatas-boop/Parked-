@@ -23,11 +23,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Don't replay a widget/notification action after a configuration change.
         if (savedInstanceState == null) pendingAction = actionFrom(intent)
-        // Transparent system bars: the white tab bar shows through instead of the
+        // Transparent system bars: the black tab bar shows through instead of the
         // grey scrim Android adds by default under the navigation buttons.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false

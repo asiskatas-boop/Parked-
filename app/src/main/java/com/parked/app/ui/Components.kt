@@ -1,7 +1,9 @@
 package com.parked.app.ui
 
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -9,26 +11,25 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -42,56 +43,104 @@ import com.parked.app.R
 val LocalSnackbar = compositionLocalOf<SnackbarHostState> { error("No snackbar host") }
 
 /**
- * Header background. It stops at a mid green rather than lime: white text on
- * lime measured about 2.2:1; on HeaderEnd it is at least 5.2:1.
+ * Phosphor icons (light weight, one stroke everywhere), bundled as vector
+ * drawables under res/drawable/ph_*.xml. Tint them in Compose.
  */
-val HeaderGradient: Brush
-    get() = Brush.linearGradient(
-        colors = listOf(OliveDark, HeaderEnd),
-        start = Offset.Zero,
-        end = Offset(1100f, 1100f)
-    )
+object Ph {
+    val arrowRight @Composable get() = ImageVector.vectorResource(R.drawable.ph_arrow_right)
+    val arrowLeft @Composable get() = ImageVector.vectorResource(R.drawable.ph_arrow_left)
+    val arrowUpRight @Composable get() = ImageVector.vectorResource(R.drawable.ph_arrow_up_right)
+    val bell @Composable get() = ImageVector.vectorResource(R.drawable.ph_bell)
+    val bluetooth @Composable get() = ImageVector.vectorResource(R.drawable.ph_bluetooth)
+    val calendar @Composable get() = ImageVector.vectorResource(R.drawable.ph_calendar)
+    val camera @Composable get() = ImageVector.vectorResource(R.drawable.ph_camera)
+    val car @Composable get() = ImageVector.vectorResource(R.drawable.ph_car)
+    val carProfile @Composable get() = ImageVector.vectorResource(R.drawable.ph_car_profile)
+    val check @Composable get() = ImageVector.vectorResource(R.drawable.ph_check)
+    val checkCircle @Composable get() = ImageVector.vectorResource(R.drawable.ph_check_circle)
+    val clockCounter @Composable get() = ImageVector.vectorResource(R.drawable.ph_clock_counter)
+    val cornersOut @Composable get() = ImageVector.vectorResource(R.drawable.ph_corners_out)
+    val export @Composable get() = ImageVector.vectorResource(R.drawable.ph_export)
+    val gasPump @Composable get() = ImageVector.vectorResource(R.drawable.ph_gas_pump)
+    val gauge @Composable get() = ImageVector.vectorResource(R.drawable.ph_gauge)
+    val info @Composable get() = ImageVector.vectorResource(R.drawable.ph_info)
+    val mapPin @Composable get() = ImageVector.vectorResource(R.drawable.ph_map_pin)
+    val navigation @Composable get() = ImageVector.vectorResource(R.drawable.ph_navigation)
+    val note @Composable get() = ImageVector.vectorResource(R.drawable.ph_note)
+    val plus @Composable get() = ImageVector.vectorResource(R.drawable.ph_plus)
+    val road @Composable get() = ImageVector.vectorResource(R.drawable.ph_road)
+    val share @Composable get() = ImageVector.vectorResource(R.drawable.ph_share)
+    val sliders @Composable get() = ImageVector.vectorResource(R.drawable.ph_sliders)
+    val squaresFour @Composable get() = ImageVector.vectorResource(R.drawable.ph_squares_four)
+    val timer @Composable get() = ImageVector.vectorResource(R.drawable.ph_timer)
+    val trash @Composable get() = ImageVector.vectorResource(R.drawable.ph_trash)
+    val warning @Composable get() = ImageVector.vectorResource(R.drawable.ph_warning)
+    val wrench @Composable get() = ImageVector.vectorResource(R.drawable.ph_wrench)
+    val x @Composable get() = ImageVector.vectorResource(R.drawable.ph_x)
+}
 
-/** Page title used by every screen header, so titles match across tabs. */
+/** Large, light page title, as in the reference. */
 @Composable
-fun PageTitle(text: String, color: Color = White, modifier: Modifier = Modifier) {
+fun PageTitle(text: String, color: Color = Paper, modifier: Modifier = Modifier) {
     Text(
         text,
         fontSize = TypeScale.PageTitle,
-        lineHeight = TypeScale.PageTitle * 1.15f,
-        fontWeight = FontWeight.ExtraBold,
+        lineHeight = TypeScale.PageTitle * 1.1f,
+        fontWeight = FontWeight.Normal,
         color = color,
-        letterSpacing = (-0.5).sp,
+        letterSpacing = (-0.4).sp,
         modifier = modifier.semantics { heading() }
     )
 }
 
+/** The orange arrow that ends every call to action and every navigating row. */
+@Composable
+fun AccentArrow(modifier: Modifier = Modifier, icon: ImageVector = Ph.arrowRight) {
+    Icon(icon, contentDescription = null, tint = Accent, modifier = modifier.size(20.dp))
+}
+
 /**
- * Main call to action. Uses a minimum height rather than a fixed one so the
- * label is never clipped at large font sizes.
+ * Main call to action: a white rectangle with the label on the left and an
+ * orange arrow after it. Minimum height rather than fixed, so large font
+ * sizes never clip the label.
  */
 @Composable
 fun PrimaryButton(
     text: String,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.fillMaxWidth().heightIn(min = 56.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = LimeBright, contentColor = NearBlack),
+        shape = RectangleShape,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Paper,
+            contentColor = Ink,
+            disabledContainerColor = Field,
+            disabledContentColor = Muted,
+        ),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
     ) {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(12.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(12.dp))
+            }
+            Text(text, fontSize = TypeScale.Emphasis, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.width(10.dp))
+            AccentArrow()
         }
-        Text(text, fontSize = TypeScale.Emphasis, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     }
 }
 
+/**
+ * Second-level action: an outlined rectangle. Used where two actions sit side
+ * by side and neither is the main one.
+ */
 @Composable
 fun SecondaryButton(
     text: String,
@@ -99,31 +148,54 @@ fun SecondaryButton(
     icon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
-    Button(
+    OutlinedButton(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 50.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = OliveDark, contentColor = White),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        modifier = modifier.heightIn(min = 48.dp),
+        shape = RectangleShape,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Line),
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.Transparent, contentColor = Paper),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Icon(icon, contentDescription = null, tint = Accent, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
         }
-        Text(text, fontSize = TypeScale.Supporting, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(text, fontSize = TypeScale.Label, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+    }
+}
+
+/** Text link with an orange arrow, as in the reference ("Αργότερα →"). */
+@Composable
+fun LinkButton(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Paper,
+    icon: ImageVector? = null,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, fontSize = TypeScale.Emphasis, color = color)
+        Spacer(Modifier.width(10.dp))
+        AccentArrow(icon = icon ?: Ph.arrowRight)
     }
 }
 
 @Composable
-fun QuietButton(text: String, modifier: Modifier = Modifier, color: Color = TextSecondary, onClick: () -> Unit) {
-    TextButton(onClick = onClick, modifier = modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-        Text(text, fontSize = TypeScale.Body, color = color, fontWeight = FontWeight.SemiBold)
+fun QuietButton(text: String, modifier: Modifier = Modifier, color: Color = Muted, onClick: () -> Unit) {
+    TextButton(onClick = onClick, modifier = modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RectangleShape) {
+        Text(text, fontSize = TypeScale.Body, color = color)
     }
 }
 
 /**
- * Bottom sheet used by every form. It is a real modal: it covers the bottom
- * navigation, closes on back and outside tap, and moves above the keyboard.
+ * Bottom sheet used by every form. It is a real modal: it covers the tab bar,
+ * closes on back and outside tap, and moves above the keyboard.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,8 +208,13 @@ fun ParkedSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = White,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = Panel,
+        contentColor = Paper,
+        scrimColor = Color.Black.copy(alpha = 0.6f),
+        shape = RectangleShape,
+        dragHandle = {
+            Box(Modifier.padding(top = 12.dp, bottom = 8.dp).size(width = 32.dp, height = 3.dp).background(Line))
+        },
     ) {
         Column(
             Modifier
@@ -149,21 +226,22 @@ fun ParkedSheet(
             Text(
                 title,
                 fontSize = TypeScale.SheetTitle,
-                fontWeight = FontWeight.ExtraBold,
-                color = NearBlack,
+                lineHeight = TypeScale.SheetTitle * 1.15f,
+                fontWeight = FontWeight.Normal,
+                color = Paper,
                 modifier = Modifier.semantics { heading() }
             )
             if (subtitle != null) {
-                Spacer(Modifier.height(4.dp))
-                Text(subtitle, fontSize = TypeScale.Supporting, lineHeight = 18.sp, color = TextSecondary)
+                Spacer(Modifier.height(6.dp))
+                Text(subtitle, fontSize = TypeScale.Body, lineHeight = 24.sp, color = Muted)
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
             content()
         }
     }
 }
 
-/** Full-screen sub-page with a back button, used for histories and lists. */
+/** Full-screen sub-page: back arrow, large title, then a list. */
 @Composable
 fun SubPage(
     title: String,
@@ -172,30 +250,33 @@ fun SubPage(
     actions: @Composable RowScope.() -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().background(White)) {
+    Column(Modifier.fillMaxSize().background(Ink)) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .background(HeaderGradient)
                 .statusBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 12.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = White)
+            IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                Icon(Ph.arrowLeft, contentDescription = stringResource(R.string.cd_back), tint = Paper, modifier = Modifier.size(24.dp))
             }
-            Spacer(Modifier.width(4.dp))
-            PageTitle(title, modifier = Modifier.weight(1f))
+            Spacer(Modifier.weight(1f))
             actions()
         }
+        PageTitle(title, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 20.dp))
         LazyColumn(Modifier.fillMaxSize()) {
             // The empty message goes above the content, not instead of it, so
             // actions such as "Add reminder" stay reachable on an empty page.
             if (emptyText != null) {
                 item {
-                    Box(Modifier.fillMaxWidth().heightIn(min = 200.dp).padding(24.dp), contentAlignment = Alignment.Center) {
-                        Text(emptyText, color = TextSecondary, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
-                    }
+                    Text(
+                        emptyText,
+                        fontSize = TypeScale.Body,
+                        lineHeight = 24.sp,
+                        color = Muted,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp)
+                    )
                 }
             }
             content()
@@ -204,104 +285,117 @@ fun SubPage(
     }
 }
 
-/** Tappable row with an icon, a title, a supporting line and a chevron. */
+/**
+ * Tappable list row: icon, title, supporting line, orange arrow, hairline
+ * underneath. Rows stack into a list with no cards.
+ */
 @Composable
 fun ActionRow(
-    icon: ImageVector,
+    icon: ImageVector?,
     title: String,
     subtitle: String?,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     trailing: @Composable (() -> Unit)? = null,
 ) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        color = SurfaceTint,
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Column(modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick)) {
         Row(
-            Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 16.dp),
+            Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, tint = OliveDark)
-            Spacer(Modifier.width(12.dp))
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = Paper, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(16.dp))
+            }
             Column(Modifier.weight(1f)) {
-                Text(title, fontSize = TypeScale.Body, fontWeight = FontWeight.Bold, color = NearBlack)
-                if (subtitle != null) Text(subtitle, fontSize = TypeScale.Caption, lineHeight = 16.sp, color = TextSecondary)
+                Text(title, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper)
+                if (subtitle != null) Text(subtitle, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
             }
-            if (trailing != null) trailing() else {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = OliveDark)
-            }
+            Spacer(Modifier.width(12.dp))
+            if (trailing != null) trailing() else AccentArrow()
+        }
+        DividerRow()
+    }
+}
+
+/** A group of rows between hairlines. Rows inside separate with [DividerRow]. */
+@Composable
+fun SettingsCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+        DividerRow()
+        content()
+        DividerRow()
+    }
+}
+
+/**
+ * Square switch, as in the reference: orange track and black knob when on,
+ * dark track and grey knob when off. 48 dp tall touch area when interactive.
+ */
+@Composable
+fun ParkedSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier) {
+    val track by animateColorAsState(if (checked) Accent else Field, tween(180), label = "track")
+    val knob by animateColorAsState(if (checked) Ink else Muted, tween(180), label = "knob")
+    val offset by animateDpAsState(if (checked) 20.dp else 0.dp, tween(180, easing = FastOutSlowInEasing), label = "knob")
+    val base = if (onCheckedChange != null) {
+        modifier
+            .heightIn(min = 48.dp)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+    } else modifier
+    Box(base, contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(width = 48.dp, height = 28.dp)
+                .background(track)
+                .then(if (checked) Modifier else Modifier.border(1.dp, Line))
+                .padding(3.dp)
+        ) {
+            Box(Modifier.offset(x = offset).size(22.dp).background(knob))
         }
     }
 }
 
-@Composable
-fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        color = White,
-        shape = RoundedCornerShape(16.dp),
-        shadowElevation = 2.dp,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
-    ) { Column(content = content) }
-}
-
-@Composable
-fun ParkedSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier) {
-    Switch(
-        checked = checked,
-        onCheckedChange = onCheckedChange,
-        modifier = modifier,
-        colors = SwitchDefaults.colors(
-            checkedThumbColor = White,
-            checkedTrackColor = OliveMid,
-            uncheckedThumbColor = White,
-            uncheckedTrackColor = Color(0xFFBDBDBD),
-            uncheckedBorderColor = Color(0xFF9E9E9E),
-        )
-    )
-}
-
-/** The whole row toggles, not only the small switch, for a larger touch target. */
+/** The whole row toggles, not only the switch, for a larger touch target. */
 @Composable
 fun ToggleRow(label: String, checked: Boolean, supporting: String? = null, onToggle: (Boolean) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .toggleableRow(checked, onToggle)
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onToggle)
+            .heightIn(min = 56.dp)
+            .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(label, fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack)
-            if (supporting != null) Text(supporting, fontSize = TypeScale.Caption, lineHeight = 16.sp, color = TextSecondary)
+            Text(label, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper)
+            if (supporting != null) Text(supporting, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
         }
         ParkedSwitch(checked = checked, onCheckedChange = null)
     }
 }
 
-private fun Modifier.toggleableRow(checked: Boolean, onToggle: (Boolean) -> Unit): Modifier =
-    this.then(
-        Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onToggle)
-    )
-
+/** Label on the left, current value and an orange arrow on the right. */
 @Composable
 fun TextRow(label: String, value: String, onClick: () -> Unit) {
-    Surface(onClick = onClick, color = Color.Transparent) {
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(label, fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack, modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(12.dp))
-            Text(value, fontSize = TypeScale.Label, fontWeight = FontWeight.Medium, color = OliveDark, textAlign = TextAlign.End)
-        }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 56.dp)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(12.dp))
+        Text(value, fontSize = TypeScale.Body, color = Muted, textAlign = TextAlign.End)
+        Spacer(Modifier.width(12.dp))
+        AccentArrow()
     }
 }
 
 @Composable
-fun DividerRow() {
-    HorizontalDivider(color = Color(0xFFF0F0F0), thickness = 1.dp)
+fun DividerRow(modifier: Modifier = Modifier) {
+    HorizontalDivider(modifier, color = Line, thickness = 1.dp)
 }
 
 @Composable
@@ -317,26 +411,30 @@ fun ConfirmDialog(
     if (!visible) return
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = White,
-        title = { Text(title, fontWeight = FontWeight.ExtraBold, color = NearBlack) },
-        text = { Text(message, color = TextSecondary) },
+        containerColor = Panel,
+        shape = RectangleShape,
+        title = { Text(title, fontSize = 24.sp, fontWeight = FontWeight.Normal, color = Paper) },
+        text = { Text(message, fontSize = TypeScale.Body, lineHeight = 24.sp, color = Muted) },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(confirmLabel, color = if (destructive) ErrorRed else OliveDark, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onConfirm, shape = RectangleShape, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(confirmLabel, fontSize = TypeScale.Body, color = if (destructive) Danger else Accent, fontWeight = FontWeight.Medium)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = OliveDark) }
+            TextButton(onClick = onDismiss, shape = RectangleShape, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.cancel), fontSize = TypeScale.Body, color = Paper)
+            }
         }
     )
 }
 
 @Composable
-fun SectionTitle(text: String, color: Color = NearBlack, modifier: Modifier = Modifier) {
+fun SectionTitle(text: String, color: Color = Paper, modifier: Modifier = Modifier) {
     Text(
         text,
         fontSize = TypeScale.Section,
-        fontWeight = FontWeight.ExtraBold,
+        lineHeight = 26.sp,
+        fontWeight = FontWeight.Normal,
         color = color,
         modifier = modifier.semantics { heading() }
     )
@@ -346,8 +444,35 @@ fun SectionTitle(text: String, color: Color = NearBlack, modifier: Modifier = Mo
 fun ErrorText(text: String?) {
     if (text == null) return
     Spacer(Modifier.height(8.dp))
-    Text(text, fontSize = TypeScale.Supporting, color = ErrorRed)
+    Text(text, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Danger)
 }
+
+/** Square dark fields with an orange focus outline. Shared by every form. */
+@Composable
+fun parkedFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = Field,
+    unfocusedContainerColor = Field,
+    disabledContainerColor = Field,
+    errorContainerColor = Field,
+    focusedBorderColor = Accent,
+    unfocusedBorderColor = Line,
+    errorBorderColor = Danger,
+    focusedLabelColor = Accent,
+    unfocusedLabelColor = Muted,
+    focusedTextColor = Paper,
+    unfocusedTextColor = Paper,
+    cursorColor = Accent,
+    focusedPlaceholderColor = Muted,
+    unfocusedPlaceholderColor = Muted,
+    focusedSupportingTextColor = Muted,
+    unfocusedSupportingTextColor = Muted,
+    focusedTrailingIconColor = Paper,
+    unfocusedTrailingIconColor = Muted,
+    selectionColors = androidx.compose.foundation.text.selection.TextSelectionColors(
+        handleColor = Accent,
+        backgroundColor = Accent.copy(alpha = 0.35f),
+    ),
+)
 
 @Composable
 fun NumberField(
@@ -363,9 +488,12 @@ fun NumberField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
-        placeholder = placeholder?.let { { Text(it, color = TextSecondary) } },
+        placeholder = placeholder?.let { { Text(it) } },
         supportingText = supporting?.let { { Text(it) } },
         singleLine = true,
+        shape = RectangleShape,
+        colors = parkedFieldColors(),
+        textStyle = androidx.compose.ui.text.TextStyle(fontFamily = SofiaSans, fontSize = TypeScale.Emphasis),
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
             keyboardType = if (decimal) androidx.compose.ui.text.input.KeyboardType.Decimal
             else androidx.compose.ui.text.input.KeyboardType.Number

@@ -46,7 +46,15 @@ compiler errors are attached to the check run as a single annotation.
 
 ## Design tokens
 
-Colours and type live in `ui/Theme.kt`: olive `#2B4A23`, lime `#6EC436`, Inter.
-Secondary text uses `TextSecondary` (meets WCAG AA on white). Shared building
-blocks (buttons, sheets, rows, toasts) are in `ui/Components.kt`; reuse them
-rather than restyling per screen.
+Dark only. Colours and type live in `ui/Theme.kt`: background `Ink` #000000,
+`Panel` #1A1A1A, `Field` #262626, `Line` #333333, text `Paper` #FFFFFF,
+secondary text `Muted` #9A9A9A (7.4:1 on black), one accent `Accent` #FF7500,
+`Danger` and `Warn` for status. Font: Sofia Sans (`res/font/sofia_sans.ttf`,
+variable, OFL). Icons: Phosphor light (`res/drawable/ph_*.xml`, MIT), reached
+through `Ph` in `ui/Components.kt`. Shapes are square. Touch targets are at
+least 48 dp; body text 15-17 sp with a line height of at least 1.5.
+
+Shared building blocks (white primary button with an orange arrow, text links,
+hairline rows, square switch, fields, sheets, dialogs) are in
+`ui/Components.kt`; reuse them rather than restyling per screen. Map tiles are
+CARTO Dark Matter; keep the "© OpenStreetMap © CARTO" credit visible.

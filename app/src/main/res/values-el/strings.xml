@@ -16,36 +16,28 @@
     <string name="tab_settings">Ρυθμίσεις</string>
 
     <!-- Onboarding -->
-    <string name="onboarding_1_title">Μην ψάχνεις ποτέ ξανά πού πάρκαρες.</string>
-    <string name="onboarding_1_body">Πάρκαρε. Φύγε. Το Parked! θυμάται το σημείο, για να σε περιμένει όταν χρειαστείς το αυτοκίνητο.</string>
-    <string name="onboarding_2_title">Σύνδεσέ το μία φορά. Τα υπόλοιπα τα αναλαμβάνουμε εμείς.</string>
-    <string name="onboarding_2_body">Διάλεξε το Bluetooth του αυτοκινήτου σου και άνοιξε το AutoPark. Μόλις αποσυνδεθείς, το Parked! αποθηκεύει αυτόματα το σημείο.</string>
-    <string name="onboarding_continue">Πάτησε για να συνεχίσεις</string>
-    <string name="onboarding_start">Πάτησε για να ξεκινήσεις</string>
 
     <!-- Home -->
     <string name="home_empty_title">Αποθήκευσε πού πάρκαρες</string>
     <string name="home_empty_body">Αποθήκευσε αυτό το σημείο τώρα. Την επόμενη φορά μπορεί να το κάνει το AutoPark.</string>
-    <string name="home_saved_title">Το σημείο στάθμευσης αποθηκεύτηκε</string>
-    <string name="home_at_car">Το αυτοκίνητό σου είναι εδώ!</string>
+    <string name="home_at_car">Είσαι στο αυτοκίνητό σου.</string>
     <string name="save_parking_spot">Αποθήκευση σημείου</string>
     <string name="save_current_spot">Αποθήκευση εδώ</string>
     <string name="share_spot">Κοινοποίηση</string>
-    <string name="get_directions">Οδηγίες προς το αυτοκίνητο</string>
+    <string name="get_directions">Πήγαινε στο αυτοκίνητο</string>
     <string name="saving">Αποθήκευση…</string>
     <string name="spot_saved">Το σημείο αποθηκεύτηκε</string>
     <string name="parked_recently">Πάρκαρες πρόσφατα</string>
     <string name="parked_today">Πάρκαρες σήμερα στις %1$s</string>
     <string name="parked_yesterday">Πάρκαρες χθες στις %1$s</string>
     <string name="parked_on">Πάρκαρες %1$s στις %2$s</string>
-    <string name="distance_walk">%1$s μακριά · %2$d λεπτά με τα πόδια</string>
     <string name="autopark_on">Το AutoPark είναι ενεργό</string>
     <string name="autopark_off">Το AutoPark είναι ανενεργό</string>
     <string name="autopark_on_limited">Το AutoPark θα σου ζητήσει να αποθηκεύσεις</string>
     <string name="turn_on_location">Άνοιξε την Τοποθεσία και δοκίμασε ξανά</string>
     <string name="error_no_location">Δεν βρέθηκε η τοποθεσία σου. Δοκίμασε ξανά σε ανοιχτό χώρο.</string>
     <string name="error_location_permission">Χρειάζεται άδεια τοποθεσίας</string>
-    <string name="osm_attribution">© Συντελεστές του OpenStreetMap</string>
+    <string name="osm_attribution">© OpenStreetMap © CARTO</string>
     <string name="map_parked_car">Σταθμευμένο αυτοκίνητο</string>
     <string name="map_you">Είσαι εδώ</string>
     <string name="map_center_car">Δείξε το αυτοκίνητο</string>
@@ -54,11 +46,8 @@
     <string name="share_text_note">Πάρκαρα εδώ (%1$s): %2$s</string>
 
     <string name="chip_add_note">Σημείωση</string>
-    <string name="chip_edit_note">Σημείωση</string>
     <string name="chip_add_photo">Φωτογραφία</string>
-    <string name="chip_view_photo">Φωτογραφία</string>
     <string name="chip_timer">Λήξη στάθμευσης</string>
-    <string name="chip_timer_edit">Λήξη στάθμευσης</string>
 
     <string name="note_title">Σημείωση σημείου</string>
     <string name="note_subtitle">Όροφος, σειρά ή κάποιο ορόσημο για να βρεις το αυτοκίνητο.</string>
@@ -82,14 +71,11 @@
     <string name="timer_inexact">Οι υπενθυμίσεις μπορεί να καθυστερήσουν λίγα λεπτά, μέχρι να επιτρέψεις τα ακριβή ξυπνητήρια.</string>
     <string name="timer_allow_exact">Να επιτρέπονται ακριβή ξυπνητήρια</string>
     <string name="timer_needs_notifications">Επίτρεψε τις ειδοποιήσεις για να λαμβάνεις υπενθυμίσεις χρονομέτρου</string>
-    <string name="timer_ends_at">Η στάθμευση λήγει στις %1$s · απομένουν %2$s</string>
-    <string name="timer_expired_at">Ο χρόνος στάθμευσης έληξε στις %1$s</string>
     <string name="timer_warning_title">Η στάθμευση λήγει σε %1$d λεπτά</string>
     <string name="timer_end_title">Ο χρόνος στάθμευσης έληξε</string>
     <string name="timer_body">Πάτησε για να βρεις το αυτοκίνητο.</string>
     <string name="duration_m">%1$d λεπτά</string>
     <string name="duration_h">%1$d ώρ.</string>
-    <string name="duration_hm">%1$d ώρ. %2$d λεπτά</string>
 
     <!-- AutoPark service -->
     <string name="autopark">AutoPark</string>
@@ -132,9 +118,6 @@
     <string name="fuel_not_set">Σύρε την μπάρα ώστε να ταιριάζει με τον δείκτη του αυτοκινήτου. Αποθηκεύεται μόλις αφήσεις.</string>
     <string name="fuel_updated">Ενημερώθηκε %1$s</string>
     <string name="fuel_estimated_since">Εκτίμηση: %2$d km από %1$s</string>
-    <string name="fuel_set_level">Ορισμός στάθμης</string>
-    <string name="fuel_correct_level">Διόρθωση στάθμης</string>
-    <string name="fuel_level_updated">Η στάθμη καυσίμου ενημερώθηκε</string>
     <string name="refuel">Ανεφοδιασμός</string>
     <string name="refuel_saved">Ο ανεφοδιασμός αποθηκεύτηκε</string>
     <string name="fuel_at_a_glance">Με μια ματιά</string>
@@ -159,14 +142,12 @@
     <string name="export_subject">Ανεφοδιασμοί Parked!</string>
 
     <string name="refuel_subtitle">Χρησιμοποίησέ το μόνο όταν βάζεις καύσιμα.</string>
-    <string name="refuel_litres">Λίτρα</string>
     <string name="refuel_total">Ποσό που πλήρωσες (%1$s)</string>
     <string name="refuel_odometer">Χιλιομετρητής (προαιρετικό)</string>
     <string name="refuel_odometer_hint">Περίπου %1$s</string>
     <string name="refuel_full_tank">Γέμισα το ρεζερβουάρ</string>
     <string name="refuel_full_tank_hint">Ενεργοποίησέ το μόνο αν γέμισες μέχρι πάνω. Δύο γεμίσματα με ένδειξη χιλιομετρητή δίνουν τη μέση κατανάλωση.</string>
     <string name="save_refuel">Αποθήκευση ανεφοδιασμού</string>
-    <string name="error_litres">Συμπλήρωσε τα λίτρα</string>
     <string name="error_total">Συμπλήρωσε το ποσό που πλήρωσες</string>
     <string name="error_odometer">Δώσε μια έγκυρη ένδειξη χιλιομετρητή</string>
     <string name="error_odometer_low">Ο χιλιομετρητής δεν μπορεί να είναι μικρότερος από την τρέχουσα ένδειξη</string>
@@ -191,7 +172,7 @@
 
     <!-- Service reminders -->
     <string name="service_title">Υπενθυμίσεις συντήρησης</string>
-    <string name="service_row_empty">Λάδια, ελαστικά, ΚΤΕΟ — υπενθύμιση ανά km ή ημερομηνία</string>
+    <string name="service_row_empty">Λάδια, ελαστικά και ΚΤΕΟ, ανά km ή ημερομηνία</string>
     <string name="service_row_ok">Τίποτα επείγον</string>
     <string name="service_empty">Δεν υπάρχουν υπενθυμίσεις ακόμα. Πρόσθεσε μία για αλλαγή λαδιών, ελαστικά ή ΚΤΕΟ.</string>
     <string name="service_needs_odometer">Όρισε τον χιλιομετρητή στις Ρυθμίσεις για να μετρούν οι υπενθυμίσεις ανά km.</string>
@@ -226,7 +207,6 @@
     </plurals>
 
     <!-- Settings -->
-    <string name="settings_vehicle">Όχημα</string>
     <string name="settings_preferences">Προτιμήσεις</string>
     <string name="car_bluetooth">Bluetooth αυτοκινήτου</string>
     <string name="odometer">Χιλιομετρητής</string>
@@ -238,7 +218,7 @@
     <string name="error_tank">Δώσε μια έγκυρη χωρητικότητα</string>
     <string name="error_tank_high">Φαίνεται πολύ μεγάλη</string>
     <string name="parking_alerts">Ειδοποιήσεις στάθμευσης</string>
-    <string name="car_appearance">Εμφάνιση αυτοκινήτου</string>
+    <string name="car_appearance">Χρώμα αυτοκινήτου</string>
     <string name="appearance_hint">Διάλεξε το πιο κοντινό χρώμα.</string>
     <string name="cd_car_preview">Προεπισκόπηση αυτοκινήτου, %1$s</string>
     <string name="choose_your_car">Διάλεξε το αυτοκίνητό σου</string>
@@ -308,4 +288,12 @@
     <string name="photo_load_failed">Δεν ήταν δυνατό να ανοίξει η φωτογραφία.</string>
     <string name="cd_has_content">αποθηκευμένο</string>
     <string name="photo_saved">Η φωτογραφία αποθηκεύτηκε</string>
+    <!-- 0.4 intro -->
+    <string name="intro_tagline">Ξέρεις πού πάρκαρες.</string>
+    <string name="intro_body">Όταν αποσυνδεθεί το Bluetooth του αυτοκινήτου, το Parked! κρατά το σημείο για σένα.</string>
+    <string name="intro_language">Γλώσσα</string>
+    <string name="home_car_title">Το αυτοκίνητό σου</string>
+    <string name="home_distance">%1$s · %2$d λεπτά</string>
+    <string name="timer_short_ends">Λήγει %1$s</string>
+    <string name="timer_short_ended">Έληξε %1$s</string>
 </resources>

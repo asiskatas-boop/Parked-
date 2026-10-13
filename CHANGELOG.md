@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.0
+
+A new look; no change to how anything works.
+
+- Dark only, with one orange accent (#FF7500). Large light headings, hairline
+  rows instead of cards, square buttons, fields and switches.
+- Sofia Sans replaces Inter (variable font, full Greek).
+- Phosphor icons throughout; the car in Settings is a thin car profile in the
+  car's colour.
+- Map uses CARTO Dark Matter tiles, with an orange "P" marker. The credit reads
+  "© OpenStreetMap © CARTO", as both licences require.
+- One black intro screen with Set up AutoPark and Later, plus a language row
+  that opens Android's per-app language setting (Android 13+). The same row is
+  in Settings.
+- Home: "Your car", the walking distance in orange, and note, photo and
+  parking time in one row. Share and Save here are text links.
+- Icon-only tab bar; each tab is still named for screen readers.
+- Home-screen widget restyled to match.
+- Copy: no exclamation mark on "You're at your car.", no dashes in the service
+  hint, "Πήγαινε στο αυτοκίνητο" for directions in Greek, "Car colour" for the
+  colour setting.
+
+## 0.3.3
+
+- Fuel insights are plain text rather than a card, since they aren't tappable.
+- The note field saves from the keyboard's Done key and a tick in the field.
+- A message confirms when a photo is saved.
+
 ## 0.3.2
 
 - Every build is now signed with the same key, so updates install over the

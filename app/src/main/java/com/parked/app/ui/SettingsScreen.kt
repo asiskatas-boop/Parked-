@@ -13,27 +13,21 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -256,17 +250,43 @@ private fun SettingsMain(
     val notificationsChecked = fuel.notificationsEnabled && systemNotificationsAllowed
     var hasCrashReport by remember { mutableStateOf(ParkedApplication.crashFile(context).exists()) }
 
-    Column(Modifier.fillMaxSize().background(White).verticalScroll(rememberScrollState())) {
-        Column(
+    val carSwatch = carColours.firstOrNull { it.first == fuel.accentName }?.second ?: carColours[4].second
+    val autoParkLabel = stringResource(
+        when {
+            !state.monitoring -> R.string.autopark_off
+            autoParkMode == AutoParkMode.Limited -> R.string.autopark_on_limited
+            else -> R.string.autopark_on
+        }
+    )
+
+    Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState())) {
+        // The car, in its colour, on a dark panel. Tap to change the colour.
+        Box(
             Modifier
-                .fillMaxWidth()
-                .background(HeaderGradient)
                 .statusBarsPadding()
-                .padding(top = 16.dp, bottom = 24.dp, start = 20.dp, end = 20.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp)
+                .fillMaxWidth()
+                .height(240.dp)
+                .background(Panel)
+                .clickable(role = androidx.compose.ui.semantics.Role.Button) { showAppearance = true },
+            contentAlignment = Alignment.Center
         ) {
-            PageTitle(stringResource(R.string.tab_settings), modifier = Modifier.padding(start = 4.dp))
+            Icon(
+                Ph.carProfile,
+                contentDescription = stringResource(R.string.cd_car_preview, colourLabel(fuel.accentName)),
+                tint = visibleOnPanel(carSwatch),
+                modifier = Modifier.size(240.dp)
+            )
+        }
+
+        Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp)) {
+            PageTitle(state.deviceName ?: stringResource(R.string.home_car_title))
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "${colourLabel(fuel.accentName)} · $autoParkLabel",
+                fontSize = TypeScale.Label, lineHeight = 22.sp, color = Muted
+            )
             Spacer(Modifier.height(20.dp))
-            SectionTitle(stringResource(R.string.settings_vehicle), color = White, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
             SettingsCard {
                 ToggleRow(
                     label = stringResource(R.string.autopark),
@@ -305,9 +325,11 @@ private fun SettingsMain(
                     stringResource(R.string.tank_capacity),
                     fuel.tankCapacity.takeIf { it > 0 }?.let { "${formatDecimal(it, 0)} L" } ?: stringResource(R.string.not_set)
                 ) { showTank = true }
+                DividerRow()
+                TextRow(stringResource(R.string.car_appearance), colourLabel(fuel.accentName)) { showAppearance = true }
             }
 
-            SectionTitle(stringResource(R.string.settings_preferences), color = White, modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 12.dp))
+            SectionTitle(stringResource(R.string.settings_preferences), modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
             SettingsCard {
                 ToggleRow(
                     label = stringResource(R.string.parking_alerts),
@@ -354,8 +376,14 @@ private fun SettingsMain(
                         onClick = onOpenHistory
                     )
                 }
-                DividerRow()
-                TextRow(stringResource(R.string.car_appearance), colourLabel(fuel.accentName)) { showAppearance = true }
+                if (Build.VERSION.SDK_INT >= 33) {
+                    DividerRow()
+                    val locale = context.resources.configuration.locales[0]
+                    TextRow(
+                        stringResource(R.string.intro_language),
+                        locale.getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) }
+                    ) { openAppLanguageSettings(context) }
+                }
                 if (hasCrashReport) {
                     DividerRow()
                     TextRow(stringResource(R.string.crash_report), stringResource(R.string.crash_report_share)) {
@@ -364,19 +392,6 @@ private fun SettingsMain(
                     }
                 }
             }
-        }
-
-        Box(Modifier.fillMaxWidth().padding(vertical = 28.dp), contentAlignment = Alignment.Center) {
-            // Drawn as vector shapes, so it is sharp at any size and in every colour.
-            CarArt(
-                body = carColours.firstOrNull { it.first == fuel.accentName }?.second ?: carColours[4].second,
-                description = stringResource(R.string.cd_car_preview, colourLabel(fuel.accentName)),
-                modifier = Modifier
-                    .width(240.dp)
-                    .aspectRatio(450f / 375f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable { showAppearance = true }
-            )
         }
         Spacer(Modifier.height(16.dp))
     }
@@ -430,35 +445,32 @@ private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, Strin
     val fallbackName = stringResource(R.string.car_bluetooth)
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = White,
-        titleContentColor = NearBlack,
-        textContentColor = TextSecondary,
-        title = { Text(stringResource(R.string.choose_your_car)) },
+        containerColor = Panel,
+        shape = androidx.compose.ui.graphics.RectangleShape,
+        titleContentColor = Paper,
+        textContentColor = Muted,
+        title = { Text(stringResource(R.string.choose_your_car), fontSize = 24.sp) },
         text = {
             Column {
                 when {
                     !canRead -> Text(stringResource(R.string.bluetooth_permission_needed))
                     devices.isEmpty() -> Text(stringResource(R.string.no_paired_devices))
-                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    else -> LazyColumn {
+                        item { DividerRow() }
                         items(devices, key = { it.address }) { device ->
                             val name = runCatching { device.name }.getOrNull()
-                            Surface(
-                                onClick = { onSelected(name ?: fallbackName, device.address) },
-                                shape = RoundedCornerShape(10.dp),
-                                color = Color(0xFFF5F5F5),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(Modifier.padding(12.dp)) {
-                                    Text(name ?: stringResource(R.string.unnamed_device), fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack)
-                                    Text(device.address, fontSize = TypeScale.Caption, color = TextSecondary)
-                                }
-                            }
+                            ActionRow(
+                                icon = Ph.bluetooth,
+                                title = name ?: stringResource(R.string.unnamed_device),
+                                subtitle = device.address,
+                                onClick = { onSelected(name ?: fallbackName, device.address) }
+                            )
                         }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close), color = OliveDark) } }
+        confirmButton = { TextButton(onClick = onDismiss, shape = androidx.compose.ui.graphics.RectangleShape) { Text(stringResource(R.string.close), fontSize = TypeScale.Body, color = Paper) } }
     )
 }
 
@@ -499,33 +511,37 @@ private fun colourLabel(name: String): String = stringResource(
 private fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = White,
-        title = { Text(stringResource(R.string.car_appearance), fontWeight = FontWeight.ExtraBold, color = NearBlack) },
+        containerColor = Panel,
+        shape = androidx.compose.ui.graphics.RectangleShape,
+        title = { Text(stringResource(R.string.car_appearance), fontSize = 24.sp, color = Paper) },
         text = {
             Column {
-                Text(stringResource(R.string.appearance_hint), fontSize = TypeScale.Supporting, color = TextSecondary)
+                Text(stringResource(R.string.appearance_hint), fontSize = TypeScale.Body, lineHeight = 24.sp, color = Muted)
                 Spacer(Modifier.height(12.dp))
-                LazyColumn(Modifier.heightIn(max = 430.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(Modifier.heightIn(max = 430.dp)) {
                     items(carColours, key = { it.first }) { (name, swatch) ->
                         val selected = fuel.accentName == name
-                        Surface(
-                            onClick = { fuel.setAccent(name); onDismiss() },
-                            color = if (selected) SurfaceSelected else Color(0xFFF7F7F7),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .background(if (selected) Field else Color.Transparent)
+                                .selectable(selected = selected, role = androidx.compose.ui.semantics.Role.RadioButton) {
+                                    fuel.setAccent(name); onDismiss()
+                                }
+                                .heightIn(min = 52.dp)
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(Modifier.padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(24.dp).clip(CircleShape).background(Hairline).padding(1.dp).clip(CircleShape).background(swatch))
-                                Spacer(Modifier.width(12.dp))
-                                Text(colourLabel(name), modifier = Modifier.weight(1f), fontSize = TypeScale.Label, fontWeight = FontWeight.SemiBold, color = NearBlack)
-                                if (selected) Text("✓", color = OliveDark, fontWeight = FontWeight.Bold)
-                            }
+                            Box(Modifier.size(20.dp).border(1.dp, Line).background(swatch))
+                            Spacer(Modifier.width(16.dp))
+                            Text(colourLabel(name), modifier = Modifier.weight(1f), fontSize = TypeScale.Emphasis, color = Paper)
+                            if (selected) Icon(Ph.check, contentDescription = null, tint = Accent, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close), color = OliveDark) } }
+        confirmButton = { TextButton(onClick = onDismiss, shape = androidx.compose.ui.graphics.RectangleShape) { Text(stringResource(R.string.close), fontSize = TypeScale.Body, color = Paper) } }
     )
 }
 
@@ -586,7 +602,7 @@ private fun ParkingHistoryPage(store: ParkingStore, onBack: () -> Unit) {
         actions = {
             if (state.history.isNotEmpty()) {
                 IconButton(onClick = { confirmClear = true }) {
-                    Icon(Icons.Filled.DeleteSweep, contentDescription = stringResource(R.string.history_clear), tint = White)
+                    Icon(Ph.trash, contentDescription = stringResource(R.string.history_clear), tint = Paper, modifier = Modifier.size(24.dp))
                 }
             }
         }
@@ -605,7 +621,7 @@ private fun ParkingHistoryPage(store: ParkingStore, onBack: () -> Unit) {
                 },
                 onDelete = { scope.launch { store.deleteHistoryEntry(entry.at) } }
             )
-            DividerRow()
+            DividerRow(Modifier.padding(horizontal = 24.dp))
         }
     }
     ConfirmDialog(
@@ -620,18 +636,27 @@ private fun ParkingHistoryPage(store: ParkingStore, onBack: () -> Unit) {
 
 @Composable
 private fun HistoryRow(entry: ParkingHistoryEntry, label: String, onOpen: () -> Unit, onDelete: () -> Unit) {
-    Surface(onClick = onOpen, color = White) {
-        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(label, fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack)
-                if (!entry.note.isNullOrBlank()) Text(entry.note, fontSize = TypeScale.Supporting, color = TextSecondary)
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete), tint = GrayIcon)
-            }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onOpen)
+            .heightIn(min = 64.dp)
+            .padding(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper)
+            if (!entry.note.isNullOrBlank()) Text(entry.note, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
+        }
+        IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+            Icon(Ph.trash, contentDescription = stringResource(R.string.delete), tint = Muted, modifier = Modifier.size(24.dp))
         }
     }
 }
+
+/** Keeps a black or dark grey car visible on the dark panel. */
+private fun visibleOnPanel(c: Color): Color =
+    if (c.luminance() < 0.08f) Color(0xFF6B6F74) else c
 
 private fun shareCrashReport(context: android.content.Context) {
     val file = ParkedApplication.crashFile(context)

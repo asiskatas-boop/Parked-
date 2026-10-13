@@ -12,18 +12,12 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.EditNote
-import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -39,6 +33,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.semantics
@@ -239,13 +234,12 @@ fun HomeScreen(
     val liveMarkerIcon = remember { makeLiveMarker(context) }
 
     val density = androidx.compose.ui.platform.LocalDensity.current
-    // The map fills only the area the sheet leaves visible (plus the sheet's
-    // rounded corner), so the car marker and "centre" are never hidden under it.
+    // The map fills only the area above the panel, so the car marker and
+    // "centre" are never hidden under it.
     val sheetHeight = with(density) { sheetHeightPx.toDp() }
-    val mapBottom = (sheetHeight - 28.dp).coerceAtLeast(0.dp)
 
-    Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().padding(bottom = mapBottom)) {
+    Box(Modifier.fillMaxSize().background(Ink)) {
+        Box(Modifier.fillMaxSize().padding(bottom = sheetHeight)) {
             ParkedMap(
                 parkedLat = if (hasSpot) s?.parkedLat else null,
                 parkedLng = if (hasSpot) s?.parkedLng else null,
@@ -258,7 +252,7 @@ fun HomeScreen(
                 command = mapCommand,
             )
 
-            OsmAttribution(Modifier.align(Alignment.TopEnd))
+            OsmAttribution(Modifier.align(Alignment.BottomStart))
 
             // Tell the user why the map can't show them, and fix it in one tap.
             val issue = when {
@@ -272,7 +266,7 @@ fun HomeScreen(
                 visible = issue != null,
                 enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it / 2 },
                 exit = androidx.compose.animation.fadeOut(),
-                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 44.dp, start = 16.dp, end = 16.dp)
+                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp, start = 16.dp, end = 16.dp)
             ) {
                 MapBanner(
                     issue = issue ?: MapIssue.Permission,
@@ -295,67 +289,59 @@ fun HomeScreen(
             // One button: centre on the car, or when you're away from it, fit
             // both you and the car on screen.
             if (hasSpot) {
+                val both = live != null && distance != null && distance >= 40
                 MapButton(
-                    icon = if (live != null && distance != null && distance >= 40) Icons.Filled.ZoomOutMap else Icons.Filled.DirectionsCar,
-                    description = stringResource(
-                        if (live != null && distance != null && distance >= 40) R.string.map_show_both else R.string.map_center_car
-                    ),
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 40.dp)
+                    icon = if (both) Ph.cornersOut else Ph.mapPin,
+                    description = stringResource(if (both) R.string.map_show_both else R.string.map_center_car),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp)
                 ) {
                     val next = (mapCommand?.id ?: 0) + 1
-                    mapCommand = if (live != null && distance != null && distance >= 40) MapCommand.ShowBoth(next)
-                    else MapCommand.CenterOnCar(next)
+                    mapCommand = if (both) MapCommand.ShowBoth(next) else MapCommand.CenterOnCar(next)
                 }
             }
         }
 
-        Surface(
-            color = White,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            shadowElevation = 12.dp,
-            modifier = Modifier
+        Column(
+            Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
+                .background(Ink)
                 .onSizeChanged { sheetHeightPx = it.height }
+                // Never more than about 60% of the screen, so the map stays usable.
+                .heightIn(max = minOf(520.dp, (LocalConfiguration.current.screenHeightDp * 0.6f).dp))
+                .animateContentSize(tween(260))
+                .verticalScroll(rememberScrollState())
+                .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 8.dp)
         ) {
-            Column(
-                Modifier
-                    // Never more than about half the screen, so the map stays usable.
-                    .heightIn(max = minOf(460.dp, (LocalConfiguration.current.screenHeightDp * 0.55f).dp))
-                    .animateContentSize(tween(260))
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 20.dp)
-            ) {
-                androidx.compose.animation.Crossfade(
-                    targetState = when {
-                        s == null -> 0
-                        !hasSpot -> 1
-                        else -> 2
-                    },
-                    animationSpec = tween(220),
-                    label = "homeSheet"
-                ) { mode ->
-                    Column {
-                        when {
-                            mode == 0 || s == null -> Spacer(Modifier.height(120.dp))
-                            mode == 1 -> EmptySpotContent(saving = saving, onSave = onSaveSpot)
-                            else -> SavedSpotContent(
-                                state = s,
-                                autoParkMode = autoParkMode,
-                                isAtCar = isAtCar,
-                                distance = distance,
-                                saving = saving,
-                                onDirections = { openDirections(context, s) },
-                                onSave = {
-                                    // Far from the saved car, saving here is probably a mistake: ask first.
-                                    if (distance != null && distance > 50) confirmReplace = true else onSaveSpot()
-                                },
-                                onShare = { shareSpot(context, s) },
-                                onNote = { showNote = true },
-                                onPhoto = { if (s.photoPath == null) takePhoto() else showPhoto = true },
-                                onTimer = { showTimer = true },
-                            )
-                        }
+            androidx.compose.animation.Crossfade(
+                targetState = when {
+                    s == null -> 0
+                    !hasSpot -> 1
+                    else -> 2
+                },
+                animationSpec = tween(220),
+                label = "homeSheet"
+            ) { mode ->
+                Column {
+                    when {
+                        mode == 0 || s == null -> Spacer(Modifier.height(160.dp))
+                        mode == 1 -> EmptySpotContent(saving = saving, onSave = onSaveSpot)
+                        else -> SavedSpotContent(
+                            state = s,
+                            autoParkMode = autoParkMode,
+                            isAtCar = isAtCar,
+                            distance = distance,
+                            saving = saving,
+                            onDirections = { openDirections(context, s) },
+                            onSave = {
+                                // Far from the saved car, saving here is probably a mistake: ask first.
+                                if (distance != null && distance > 50) confirmReplace = true else onSaveSpot()
+                            },
+                            onShare = { shareSpot(context, s) },
+                            onNote = { showNote = true },
+                            onPhoto = { if (s.photoPath == null) takePhoto() else showPhoto = true },
+                            onTimer = { showTimer = true },
+                        )
                     }
                 }
             }
@@ -409,21 +395,28 @@ fun HomeScreen(
 private var orphanCleanupDone = false
 
 @Composable
-private fun EmptySpotContent(saving: Boolean, onSave: () -> Unit) {
+private fun HeroText(text: String, color: Color, heading: Boolean = false) {
     Text(
-        stringResource(R.string.home_empty_title),
-        fontSize = TypeScale.PageTitle, fontWeight = FontWeight.ExtraBold,
-        color = NearBlack, letterSpacing = (-0.5).sp,
-        modifier = Modifier.semantics { heading() }
+        text,
+        fontSize = TypeScale.Hero,
+        lineHeight = TypeScale.Hero * 1.1f,
+        color = color,
+        letterSpacing = (-0.5).sp,
+        modifier = if (heading) Modifier.semantics { heading() } else Modifier
     )
-    Spacer(Modifier.height(8.dp))
-    Text(stringResource(R.string.home_empty_body), fontSize = TypeScale.Label, color = TextSecondary, fontWeight = FontWeight.Medium)
-    Spacer(Modifier.height(16.dp))
+}
+
+@Composable
+private fun EmptySpotContent(saving: Boolean, onSave: () -> Unit) {
+    HeroText(stringResource(R.string.home_empty_title), Paper, heading = true)
+    Spacer(Modifier.height(12.dp))
+    Text(stringResource(R.string.home_empty_body), fontSize = TypeScale.Body, lineHeight = 24.sp, color = Muted)
+    Spacer(Modifier.height(24.dp))
     PrimaryButton(
         text = stringResource(if (saving) R.string.saving else R.string.save_parking_spot),
-        icon = Icons.Filled.Bookmark,
         onClick = onSave
     )
+    Spacer(Modifier.height(16.dp))
 }
 
 @Composable
@@ -441,179 +434,109 @@ private fun SavedSpotContent(
     onTimer: () -> Unit,
 ) {
     val context = LocalContext.current
-    Text(
-        stringResource(if (isAtCar) R.string.home_at_car else R.string.home_saved_title),
-        fontSize = TypeScale.PageTitle, fontWeight = FontWeight.ExtraBold,
-        color = NearBlack, letterSpacing = (-0.5).sp,
-        modifier = Modifier.semantics { heading() }
-    )
-    Spacer(Modifier.height(8.dp))
     val parked = state.parkedAt?.let { parkedAtLabel(context, it) } ?: stringResource(R.string.parked_recently)
-    val away = if (distance != null && !isAtCar) {
-        stringResource(R.string.distance_walk, formatDistance(distance), walkingMinutes(distance))
-    } else null
-    Text(
-        listOfNotNull(parked, away).joinToString(" · "),
-        fontSize = TypeScale.Label, color = TextSecondary, fontWeight = FontWeight.Medium
-    )
-    Text(
-        stringResource(
-            when {
-                !state.monitoring -> R.string.autopark_off
-                autoParkMode == AutoParkMode.Limited -> R.string.autopark_on_limited
-                else -> R.string.autopark_on
-            }
-        ),
-        fontSize = TypeScale.Supporting, color = TextSecondary
-    )
-
-    if (!state.note.isNullOrBlank()) {
-        Spacer(Modifier.height(12.dp))
-        Surface(onClick = onNote, color = SurfaceTint, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.EditNote, contentDescription = null, tint = OliveDark)
-                Spacer(Modifier.width(12.dp))
-                Text(state.note, fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack)
-            }
+    val autoPark = stringResource(
+        when {
+            !state.monitoring -> R.string.autopark_off
+            autoParkMode == AutoParkMode.Limited -> R.string.autopark_on_limited
+            else -> R.string.autopark_on
         }
+    )
+    Text("$parked · $autoPark", fontSize = TypeScale.Label, lineHeight = 22.sp, color = Muted)
+    Spacer(Modifier.height(8.dp))
+    HeroText(stringResource(if (isAtCar) R.string.home_at_car else R.string.home_car_title), Paper, heading = true)
+    if (distance != null && !isAtCar) {
+        HeroText(stringResource(R.string.home_distance, formatDistance(distance), walkingMinutes(distance)), Accent)
     }
 
+    // Note, photo and parking time: three columns between hairlines.
     val timerEnds = state.timerEndsAt?.takeIf { it > System.currentTimeMillis() - 60 * 60_000L }
-    if (timerEnds != null) {
-        Spacer(Modifier.height(12.dp))
-        TimerStatus(endsAt = timerEnds, onClick = onTimer)
-    }
-
-    Spacer(Modifier.height(16.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        SpotChip(
-            icon = Icons.Outlined.EditNote,
-            label = stringResource(if (state.note.isNullOrBlank()) R.string.chip_add_note else R.string.chip_edit_note),
+    Spacer(Modifier.height(20.dp))
+    DividerRow()
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        SpotCell(
+            icon = Ph.note,
+            label = state.note?.takeIf { it.isNotBlank() } ?: stringResource(R.string.chip_add_note),
             active = !state.note.isNullOrBlank(),
             modifier = Modifier.weight(1f),
             onClick = onNote
         )
-        SpotChip(
-            icon = Icons.Outlined.CameraAlt,
-            label = stringResource(if (state.photoPath == null) R.string.chip_add_photo else R.string.chip_view_photo),
+        VerticalDivider(color = Line)
+        SpotCell(
+            icon = Ph.camera,
+            label = stringResource(R.string.chip_add_photo),
             active = state.photoPath != null,
             modifier = Modifier.weight(1f),
             onClick = onPhoto
         )
-        SpotChip(
-            icon = Icons.Outlined.Timer,
-            label = stringResource(if (timerEnds == null) R.string.chip_timer else R.string.chip_timer_edit),
-            active = timerEnds != null,
-            modifier = Modifier.weight(1f),
-            onClick = onTimer
-        )
+        VerticalDivider(color = Line)
+        TimerCell(endsAt = timerEnds, modifier = Modifier.weight(1f), onClick = onTimer)
     }
+    DividerRow()
 
-    Spacer(Modifier.height(16.dp))
-    PrimaryButton(text = stringResource(R.string.get_directions), icon = Icons.Filled.Navigation, onClick = onDirections)
-    Spacer(Modifier.height(12.dp))
-    // Both buttons always share the taller one's height, even when a longer
-    // translation wraps onto two lines.
-    Row(
-        Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        SecondaryButton(
-            text = stringResource(R.string.share_spot),
-            icon = Icons.Filled.Share,
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-            onClick = onShare
+    Spacer(Modifier.height(20.dp))
+    PrimaryButton(text = stringResource(R.string.get_directions), onClick = onDirections)
+    Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.padding(top = 4.dp)) {
+        LinkButton(stringResource(R.string.share_spot), onClick = onShare)
+        // Replacing the saved spot is the risky action here, so it is the
+        // quietest one on the screen.
+        LinkButton(
+            stringResource(if (saving) R.string.saving else R.string.save_current_spot),
+            color = Muted,
+            onClick = onSave
         )
-        // Replacing the saved spot is the risky action here, so it gets the
-        // quietest style instead of matching Share.
-        OutlinedButton(
-            onClick = onSave,
-            modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 50.dp),
-            shape = RoundedCornerShape(20.dp),
-            border = androidx.compose.foundation.BorderStroke(1.5.dp, OliveDark),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        ) {
-            Icon(Icons.Filled.Bookmark, contentDescription = null, tint = OliveDark, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(
-                stringResource(if (saving) R.string.saving else R.string.save_current_spot),
-                fontSize = TypeScale.Supporting, fontWeight = FontWeight.Bold, color = OliveDark,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-        }
     }
 }
 
+/** One column of the note / photo / timer row. Orange icon = something saved. */
 @Composable
-private fun SpotChip(icon: ImageVector, label: String, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun SpotCell(
+    icon: ImageVector,
+    label: String,
+    active: Boolean,
+    modifier: Modifier,
+    labelColor: Color = Paper,
+    onClick: () -> Unit,
+) {
     val saved = stringResource(R.string.cd_has_content)
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
-        // A filled chip means something is saved there (a note, a photo, a timer).
-        color = if (active) SurfaceSelected else SurfaceTint,
-        border = if (active) androidx.compose.foundation.BorderStroke(1.5.dp, OliveMid) else null,
-        modifier = modifier
-            .heightIn(min = 56.dp)
+    Column(
+        modifier
+            .fillMaxHeight()
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
             .semantics { if (active) stateDescription = saved }
+            .heightIn(min = 88.dp)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Column(
-            Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box {
-                Icon(icon, contentDescription = null, tint = OliveDark, modifier = Modifier.size(20.dp))
-                if (active) {
-                    Icon(
-                        Icons.Filled.CheckCircle, contentDescription = null, tint = OliveMid,
-                        modifier = Modifier.size(12.dp).align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp)
-                            .background(White, CircleShape)
-                    )
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                label, fontSize = TypeScale.Caption, fontWeight = FontWeight.SemiBold, color = NearBlack,
-                maxLines = 2, overflow = TextOverflow.Ellipsis,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-        }
+        Icon(icon, contentDescription = null, tint = if (active) Accent else Paper, modifier = Modifier.size(24.dp))
+        Text(label, fontSize = TypeScale.Label, lineHeight = 20.sp, color = labelColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
 @Composable
-private fun TimerStatus(endsAt: Long, onClick: () -> Unit) {
+private fun TimerCell(endsAt: Long?, modifier: Modifier, onClick: () -> Unit) {
     val context = LocalContext.current
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(endsAt) {
-        while (true) {
+        while (endsAt != null) {
             now = System.currentTimeMillis()
             delay(15_000L)
         }
     }
-    val minutesLeft = ((endsAt - now) / 60_000.0).let { kotlin.math.ceil(it).toInt() }
-    val expired = minutesLeft <= 0
-    val text = if (expired) {
-        stringResource(R.string.timer_expired_at, clockTime(context, endsAt))
-    } else {
-        val left = if (minutesLeft >= 60) {
-            stringResource(R.string.duration_hm, minutesLeft / 60, minutesLeft % 60)
-        } else stringResource(R.string.duration_m, minutesLeft)
-        stringResource(R.string.timer_ends_at, clockTime(context, endsAt), left)
+    val expired = endsAt != null && endsAt <= now
+    val label = when {
+        endsAt == null -> stringResource(R.string.chip_timer)
+        expired -> stringResource(R.string.timer_short_ended, clockTime(context, endsAt))
+        else -> stringResource(R.string.timer_short_ends, clockTime(context, endsAt))
     }
-    Surface(
-        onClick = onClick,
-        color = if (expired || minutesLeft <= ParkingTimer.WARNING_MINUTES) Color(0xFFFFF1E0) else SurfaceTint,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }
-    ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Timer, contentDescription = null, tint = if (expired) WarnAmber else OliveDark)
-            Spacer(Modifier.width(12.dp))
-            Text(text, fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = if (expired) WarnAmber else NearBlack)
-        }
-    }
+    SpotCell(
+        icon = Ph.timer,
+        label = label,
+        active = endsAt != null,
+        labelColor = if (expired) Warn else Paper,
+        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        onClick = onClick
+    )
 }
 
 private enum class MapIssue { Permission, LocationOff, AutoParkOff }
@@ -625,28 +548,23 @@ private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Un
         MapIssue.LocationOff -> R.string.banner_location_off to R.string.banner_location_off_action
         MapIssue.AutoParkOff -> R.string.banner_autopark_off to R.string.banner_autopark_off_action
     }
-    Surface(
-        color = White,
-        shape = RoundedCornerShape(18.dp),
-        shadowElevation = 6.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxWidth().background(Panel).padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 4.dp)) {
+        Row(Modifier.padding(end = 8.dp), verticalAlignment = Alignment.Top) {
             Icon(
-                if (issue == MapIssue.AutoParkOff) Icons.Filled.Bluetooth else Icons.Filled.LocationOff,
+                if (issue == MapIssue.AutoParkOff) Ph.bluetooth else Ph.mapPin,
                 contentDescription = null,
-                tint = OliveDark,
+                tint = Accent,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(Modifier.width(12.dp))
-            Text(stringResource(text), fontSize = TypeScale.Supporting, lineHeight = 17.sp, color = NearBlack, modifier = Modifier.weight(1f))
+            Text(stringResource(text), fontSize = TypeScale.Label, lineHeight = 22.sp, color = Paper, modifier = Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth().padding(start = 32.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            LinkButton(stringResource(action), onClick = onAction)
             if (issue == MapIssue.AutoParkOff) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.banner_not_now), color = TextSecondary)
+                TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp), shape = androidx.compose.ui.graphics.RectangleShape) {
+                    Text(stringResource(R.string.banner_not_now), fontSize = TypeScale.Emphasis, color = Muted)
                 }
-            }
-            TextButton(onClick = onAction) {
-                Text(stringResource(action), fontWeight = FontWeight.Bold, color = OliveDark)
             }
         }
     }
@@ -654,33 +572,31 @@ private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Un
 
 @Composable
 private fun MapButton(icon: ImageVector, description: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = White,
-        shadowElevation = 6.dp,
-        modifier = modifier.size(52.dp)
+    Box(
+        modifier
+            .size(48.dp)
+            .background(Ink)
+            .border(1.dp, Line)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = description, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = description, tint = OliveDark)
-        }
+        Icon(icon, contentDescription = null, tint = Paper, modifier = Modifier.size(24.dp))
     }
 }
 
 @Composable
 private fun OsmAttribution(modifier: Modifier) {
-    // Credit only, not a link: a tiny tap target here sat right next to the map
-    // banner and was easy to hit by accident.
+    // Required by the OpenStreetMap and CARTO licences. Credit only, not a
+    // link: a tiny tap target on the map was easy to hit by accident.
     Text(
         stringResource(R.string.osm_attribution),
-        fontSize = TypeScale.Caption,
-        color = NearBlack,
+        fontSize = 11.sp,
+        color = Muted,
         modifier = modifier
-            .statusBarsPadding()
-            .padding(top = 8.dp, end = 8.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(White.copy(alpha = 0.88f))
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(start = 8.dp, bottom = 8.dp)
+            .background(Ink.copy(alpha = 0.7f))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
     )
 }
 
@@ -700,8 +616,11 @@ private fun NoteSheet(initial: String, onDismiss: () -> Unit, onSave: (String?) 
             value = text,
             onValueChange = { text = it.take(140) },
             label = { Text(stringResource(R.string.note_label)) },
-            placeholder = { Text(stringResource(R.string.note_placeholder), color = TextSecondary) },
+            placeholder = { Text(stringResource(R.string.note_placeholder)) },
             singleLine = true,
+            shape = androidx.compose.ui.graphics.RectangleShape,
+            colors = parkedFieldColors(),
+            textStyle = androidx.compose.ui.text.TextStyle(fontFamily = SofiaSans, fontSize = TypeScale.Emphasis),
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.Sentences,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Done
@@ -711,7 +630,7 @@ private fun NoteSheet(initial: String, onDismiss: () -> Unit, onSave: (String?) 
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onSave(text) }),
             trailingIcon = {
                 IconButton(onClick = { onSave(text) }) {
-                    Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.save_note), tint = OliveDark)
+                    Icon(Ph.check, contentDescription = stringResource(R.string.save_note), tint = Accent, modifier = Modifier.size(24.dp))
                 }
             },
             supportingText = { Text("${text.length}/140") },
@@ -720,7 +639,7 @@ private fun NoteSheet(initial: String, onDismiss: () -> Unit, onSave: (String?) 
         Spacer(Modifier.height(16.dp))
         PrimaryButton(text = stringResource(R.string.save_note), onClick = { onSave(text) })
         if (initial.isNotBlank()) {
-            QuietButton(text = stringResource(R.string.remove_note), color = ErrorRed) { onSave(null) }
+            QuietButton(text = stringResource(R.string.remove_note), color = Danger) { onSave(null) }
         }
         QuietButton(text = stringResource(R.string.cancel), onClick = onDismiss)
     }
@@ -776,9 +695,9 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
         if (endsAt != null) {
             Text(
                 stringResource(R.string.timer_current, clockTime(context, endsAt)),
-                fontSize = TypeScale.Body, fontWeight = FontWeight.SemiBold, color = NearBlack
+                fontSize = TypeScale.Body, lineHeight = 24.sp, color = Paper
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
         }
         val presets = listOf(30, 60, 120, 180)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -787,12 +706,13 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
                     onClick = { start(minutes) },
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     contentPadding = PaddingValues(horizontal = 4.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = androidx.compose.ui.graphics.RectangleShape,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Line),
                 ) {
                     Text(
                         if (minutes < 60) stringResource(R.string.duration_m, minutes)
                         else stringResource(R.string.duration_h, minutes / 60),
-                        color = OliveDark, fontWeight = FontWeight.Bold
+                        color = Paper, fontSize = TypeScale.Body
                     )
                 }
             }
@@ -812,8 +732,8 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
         })
         if (!exactAllowed && Build.VERSION.SDK_INT >= 31) {
             Spacer(Modifier.height(12.dp))
-            Text(stringResource(R.string.timer_inexact), fontSize = TypeScale.Caption, lineHeight = 16.sp, color = TextSecondary)
-            QuietButton(text = stringResource(R.string.timer_allow_exact), color = OliveDark) {
+            Text(stringResource(R.string.timer_inexact), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
+            QuietButton(text = stringResource(R.string.timer_allow_exact), color = Accent) {
                 runCatching {
                     context.startActivity(
                         Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
@@ -822,7 +742,7 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
             }
         }
         if (endsAt != null) {
-            QuietButton(text = stringResource(R.string.timer_cancel), color = ErrorRed) { onSet(null) }
+            QuietButton(text = stringResource(R.string.timer_cancel), color = Danger) { onSet(null) }
         }
     }
 }
@@ -843,7 +763,7 @@ private fun PhotoDialog(
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
-            Modifier.fillMaxSize().background(NearBlack).systemBarsPadding().padding(16.dp),
+            Modifier.fillMaxSize().background(Ink).systemBarsPadding().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -853,21 +773,21 @@ private fun PhotoDialog(
                         bitmap = bmp.asImageBitmap(),
                         contentDescription = stringResource(R.string.cd_spot_photo),
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
+                        modifier = Modifier.fillMaxSize()
                     )
                 } else if (failed) {
                     // The file is gone or unreadable: say so instead of spinning forever.
-                    Text(stringResource(R.string.photo_load_failed), color = White, fontSize = TypeScale.Body)
+                    Text(stringResource(R.string.photo_load_failed), color = Paper, fontSize = TypeScale.Body)
                 } else {
-                    CircularProgressIndicator(color = LimeBright)
+                    CircularProgressIndicator(color = Accent)
                 }
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                SecondaryButton(stringResource(R.string.photo_retake), icon = Icons.Outlined.CameraAlt, modifier = Modifier.weight(1f), onClick = onRetake)
-                SecondaryButton(stringResource(R.string.photo_remove), icon = Icons.Filled.Delete, modifier = Modifier.weight(1f), onClick = onRemove)
+                SecondaryButton(stringResource(R.string.photo_retake), icon = Ph.camera, modifier = Modifier.weight(1f), onClick = onRetake)
+                SecondaryButton(stringResource(R.string.photo_remove), icon = Ph.trash, modifier = Modifier.weight(1f), onClick = onRemove)
             }
-            QuietButton(stringResource(R.string.close), color = White, onClick = onDismiss)
+            QuietButton(stringResource(R.string.close), color = Paper, onClick = onDismiss)
         }
     }
 }
