@@ -43,6 +43,9 @@ compiler errors are attached to the check run as a single annotation.
   the user corrects only when the car's gauge differs.
 - The odometer only advances from GPS after the user has entered a real reading.
 - Keep storage keys backward compatible; users update in place.
+- For now 0.4 builds as a separate app (`applicationIdSuffix = ".next"`,
+  label "Parked! Next") so it runs beside the installed 0.3.x. Removing the
+  suffix makes it an in-place update again.
 
 ## Design tokens
 

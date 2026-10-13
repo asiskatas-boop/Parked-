@@ -14,6 +14,12 @@ android {
         targetSdk = 35
         versionCode = 14
         versionName = "0.4.0"
+
+        // 0.4 installs as a separate app next to 0.3.x, so the redesign can be
+        // tried without touching the data in the installed app. Remove these two
+        // lines to ship 0.4 as an update to com.parked.app instead.
+        applicationIdSuffix = ".next"
+        manifestPlaceholders["appLabel"] = "Parked! Next"
     }
 
     // CI provides a fixed debug key so every build installs over the previous

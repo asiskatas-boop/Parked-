@@ -4,6 +4,9 @@
 
 A new look; no change to how anything works.
 
+- Installs as a separate app, "Parked! Next" (com.parked.app.next), next to
+  0.3.x. It starts with empty data; the installed Parked! keeps its own.
+
 - Dark only, with one orange accent (#FF7500). Large light headings, hairline
   rows instead of cards, square buttons, fields and switches.
 - Sofia Sans replaces Inter (variable font, full Greek).
