@@ -386,6 +386,9 @@ enum class AppTab(val labelRes: Int, val icon: Int) {
     Settings(R.string.tab_settings, R.drawable.ph_sliders),
 }
 
+/** Accuracy of the latest location fix (metres) and when it arrived. */
+data class GpsReading(val accuracy: Float?, val at: Long)
+
 /** The phone's live position while Home is visible. */
 data class LiveLocation(val lat: Double, val lng: Double, val accuracy: Float?)
 
@@ -419,6 +422,8 @@ private fun MainContent(
     }
 
     var live by remember { mutableStateOf<LiveLocation?>(null) }
+    // The latest fix's accuracy and when it arrived, for the GPS signal on the map.
+    var gps by remember { mutableStateOf<GpsReading?>(null) }
     var hasPerm by remember { mutableStateOf(hasLocationPermission(context)) }
     var locationOn by remember { mutableStateOf(com.parked.app.util.isLocationServicesEnabled(context)) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -431,6 +436,8 @@ private fun MainContent(
         object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val loc = result.lastLocation ?: return
+                // Every fix counts for the GPS signal, including poor ones.
+                gps = GpsReading(if (loc.hasAccuracy()) loc.accuracy else null, System.currentTimeMillis())
                 // A very poor fix would wrongly claim the user is at (or far from) the car.
                 if (loc.hasAccuracy() && loc.accuracy > 100f) return
                 live = LiveLocation(loc.latitude, loc.longitude, if (loc.hasAccuracy()) loc.accuracy else null)
@@ -460,6 +467,7 @@ private fun MainContent(
         } else {
             runCatching { fused.removeLocationUpdates(locCallback) }
             live = null
+            gps = null
         }
     }
 
@@ -525,6 +533,7 @@ private fun MainContent(
                         store = store,
                         fuel = fuel,
                         live = live,
+                        gps = gps,
                         hasPerm = hasPerm,
                         locationOn = locationOn,
                         onSetUpAutoPark = { tab = AppTab.Settings; autoParkRequest++ },
@@ -548,7 +557,8 @@ private fun MainContent(
                         fuel = fuel,
                         store = store,
                         autoParkRequest = autoParkRequest,
-                        onAutoParkRequestHandled = { autoParkRequest = 0 }
+                        onAutoParkRequestHandled = { autoParkRequest = 0 },
+                        appScope = appScope,
                     )
                 }
             }

@@ -74,6 +74,8 @@ object Ph {
     val squaresFour @Composable get() = ImageVector.vectorResource(R.drawable.ph_squares_four)
     val timer @Composable get() = ImageVector.vectorResource(R.drawable.ph_timer)
     val trash @Composable get() = ImageVector.vectorResource(R.drawable.ph_trash)
+    val trayArrowDown @Composable get() = ImageVector.vectorResource(R.drawable.ph_tray_arrow_down)
+    val trayArrowUp @Composable get() = ImageVector.vectorResource(R.drawable.ph_tray_arrow_up)
     val warning @Composable get() = ImageVector.vectorResource(R.drawable.ph_warning)
     val wrench @Composable get() = ImageVector.vectorResource(R.drawable.ph_wrench)
     val x @Composable get() = ImageVector.vectorResource(R.drawable.ph_x)

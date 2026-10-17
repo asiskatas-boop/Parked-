@@ -309,14 +309,21 @@
     <string name="backup_not_valid">Αυτό το αρχείο δεν είναι αντίγραφο ασφαλείας του Parked!</string>
     <string name="backup_too_new">Το αντίγραφο είναι από νεότερη έκδοση. Ενημέρωσε το Parked! και δοκίμασε ξανά.</string>
     <string name="backup_restore_title">Επαναφορά αντιγράφου;</string>
-    <string name="backup_restore_body">Δημιουργήθηκε στις %1$s. Αντικαθιστά το αυτοκίνητο, το σημείο, τους ανεφοδιασμούς, τις υπενθυμίσεις και τις ρυθμίσεις σε αυτό το κινητό. Οι φωτογραφίες δεν περιλαμβάνονται και το AutoPark μένει κλειστό μέχρι να το ανοίξεις.</string>
+    <string name="backup_restore_body">Αντικαθιστά το αυτοκίνητο, το σημείο (μαζί με τη φωτογραφία του), τους ανεφοδιασμούς, τις υπενθυμίσεις και τις ρυθμίσεις σε αυτό το κινητό. Το AutoPark μένει κλειστό μέχρι να το ανοίξεις.</string>
     <string name="backup_restore_confirm">Επαναφορά</string>
     <string name="backup_restored">Έγινε επαναφορά του αντιγράφου.</string>
     <!-- GPS signal on the map -->
-    <string name="gps_good">GPS καλό · ±%1$d m</string>
-    <string name="gps_fair">GPS μέτριο · ±%1$d m</string>
-    <string name="gps_weak">GPS αδύναμο · ±%1$d m</string>
+    <string name="gps_good">GPS καλό</string>
+    <string name="gps_fair">GPS μέτριο</string>
+    <string name="gps_weak">GPS αδύναμο</string>
     <string name="gps_on">GPS ενεργό</string>
     <string name="gps_searching">Αναζήτηση GPS</string>
     <string name="spot_saved_weak">Το σημείο αποθηκεύτηκε. Το GPS ήταν αδύναμο (±%1$d m), οπότε ίσως απέχει λίγο.</string>
+    <string name="backup_restore_made">Δημιουργήθηκε στις %1$s.</string>
+    <plurals name="backup_restore_history">
+        <item quantity="one">Επίσης ενεργοποιεί το ιστορικό στάθμευσης και επαναφέρει %1$d αποθηκευμένο σημείο.</item>
+        <item quantity="other">Επίσης ενεργοποιεί το ιστορικό στάθμευσης και επαναφέρει %1$d αποθηκευμένα σημεία.</item>
+    </plurals>
+    <string name="gps_accuracy">%1$s · ±%2$d m</string>
+    <string name="gps_approximate">Μόνο κατά προσέγγιση τοποθεσία</string>
 </resources>

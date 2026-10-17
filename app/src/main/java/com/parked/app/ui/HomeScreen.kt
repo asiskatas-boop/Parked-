@@ -77,6 +77,7 @@ fun HomeScreen(
     store: ParkingStore,
     fuel: FuelStore,
     live: LiveLocation?,
+    gps: GpsReading?,
     hasPerm: Boolean,
     locationOn: Boolean,
     onSetUpAutoPark: () -> Unit,
@@ -256,13 +257,15 @@ fun HomeScreen(
                 command = mapCommand,
             )
 
-            OsmAttribution(Modifier.align(Alignment.BottomStart))
-
-            // GPS quality, so you know whether "you" on the map (and a save
-            // right now) can be trusted. The banner covers permission and
-            // Location being off, so this only shows when both are fine.
-            if (hasPerm && locationOn) {
-                GpsSignal(live = live, modifier = Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 30.dp))
+            // GPS quality above the map credit, stacked so large text never
+            // makes one cover the other. The banner covers permission and
+            // Location being off, so the signal only shows when both are fine.
+            Column(Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 8.dp)) {
+                if (hasPerm && locationOn) {
+                    GpsSignal(gps = gps)
+                    Spacer(Modifier.height(6.dp))
+                }
+                OsmAttribution(Modifier)
             }
 
             // Tell the user why the map can't show them, and fix it in one tap.
@@ -569,41 +572,62 @@ private fun TimerCell(endsAt: Long?, modifier: Modifier, onClick: () -> Unit) {
 /** Accuracy above this many metres counts as weak GPS. */
 private const val WEAK_GPS_M = 30f
 
-/** Three bars and a label: good (up to 15 m), fair (up to 30 m), weak (worse). */
+/** A fix older than this means the phone has lost GPS (a garage, a tunnel). */
+private const val GPS_STALE_MS = 20_000L
+
+/**
+ * Three bars and a label: good (up to 15 m), fair (up to 30 m), weak (worse).
+ * No recent fix reads "Looking for GPS"; approximate-only permission says so.
+ */
 @Composable
-private fun GpsSignal(live: LiveLocation?, modifier: Modifier = Modifier) {
-    val acc = live?.accuracy
+private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(5_000L)
+            now = System.currentTimeMillis()
+        }
+    }
+    val precise = androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED
+    val acc = gps?.takeIf { maxOf(now, it.at) - it.at <= GPS_STALE_MS }?.accuracy
+    val fresh = gps != null && maxOf(now, gps.at) - gps.at <= GPS_STALE_MS
     val bars = when {
-        live == null -> 0
-        acc == null || acc <= 15f -> 3
+        !precise -> 1
+        !fresh || acc == null -> 0
+        acc <= 15f -> 3
         acc <= WEAK_GPS_M -> 2
         else -> 1
     }
     val color = when (bars) { 3 -> Accent; 2 -> Warn; 1 -> Danger; else -> Muted }
-    val metres = acc?.roundToInt()
-    val label = when {
-        live == null -> stringResource(R.string.gps_searching)
-        metres == null -> stringResource(R.string.gps_on)
-        bars == 3 -> stringResource(R.string.gps_good, metres)
-        bars == 2 -> stringResource(R.string.gps_fair, metres)
-        else -> stringResource(R.string.gps_weak, metres)
+    // The spoken label is the level only, so TalkBack isn't re-reading a
+    // changing number every few seconds; the screen shows the metres.
+    val level = when {
+        !precise -> stringResource(R.string.gps_approximate)
+        !fresh -> stringResource(R.string.gps_searching)
+        acc == null -> stringResource(R.string.gps_on)
+        bars == 3 -> stringResource(R.string.gps_good)
+        bars == 2 -> stringResource(R.string.gps_fair)
+        else -> stringResource(R.string.gps_weak)
     }
+    val shown = if (precise && fresh && acc != null) stringResource(R.string.gps_accuracy, level, acc.roundToInt()) else level
     Row(
         modifier
             .background(Ink.copy(alpha = 0.8f))
             .border(1.dp, Line)
             .padding(horizontal = 8.dp, vertical = 5.dp)
-            .clearAndSetSemantics { contentDescription = label },
+            .clearAndSetSemantics { contentDescription = level },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             listOf(5.dp, 9.dp, 13.dp).forEachIndexed { i, h ->
-                Box(Modifier.size(width = 3.dp, height = h).background(if (i < bars) color else Line))
+                Box(Modifier.size(width = 3.dp, height = h).background(if (i < bars) color else Color(0xFF555555)))
             }
         }
         Spacer(Modifier.width(8.dp))
         // Status is in words too, never colour alone.
-        Text(label, fontSize = TypeScale.Caption, color = Paper)
+        Text(shown, fontSize = TypeScale.Caption, color = Paper)
     }
 }
 
@@ -662,7 +686,6 @@ private fun OsmAttribution(modifier: Modifier) {
         fontSize = 11.sp,
         color = Muted,
         modifier = modifier
-            .padding(start = 8.dp, bottom = 8.dp)
             .background(Ink.copy(alpha = 0.7f))
             .padding(horizontal = 6.dp, vertical = 2.dp)
     )

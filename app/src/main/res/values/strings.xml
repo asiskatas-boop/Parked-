@@ -312,14 +312,21 @@
     <string name="backup_not_valid">This file isn\'t a Parked! backup.</string>
     <string name="backup_too_new">This backup is from a newer version. Update Parked! and try again.</string>
     <string name="backup_restore_title">Restore this backup?</string>
-    <string name="backup_restore_body">Made on %1$s. It replaces the car, spot, refuels, reminders and settings on this phone. Photos aren\'t included, and AutoPark stays off until you turn it on.</string>
+    <string name="backup_restore_body">It replaces the car, spot (with its photo), refuels, reminders and settings on this phone. AutoPark stays off until you turn it on.</string>
     <string name="backup_restore_confirm">Restore</string>
     <string name="backup_restored">Backup restored.</string>
     <!-- GPS signal on the map -->
-    <string name="gps_good">GPS good · ±%1$d m</string>
-    <string name="gps_fair">GPS fair · ±%1$d m</string>
-    <string name="gps_weak">GPS weak · ±%1$d m</string>
+    <string name="gps_good">GPS good</string>
+    <string name="gps_fair">GPS fair</string>
+    <string name="gps_weak">GPS weak</string>
     <string name="gps_on">GPS on</string>
     <string name="gps_searching">Looking for GPS</string>
     <string name="spot_saved_weak">Spot saved. GPS was weak (±%1$d m), so it may be a little off.</string>
+    <string name="backup_restore_made">Made on %1$s.</string>
+    <plurals name="backup_restore_history">
+        <item quantity="one">It also turns on parking history and restores %1$d saved spot.</item>
+        <item quantity="other">It also turns on parking history and restores %1$d saved spots.</item>
+    </plurals>
+    <string name="gps_accuracy">%1$s · ±%2$d m</string>
+    <string name="gps_approximate">Approximate location only</string>
 </resources>

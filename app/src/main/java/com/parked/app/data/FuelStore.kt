@@ -114,6 +114,19 @@ class FuelStore(context: Context) {
     }
 
     companion object {
+        /**
+         * Keys the backup file carries, with their stored type: f float,
+         * l long, s string, b boolean. Import refuses any other type for a key,
+         * because a wrong type would crash every later read.
+         */
+        val BACKUP_KEYS: Map<String, Char> = linkedMapOf(
+            "tankCapacity" to 'f', "currency" to 's', "baselineOdo" to 'f', "gpsKm" to 'f',
+            "levelPct" to 'f', "odoForLevel" to 'f', "levelUpdatedAt" to 'l',
+            "fuelLevelLogs" to 's', "refuels" to 's', "accentName" to 's',
+            "notificationsEnabled" to 'b', "serviceReminders" to 's',
+        )
+        /** Values that hold JSON arrays; import checks they parse. */
+        val BACKUP_JSON_ARRAYS = setOf("fuelLevelLogs", "refuels", "serviceReminders")
         private val legacyMigrationLock = Any()
         private val reminderLock = Any()
         private val supportedAccentNames = setOf(
@@ -162,41 +175,37 @@ class FuelStore(context: Context) {
     }
 
     /**
-     * Every stored value with its type, for the backup file. Keys are written
-     * exactly as stored, so a backup restores into any later version that
-     * reads the same keys.
+     * The user's data with each value's type, for the backup file. Only the
+     * keys in [BACKUP_KEYS]; internal migration flags stay on this phone.
      */
     fun exportJson(): JSONObject = JSONObject().apply {
-        prefs.all.forEach { (key, value) ->
-            val entry = when (value) {
-                is Boolean -> JSONObject().put("t", "b").put("v", value)
-                is Int -> JSONObject().put("t", "i").put("v", value)
-                is Long -> JSONObject().put("t", "l").put("v", value)
-                is Float -> JSONObject().put("t", "f").put("v", value.toDouble())
-                is String -> JSONObject().put("t", "s").put("v", value)
-                else -> null // String sets are not used by this store.
+        val all = prefs.all
+        BACKUP_KEYS.forEach { (key, type) ->
+            val value = all[key] ?: return@forEach
+            when {
+                type == 'f' && value is Float && value.isFinite() -> put(key, JSONObject().put("t", "f").put("v", value.toDouble()))
+                type == 'l' && value is Long -> put(key, JSONObject().put("t", "l").put("v", value))
+                type == 's' && value is String -> put(key, JSONObject().put("t", "s").put("v", value))
+                type == 'b' && value is Boolean -> put(key, JSONObject().put("t", "b").put("v", value))
             }
-            if (entry != null) put(key, entry)
         }
     }
 
     /**
-     * Replaces everything with a backup made by [exportJson]. Keys missing from
-     * the backup are removed one by one (not with clear()), so the change
-     * listener reloads each value into the screens and the AutoPark service.
+     * Replaces the user's data with already-checked values (see Backup.parse).
+     * Each key in [BACKUP_KEYS] is either written or removed one by one, so the
+     * change listener reloads it into the screens and the AutoPark service.
+     * The migration flags are left alone, so old-format code never runs again.
      */
-    fun importJson(data: JSONObject) {
+    fun importValues(values: Map<String, Any>) {
         val editor = prefs.edit()
-        val incoming = data.keys().asSequence().toSet()
-        prefs.all.keys.filterNot { it in incoming }.forEach { editor.remove(it) }
-        incoming.forEach { key ->
-            val e = data.optJSONObject(key) ?: return@forEach
-            when (e.optString("t")) {
-                "b" -> editor.putBoolean(key, e.getBoolean("v"))
-                "i" -> editor.putInt(key, e.getInt("v"))
-                "l" -> editor.putLong(key, e.getLong("v"))
-                "f" -> editor.putFloat(key, e.getDouble("v").toFloat())
-                "s" -> editor.putString(key, e.getString("v"))
+        BACKUP_KEYS.keys.forEach { key ->
+            when (val v = values[key]) {
+                is Float -> editor.putFloat(key, v)
+                is Long -> editor.putLong(key, v)
+                is String -> editor.putString(key, v)
+                is Boolean -> editor.putBoolean(key, v)
+                else -> editor.remove(key)
             }
         }
         editor.commit()

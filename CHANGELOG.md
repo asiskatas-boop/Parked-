@@ -4,10 +4,16 @@
 
 - Backup: Settings → Backup exports one file with the car, spot, note,
   timer, opt-in history, fuel, refuels, odometer and service reminders, and
-  imports it again (with Undo). You choose where the file goes; the app uploads
-  nothing. Photos are not included, and AutoPark stays off after a restore.
-- GPS signal on the map: good, fair or weak with the accuracy in metres, or
-  "Looking for GPS". Saving with a weak fix says so.
+  imports it again. You choose where the file goes; the app uploads nothing.
+  - The whole file is checked before anything changes; a broken or edited
+    file is refused with a message.
+  - Restoring can be undone right after, including the spot photo and
+    AutoPark's on/off state.
+  - The confirm dialog says when a backup turns parking history on.
+  - Photos are not in the file, and AutoPark stays off after a restore.
+- GPS signal on the map: good, fair or weak with the accuracy in metres,
+  "Looking for GPS" when no fix has arrived for 20 seconds, or "Approximate
+  location only" without precise permission. Saving with a weak fix says so.
 - Home asks for high-accuracy location while it is on screen, so the signal
   shown is real GPS.
 

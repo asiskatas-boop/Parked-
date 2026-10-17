@@ -62,6 +62,7 @@ fun SettingsScreen(
     store: ParkingStore,
     autoParkRequest: Int = 0,
     onAutoParkRequestHandled: () -> Unit = {},
+    appScope: kotlinx.coroutines.CoroutineScope,
 ) {
     var showHistory by rememberSaveable { mutableStateOf(false) }
     if (showHistory) BackHandler { showHistory = false }
@@ -77,6 +78,7 @@ fun SettingsScreen(
             onOpenHistory = { showHistory = true },
             autoParkRequest = autoParkRequest,
             onAutoParkRequestHandled = onAutoParkRequestHandled,
+            appScope = appScope,
         )
     }
 }
@@ -88,6 +90,7 @@ private fun SettingsMain(
     onOpenHistory: () -> Unit,
     autoParkRequest: Int,
     onAutoParkRequestHandled: () -> Unit,
+    appScope: kotlinx.coroutines.CoroutineScope,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -250,7 +253,7 @@ private fun SettingsMain(
 
     // Backup: the user picks where the file goes, so nothing leaves the phone
     // unless they send it somewhere.
-    var pendingRestore by remember { mutableStateOf<Backup.ReadResult.Ok?>(null) }
+    var pendingRestore by remember { mutableStateOf<Backup.Parsed?>(null) }
     val sBackupSaved = stringResource(R.string.backup_saved)
     val sBackupFailed = stringResource(R.string.backup_save_failed)
     val sBackupInvalid = stringResource(R.string.backup_not_valid)
@@ -263,7 +266,7 @@ private fun SettingsMain(
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             when (val r = Backup.read(context, uri)) {
-                is Backup.ReadResult.Ok -> pendingRestore = r
+                is Backup.ReadResult.Ok -> pendingRestore = r.backup
                 Backup.ReadResult.NotABackup -> say(sBackupInvalid)
                 Backup.ReadResult.TooNew -> say(sBackupTooNew)
             }
@@ -419,7 +422,7 @@ private fun SettingsMain(
             SectionTitle(stringResource(R.string.backup_section), modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
             DividerRow()
             ActionRow(
-                icon = Ph.export,
+                icon = Ph.trayArrowUp,
                 title = stringResource(R.string.backup_export),
                 subtitle = stringResource(R.string.backup_export_sub),
                 onClick = {
@@ -428,7 +431,7 @@ private fun SettingsMain(
                 }
             )
             ActionRow(
-                icon = Ph.clockCounter,
+                icon = Ph.trayArrowDown,
                 title = stringResource(R.string.backup_import),
                 subtitle = stringResource(R.string.backup_import_sub),
                 onClick = {
@@ -444,21 +447,38 @@ private fun SettingsMain(
     if (showTank) TankSheet(fuel = fuel, onDismiss = { showTank = false })
     if (showAppearance) AppearanceDialog(fuel = fuel, onDismiss = { showAppearance = false })
     pendingRestore?.let { r ->
+        val message = listOfNotNull(
+            r.exportedAt.takeIf { it > 0 }?.let { stringResource(R.string.backup_restore_made, dateTime(context, it)) },
+            stringResource(R.string.backup_restore_body),
+            // History is opt-in, so say plainly that this backup turns it on.
+            if (r.parking.historyEnabled) pluralStringResource(R.plurals.backup_restore_history, r.parking.history.size, r.parking.history.size) else null,
+        ).joinToString(" ")
         ConfirmDialog(
             visible = true,
             title = stringResource(R.string.backup_restore_title),
-            message = stringResource(R.string.backup_restore_body, dateTime(context, r.exportedAt)),
+            message = message,
             confirmLabel = stringResource(R.string.backup_restore_confirm),
             onDismiss = { pendingRestore = null },
             onConfirm = {
                 pendingRestore = null
-                scope.launch {
-                    // Keep what was here, so the restore can be undone.
-                    val before = Backup.build(store, fuel)
-                    Backup.restore(context, r.data, store, fuel)
+                // App-wide scope: leaving Settings must not cancel the restore or its Undo.
+                appScope.launch {
+                    val before = Backup.snapshot(store, fuel)
+                    Backup.restore(context, r, store, fuel)
                     snackbar.currentSnackbarData?.dismiss()
-                    val result = snackbar.showSnackbar(sBackupRestored, actionLabel = sUndo, duration = SnackbarDuration.Long, withDismissAction = true)
-                    if (result == SnackbarResult.ActionPerformed) Backup.restore(context, before, store, fuel)
+                    val result = snackbar.showSnackbar(
+                        sBackupRestored,
+                        actionLabel = if (before != null) sUndo else null,
+                        duration = SnackbarDuration.Long,
+                        withDismissAction = true,
+                    )
+                    if (before == null) return@launch
+                    if (result == SnackbarResult.ActionPerformed) {
+                        Backup.restore(context, before.data, store, fuel, before.photoPath, before.monitoring)
+                    } else {
+                        // Undo has passed: the replaced spot's photo belongs to nothing now.
+                        store.deletePhotoFile(before.photoPath)
+                    }
                 }
             }
         )
