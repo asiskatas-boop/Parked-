@@ -622,7 +622,7 @@ private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
     ) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             listOf(5.dp, 9.dp, 13.dp).forEachIndexed { i, h ->
-                Box(Modifier.size(width = 3.dp, height = h).background(if (i < bars) color else Color(0xFF555555)))
+                Box(Modifier.size(width = 3.dp, height = h).background(if (i < bars) color else Color(0xFF616161)) // 3.3:1 on black)
             }
         }
         Spacer(Modifier.width(8.dp))
