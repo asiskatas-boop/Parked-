@@ -42,6 +42,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.parked.app.ParkedApplication
 import com.parked.app.R
+import com.parked.app.data.Backup
 import com.parked.app.data.FuelStore
 import com.parked.app.data.ParkingHistoryEntry
 import com.parked.app.data.ParkingState
@@ -247,6 +248,28 @@ private fun SettingsMain(
         }
     }
 
+    // Backup: the user picks where the file goes, so nothing leaves the phone
+    // unless they send it somewhere.
+    var pendingRestore by remember { mutableStateOf<Backup.ReadResult.Ok?>(null) }
+    val sBackupSaved = stringResource(R.string.backup_saved)
+    val sBackupFailed = stringResource(R.string.backup_save_failed)
+    val sBackupInvalid = stringResource(R.string.backup_not_valid)
+    val sBackupTooNew = stringResource(R.string.backup_too_new)
+    val sBackupRestored = stringResource(R.string.backup_restored)
+    val sUndo = stringResource(R.string.undo)
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) scope.launch { say(if (Backup.write(context, uri, store, fuel)) sBackupSaved else sBackupFailed) }
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            when (val r = Backup.read(context, uri)) {
+                is Backup.ReadResult.Ok -> pendingRestore = r
+                Backup.ReadResult.NotABackup -> say(sBackupInvalid)
+                Backup.ReadResult.TooNew -> say(sBackupTooNew)
+            }
+        }
+    }
+
     val notificationsChecked = fuel.notificationsEnabled && systemNotificationsAllowed
     var hasCrashReport by remember { mutableStateOf(ParkedApplication.crashFile(context).exists()) }
 
@@ -392,6 +415,27 @@ private fun SettingsMain(
                     }
                 }
             }
+
+            SectionTitle(stringResource(R.string.backup_section), modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
+            DividerRow()
+            ActionRow(
+                icon = Ph.export,
+                title = stringResource(R.string.backup_export),
+                subtitle = stringResource(R.string.backup_export_sub),
+                onClick = {
+                    val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+                    runCatching { exportLauncher.launch("parked-backup-$day.json") }
+                }
+            )
+            ActionRow(
+                icon = Ph.clockCounter,
+                title = stringResource(R.string.backup_import),
+                subtitle = stringResource(R.string.backup_import_sub),
+                onClick = {
+                    // Many file managers label .json files as plain text or binary.
+                    runCatching { importLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }
+                }
+            )
         }
         Spacer(Modifier.height(16.dp))
     }
@@ -399,6 +443,26 @@ private fun SettingsMain(
     if (showOdo) OdometerSheet(fuel = fuel, onDismiss = { showOdo = false })
     if (showTank) TankSheet(fuel = fuel, onDismiss = { showTank = false })
     if (showAppearance) AppearanceDialog(fuel = fuel, onDismiss = { showAppearance = false })
+    pendingRestore?.let { r ->
+        ConfirmDialog(
+            visible = true,
+            title = stringResource(R.string.backup_restore_title),
+            message = stringResource(R.string.backup_restore_body, dateTime(context, r.exportedAt)),
+            confirmLabel = stringResource(R.string.backup_restore_confirm),
+            onDismiss = { pendingRestore = null },
+            onConfirm = {
+                pendingRestore = null
+                scope.launch {
+                    // Keep what was here, so the restore can be undone.
+                    val before = Backup.build(store, fuel)
+                    Backup.restore(context, r.data, store, fuel)
+                    snackbar.currentSnackbarData?.dismiss()
+                    val result = snackbar.showSnackbar(sBackupRestored, actionLabel = sUndo, duration = SnackbarDuration.Long, withDismissAction = true)
+                    if (result == SnackbarResult.ActionPerformed) Backup.restore(context, before, store, fuel)
+                }
+            }
+        )
+    }
     ConfirmDialog(
         visible = confirmHistoryOff,
         title = stringResource(R.string.history_off_title),

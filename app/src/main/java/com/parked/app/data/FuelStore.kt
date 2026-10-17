@@ -161,6 +161,47 @@ class FuelStore(context: Context) {
         prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
     }
 
+    /**
+     * Every stored value with its type, for the backup file. Keys are written
+     * exactly as stored, so a backup restores into any later version that
+     * reads the same keys.
+     */
+    fun exportJson(): JSONObject = JSONObject().apply {
+        prefs.all.forEach { (key, value) ->
+            val entry = when (value) {
+                is Boolean -> JSONObject().put("t", "b").put("v", value)
+                is Int -> JSONObject().put("t", "i").put("v", value)
+                is Long -> JSONObject().put("t", "l").put("v", value)
+                is Float -> JSONObject().put("t", "f").put("v", value.toDouble())
+                is String -> JSONObject().put("t", "s").put("v", value)
+                else -> null // String sets are not used by this store.
+            }
+            if (entry != null) put(key, entry)
+        }
+    }
+
+    /**
+     * Replaces everything with a backup made by [exportJson]. Keys missing from
+     * the backup are removed one by one (not with clear()), so the change
+     * listener reloads each value into the screens and the AutoPark service.
+     */
+    fun importJson(data: JSONObject) {
+        val editor = prefs.edit()
+        val incoming = data.keys().asSequence().toSet()
+        prefs.all.keys.filterNot { it in incoming }.forEach { editor.remove(it) }
+        incoming.forEach { key ->
+            val e = data.optJSONObject(key) ?: return@forEach
+            when (e.optString("t")) {
+                "b" -> editor.putBoolean(key, e.getBoolean("v"))
+                "i" -> editor.putInt(key, e.getInt("v"))
+                "l" -> editor.putLong(key, e.getLong("v"))
+                "f" -> editor.putFloat(key, e.getDouble("v").toFloat())
+                "s" -> editor.putString(key, e.getString("v"))
+            }
+        }
+        editor.commit()
+    }
+
     // gpsKm is only meaningful once the user has anchored it to the car's real
     // odometer. Without a baseline, raw GPS distance is not shown as an odometer.
     val currentOdo: Double get() = if (baselineOdo > 0) baselineOdo + gpsKm else 0.0

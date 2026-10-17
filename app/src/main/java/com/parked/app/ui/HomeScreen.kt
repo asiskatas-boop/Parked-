@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -160,14 +161,17 @@ fun HomeScreen(
                 showMessage(msgNoFix)
                 return@launch
             }
-            val previous = store.saveParking(loc.first, loc.second)
+            val previous = store.saveParking(loc.lat, loc.lng)
             saving = false
+            // Say so when the fix was weak, so a spot a few metres off is no surprise.
+            val savedText = loc.accuracy?.takeIf { it > WEAK_GPS_M }
+                ?.let { context.getString(R.string.spot_saved_weak, it.roundToInt()) } ?: msgSaved
             ParkedWidget.refresh(context)
             if (previous.timerEndsAt != null) ParkingTimer.cancel(context)
             val hadSpot = previous.lat != null && previous.lng != null
             snackbar.currentSnackbarData?.dismiss()
             if (!hadSpot) {
-                snackbar.showSnackbar(msgSaved)
+                snackbar.showSnackbar(savedText)
                 return@launch
             }
             // Saving replaces the previous spot. Offer Undo, because a stray tap
@@ -175,7 +179,7 @@ fun HomeScreen(
             var undone = false
             try {
                 val result = snackbar.showSnackbar(
-                    message = msgSaved,
+                    message = savedText,
                     actionLabel = msgUndo,
                     duration = SnackbarDuration.Long,
                     withDismissAction = true,
@@ -253,6 +257,13 @@ fun HomeScreen(
             )
 
             OsmAttribution(Modifier.align(Alignment.BottomStart))
+
+            // GPS quality, so you know whether "you" on the map (and a save
+            // right now) can be trusted. The banner covers permission and
+            // Location being off, so this only shows when both are fine.
+            if (hasPerm && locationOn) {
+                GpsSignal(live = live, modifier = Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 30.dp))
+            }
 
             // Tell the user why the map can't show them, and fix it in one tap.
             val issue = when {
@@ -555,6 +566,47 @@ private fun TimerCell(endsAt: Long?, modifier: Modifier, onClick: () -> Unit) {
     )
 }
 
+/** Accuracy above this many metres counts as weak GPS. */
+private const val WEAK_GPS_M = 30f
+
+/** Three bars and a label: good (up to 15 m), fair (up to 30 m), weak (worse). */
+@Composable
+private fun GpsSignal(live: LiveLocation?, modifier: Modifier = Modifier) {
+    val acc = live?.accuracy
+    val bars = when {
+        live == null -> 0
+        acc == null || acc <= 15f -> 3
+        acc <= WEAK_GPS_M -> 2
+        else -> 1
+    }
+    val color = when (bars) { 3 -> Accent; 2 -> Warn; 1 -> Danger; else -> Muted }
+    val metres = acc?.roundToInt()
+    val label = when {
+        live == null -> stringResource(R.string.gps_searching)
+        metres == null -> stringResource(R.string.gps_on)
+        bars == 3 -> stringResource(R.string.gps_good, metres)
+        bars == 2 -> stringResource(R.string.gps_fair, metres)
+        else -> stringResource(R.string.gps_weak, metres)
+    }
+    Row(
+        modifier
+            .background(Ink.copy(alpha = 0.8f))
+            .border(1.dp, Line)
+            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .clearAndSetSemantics { contentDescription = label },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            listOf(5.dp, 9.dp, 13.dp).forEachIndexed { i, h ->
+                Box(Modifier.size(width = 3.dp, height = h).background(if (i < bars) color else Line))
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        // Status is in words too, never colour alone.
+        Text(label, fontSize = TypeScale.Caption, color = Paper)
+    }
+}
+
 private enum class MapIssue { Permission, LocationOff, AutoParkOff }
 
 @Composable
@@ -812,8 +864,13 @@ private fun PhotoDialog(
 // Actions
 // ============================================================
 
+/** A location fix and its accuracy in metres, when Android reports one. */
+private data class Fix(val lat: Double, val lng: Double, val accuracy: Float?)
+
+private fun android.location.Location.toFix() = Fix(latitude, longitude, if (hasAccuracy()) accuracy else null)
+
 /** Best available fix: a recent cached one, otherwise a fresh one. */
-private suspend fun currentLocation(context: Context): Pair<Double, Double>? {
+private suspend fun currentLocation(context: Context): Fix? {
     if (!hasLocationPermission(context)) return null
     val fused = LocationServices.getFusedLocationProviderClient(context)
     return try {
@@ -821,14 +878,13 @@ private suspend fun currentLocation(context: Context): Pair<Double, Double>? {
             fused.lastLocation.addOnCompleteListener { cont.resume(if (it.isSuccessful) it.result else null) }
         }
         val recent = cached?.takeIf { System.currentTimeMillis() - it.time <= 2 * 60 * 1000L && it.accuracy <= 50f }
-        if (recent != null) return recent.latitude to recent.longitude
+        if (recent != null) return recent.toFix()
         val fresh = suspendCoroutine<android.location.Location?> { cont ->
             fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
                 .addOnCompleteListener { cont.resume(if (it.isSuccessful) it.result else null) }
         }
-        fresh?.let { it.latitude to it.longitude }
-            ?: cached?.takeIf { System.currentTimeMillis() - it.time <= 2 * 60 * 1000L && it.accuracy <= 150f }
-                ?.let { it.latitude to it.longitude }
+        fresh?.toFix()
+            ?: cached?.takeIf { System.currentTimeMillis() - it.time <= 2 * 60 * 1000L && it.accuracy <= 150f }?.toFix()
     } catch (_: SecurityException) {
         null
     }

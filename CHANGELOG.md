@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1
+
+- Backup: Settings → Backup exports one file with the car, spot, note,
+  timer, opt-in history, fuel, refuels, odometer and service reminders, and
+  imports it again (with Undo). You choose where the file goes; the app uploads
+  nothing. Photos are not included, and AutoPark stays off after a restore.
+- GPS signal on the map: good, fair or weak with the accuracy in metres, or
+  "Looking for GPS". Saving with a weak fix says so.
+- Home asks for high-accuracy location while it is on screen, so the signal
+  shown is real GPS.
+
 ## 0.4.0
 
 A new look; no change to how anything works.

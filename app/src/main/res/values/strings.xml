@@ -301,4 +301,25 @@
     <string name="timer_short_ended">Ended %1$s</string>
     <string name="duration_hm">%1$d h %2$d min</string>
     <string name="timer_left">%1$s left</string>
+    <!-- Backup -->
+    <string name="backup_section">Backup</string>
+    <string name="backup_export">Export backup</string>
+    <string name="backup_export_sub">Save a file with your car, spot, refuels and reminders</string>
+    <string name="backup_import">Import backup</string>
+    <string name="backup_import_sub">Restore from a Parked! backup file</string>
+    <string name="backup_saved">Backup saved.</string>
+    <string name="backup_save_failed">Couldn\'t save the backup. Try another folder.</string>
+    <string name="backup_not_valid">This file isn\'t a Parked! backup.</string>
+    <string name="backup_too_new">This backup is from a newer version. Update Parked! and try again.</string>
+    <string name="backup_restore_title">Restore this backup?</string>
+    <string name="backup_restore_body">Made on %1$s. It replaces the car, spot, refuels, reminders and settings on this phone. Photos aren\'t included, and AutoPark stays off until you turn it on.</string>
+    <string name="backup_restore_confirm">Restore</string>
+    <string name="backup_restored">Backup restored.</string>
+    <!-- GPS signal on the map -->
+    <string name="gps_good">GPS good · ±%1$d m</string>
+    <string name="gps_fair">GPS fair · ±%1$d m</string>
+    <string name="gps_weak">GPS weak · ±%1$d m</string>
+    <string name="gps_on">GPS on</string>
+    <string name="gps_searching">Looking for GPS</string>
+    <string name="spot_saved_weak">Spot saved. GPS was weak (±%1$d m), so it may be a little off.</string>
 </resources>

@@ -12,8 +12,8 @@ android {
         applicationId = "com.parked.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "0.4.0"
+        versionCode = 15
+        versionName = "0.4.1"
 
         // 0.4 installs as a separate app next to 0.3.x, so the redesign can be
         // tried without touching the data in the installed app. Remove these two

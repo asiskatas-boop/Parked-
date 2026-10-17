@@ -449,7 +449,9 @@ private fun MainContent(
                         live = LiveLocation(loc.latitude, loc.longitude, if (loc.hasAccuracy()) loc.accuracy else null)
                     }
                 }
-                val req = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 5000L)
+                // High accuracy only while Home is on screen, so the GPS signal
+                // shown on the map is the real GPS, not a Wi-Fi/cell estimate.
+                val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
                     .setMinUpdateIntervalMillis(3000L)
                     .setMaxUpdateDelayMillis(8000L)
                     .build()

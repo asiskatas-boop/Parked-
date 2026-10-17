@@ -189,6 +189,57 @@ class ParkingStore(context: Context) {
         it[Keys.history] = encodeHistory(parseHistory(it[Keys.history]).filterNot { e -> e.at == at })
     }
 
+    /**
+     * The spot, note, timer, car and history for the backup file. The photo is
+     * a file on this phone, so it is not included; AutoPark's on/off state is
+     * not either, because it needs this phone's permissions to run.
+     */
+    suspend fun exportJson(): JSONObject {
+        val s = current()
+        return JSONObject().apply {
+            s.deviceName?.let { put("device_name", it) }
+            s.deviceAddress?.let { put("device_address", it) }
+            if (s.hasSpot) {
+                put("parked_lat", s.parkedLat!!); put("parked_lng", s.parkedLng!!)
+                s.parkedAt?.let { put("parked_at", it) }
+            }
+            s.note?.let { put("spot_note", it) }
+            s.timerEndsAt?.let { put("timer_ends_at", it) }
+            put("history_enabled", s.historyEnabled)
+            put("history", JSONArray(encodeHistory(s.history)))
+        }
+    }
+
+    /**
+     * Replaces the stored data with a backup. AutoPark is left off and the
+     * current photo is dropped (it belonged to the replaced spot).
+     */
+    suspend fun importJson(o: JSONObject) {
+        var oldPhoto: String? = null
+        context.dataStore.edit {
+            oldPhoto = it[Keys.photoPath]
+            it.clear()
+            o.optString("device_name").ifBlank { null }?.let { v -> it[Keys.deviceName] = v }
+            o.optString("device_address").ifBlank { null }?.let { v -> it[Keys.deviceAddress] = v }
+            if (o.has("parked_lat") && o.has("parked_lng")) {
+                it[Keys.parkedLat] = o.getDouble("parked_lat")
+                it[Keys.parkedLng] = o.getDouble("parked_lng")
+                if (o.has("parked_at")) it[Keys.parkedAt] = o.getLong("parked_at")
+            }
+            o.optString("spot_note").ifBlank { null }?.let { v -> it[Keys.note] = v.take(140) }
+            if (o.has("timer_ends_at")) it[Keys.timerEndsAt] = o.getLong("timer_ends_at")
+            val historyOn = o.optBoolean("history_enabled", false)
+            it[Keys.historyEnabled] = historyOn
+            // History is opt-in: it is only restored when the backup had it on.
+            if (historyOn) {
+                val list = parseHistory(o.optJSONArray("history")?.toString()).take(MAX_HISTORY)
+                if (list.isNotEmpty()) it[Keys.history] = encodeHistory(list)
+            }
+            it[Keys.monitoring] = false
+        }
+        deletePhotoFile(oldPhoto)
+    }
+
     private fun parseHistory(raw: String?): List<ParkingHistoryEntry> {
         if (raw.isNullOrBlank()) return emptyList()
         return runCatching {

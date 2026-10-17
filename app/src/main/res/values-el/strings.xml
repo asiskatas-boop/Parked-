@@ -298,4 +298,25 @@
     <string name="timer_short_ended">Έληξε %1$s</string>
     <string name="duration_hm">%1$d ώρ. %2$d λεπτά</string>
     <string name="timer_left">απομένουν %1$s</string>
+    <!-- Backup -->
+    <string name="backup_section">Αντίγραφο ασφαλείας</string>
+    <string name="backup_export">Εξαγωγή αντιγράφου</string>
+    <string name="backup_export_sub">Αποθήκευσε σε αρχείο το αυτοκίνητο, το σημείο, τους ανεφοδιασμούς και τις υπενθυμίσεις</string>
+    <string name="backup_import">Εισαγωγή αντιγράφου</string>
+    <string name="backup_import_sub">Επαναφορά από αρχείο αντιγράφου του Parked!</string>
+    <string name="backup_saved">Το αντίγραφο αποθηκεύτηκε.</string>
+    <string name="backup_save_failed">Δεν αποθηκεύτηκε το αντίγραφο. Δοκίμασε άλλο φάκελο.</string>
+    <string name="backup_not_valid">Αυτό το αρχείο δεν είναι αντίγραφο ασφαλείας του Parked!</string>
+    <string name="backup_too_new">Το αντίγραφο είναι από νεότερη έκδοση. Ενημέρωσε το Parked! και δοκίμασε ξανά.</string>
+    <string name="backup_restore_title">Επαναφορά αντιγράφου;</string>
+    <string name="backup_restore_body">Δημιουργήθηκε στις %1$s. Αντικαθιστά το αυτοκίνητο, το σημείο, τους ανεφοδιασμούς, τις υπενθυμίσεις και τις ρυθμίσεις σε αυτό το κινητό. Οι φωτογραφίες δεν περιλαμβάνονται και το AutoPark μένει κλειστό μέχρι να το ανοίξεις.</string>
+    <string name="backup_restore_confirm">Επαναφορά</string>
+    <string name="backup_restored">Έγινε επαναφορά του αντιγράφου.</string>
+    <!-- GPS signal on the map -->
+    <string name="gps_good">GPS καλό · ±%1$d m</string>
+    <string name="gps_fair">GPS μέτριο · ±%1$d m</string>
+    <string name="gps_weak">GPS αδύναμο · ±%1$d m</string>
+    <string name="gps_on">GPS ενεργό</string>
+    <string name="gps_searching">Αναζήτηση GPS</string>
+    <string name="spot_saved_weak">Το σημείο αποθηκεύτηκε. Το GPS ήταν αδύναμο (±%1$d m), οπότε ίσως απέχει λίγο.</string>
 </resources>
