@@ -274,7 +274,8 @@ fun HomeScreen(
                 !hasPerm -> MapIssue.Permission
                 !locationOn -> MapIssue.LocationOff
                 // "Not now" hides the AutoPark tip until the next spot is saved.
-                s != null && !s.monitoring && autoParkTipDismissedFor != (s.parkedAt ?: 0L) -> MapIssue.AutoParkOff
+                // Offline, the "map needs a connection" note takes this spot instead.
+                online && s != null && !s.monitoring && autoParkTipDismissedFor != (s.parkedAt ?: 0L) -> MapIssue.AutoParkOff
                 else -> null
             }
             androidx.compose.animation.AnimatedVisibility(

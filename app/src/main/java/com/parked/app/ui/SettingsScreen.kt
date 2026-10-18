@@ -107,7 +107,7 @@ private fun SettingsMain(
     var sentToLocationSettings by remember { mutableStateOf(false) }
     // A car picked automatically, named in the final "AutoPark is on" message.
     var autoPickedCar by remember { mutableStateOf<String?>(null) }
-    // The notification prompt is asked at most once per setup.
+    // The notification prompt is asked at most once while Settings is open.
     var askedNotifications by remember { mutableStateOf(false) }
     var systemNotificationsAllowed by remember { mutableStateOf(Channels.canPost(context, Channels.ALERTS)) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -233,8 +233,11 @@ private fun SettingsMain(
         }
     }
 
-    fun beginAutoPark(deviceReady: Boolean = latestState.deviceAddress != null) {
+    fun beginAutoPark(deviceReady: Boolean = latestState.deviceAddress != null, fromAutoPick: Boolean = false) {
         pendingAutoStart = true
+        // Each setup starts clean: no leftover "sent to settings" or car name.
+        sentToLocationSettings = false
+        if (!fromAutoPick) autoPickedCar = null
         when {
             !hasLocationPermission(context) || !hasBluetoothPermission(context) || needsNotificationPermission() -> {
                 val required = buildList {
@@ -254,7 +257,7 @@ private fun SettingsMain(
             else -> { pendingAutoStart = false; startMonitorReady() }
         }
     }
-    continueAutoPark = { beginAutoPark(deviceReady = true) }
+    continueAutoPark = { beginAutoPark(deviceReady = true, fromAutoPick = true) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         fuel.updateNotificationsEnabled(granted)
@@ -282,6 +285,7 @@ private fun SettingsMain(
                         isBluetoothEnabled(context) && isLocationServicesEnabled(context)
                     ) {
                         pendingAutoStart = false
+                        sentToLocationSettings = false
                         startMonitorReady()
                     } else if (sentToLocationSettings && !isLocationServicesEnabled(context)) {
                         // Came back from the system Location settings without turning it
@@ -520,6 +524,7 @@ private fun SettingsMain(
                 pendingDevicePickerOnly = false
             },
             onSelected = { name, address ->
+                autoPickedCar = null
                 val shouldStart = pendingAutoStart || state.monitoring
                 showDevicePicker = false
                 scope.launch {
