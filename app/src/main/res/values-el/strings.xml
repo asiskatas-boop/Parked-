@@ -87,8 +87,8 @@
     <string name="notif_tap_to_save_title">Μόλις πάρκαρες;</string>
     <string name="notif_tap_to_save_body">Το Parked! δεν βρήκε την τοποθεσία σου. Πάτησε για να αποθηκεύσεις το σημείο τώρα.</string>
     <string name="notif_autopark_stopped_title">Το AutoPark σταμάτησε</string>
-    <string name="notif_autopark_stopped_body">Το Android το σταμάτησε. Πάτησε για να το ανοίξεις ξανά.</string>
-    <string name="notif_service_due_title">Ώρα για %1$s</string>
+    <string name="notif_autopark_stopped_body">Το Android το σταμάτησε. Πάτησε για να ανοίξεις το Parked! και να το ενεργοποιήσεις ξανά.</string>
+    <string name="notif_service_due_title">Ώρα για: %1$s</string>
     <string name="notif_service_due_body">Πάτησε για να δεις τι χρειάζεται και να το σημειώσεις ως έγινε.</string>
 
     <string name="channel_monitor">Αυτόματη στάθμευση</string>
@@ -147,7 +147,7 @@
     <string name="service_title">Υπενθυμίσεις συντήρησης</string>
     <string name="service_row_empty">Λάδια, ελαστικά και ΚΤΕΟ, ανά km ή ημερομηνία</string>
     <string name="service_empty">Δεν υπάρχουν υπενθυμίσεις ακόμα. Πρόσθεσε μία για αλλαγή λαδιών, ελαστικά ή ΚΤΕΟ.</string>
-    <string name="service_needs_odometer">Όρισε τον χιλιομετρητή στις Ρυθμίσεις για να μετρούν οι υπενθυμίσεις ανά km.</string>
+    <string name="service_needs_odometer">Όρισε τον χιλιομετρητή στην καρτέλα Αυτοκίνητο για να μετρούν οι υπενθυμίσεις ανά km.</string>
     <string name="service_add">Νέα υπενθύμιση</string>
     <string name="service_edit">Επεξεργασία υπενθύμισης</string>
     <string name="service_sheet_subtitle">Υπενθύμιση μετά από απόσταση, χρόνο ή ό,τι έρθει πρώτο.</string>
@@ -295,12 +295,11 @@
     <string name="car_this_month">Αυτόν τον μήνα</string>
     <string name="about_section">Σχετικά</string>
     <string name="about_version">Έκδοση</string>
-    <string name="autopark_using_car">Χρησιμοποιείται το %1$s ως αυτοκίνητο. Μπορείς να το αλλάξεις στις Ρυθμίσεις.</string>
     <string name="device_kind_car">Αυτοκίνητο</string>
     <string name="device_kind_other">Άλλη συσκευή</string>
-    <string name="home_saved_auto">Αποθηκεύτηκε αυτόματα όταν αποσυνδέθηκε το %1$s</string>
-    <string name="home_saved_auto_nodevice">Αποθηκεύτηκε αυτόματα από το AutoPark</string>
+    <string name="home_saved_auto">Αποθηκεύτηκε αυτόματα όταν αποσυνδέθηκε το αυτοκίνητο</string>
     <string name="home_saved_manual">Το αποθήκευσες εσύ</string>
     <string name="map_offline">Ο χάρτης θέλει σύνδεση για να φορτώσει. Το σημείο σου παραμένει αποθηκευμένο.</string>
-    <string name="autopark_turned_on">Το AutoPark είναι ενεργό. Την επόμενη φορά που θα παρκάρεις, το σημείο αποθηκεύεται μόνο του.</string>
+    <string name="autopark_turned_on">Το AutoPark είναι ενεργό. Την επόμενη φορά που θα παρκάρεις, το σημείο θα αποθηκευτεί μόνο του.</string>
+    <string name="autopark_turned_on_car">Το AutoPark είναι ενεργό για το %1$s. Την επόμενη φορά που θα παρκάρεις, το σημείο θα αποθηκευτεί μόνο του.</string>
 </resources>

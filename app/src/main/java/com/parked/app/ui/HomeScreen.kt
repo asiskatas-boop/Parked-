@@ -269,21 +269,6 @@ fun HomeScreen(
                 OsmAttribution(Modifier)
             }
 
-            // Without data the tiles can't load (an underground garage). Say so,
-            // and that the spot is safe.
-            if (!online) {
-                Text(
-                    stringResource(R.string.map_offline),
-                    fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Paper,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(horizontal = 32.dp)
-                        .background(Panel)
-                        .border(1.dp, Line)
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                )
-            }
-
             // Tell the user why the map can't show them, and fix it in one tap.
             val issue = when {
                 !hasPerm -> MapIssue.Permission
@@ -313,6 +298,23 @@ fun HomeScreen(
                             null -> Unit
                         }
                     }
+                )
+            }
+
+            // Without data the tiles can't load (an underground garage). Say so,
+            // at the top edge so the car marker in the middle stays visible.
+            if (!online && issue == null) {
+                Text(
+                    stringResource(R.string.map_offline),
+                    fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Paper,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(top = 12.dp, start = 16.dp, end = 16.dp)
+                        .fillMaxWidth()
+                        .background(Panel)
+                        .border(1.dp, Line)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 )
             }
 
@@ -470,8 +472,7 @@ private fun SavedSpotContent(
     // by hand.
     val auto = state.source == ParkingStore.SOURCE_AUTO
     val how = when {
-        auto && state.deviceName != null -> stringResource(R.string.home_saved_auto, state.deviceName)
-        auto -> stringResource(R.string.home_saved_auto_nodevice)
+        auto -> stringResource(R.string.home_saved_auto)
         state.source == ParkingStore.SOURCE_MANUAL -> stringResource(R.string.home_saved_manual)
         else -> null
     }
@@ -486,9 +487,10 @@ private fun SavedSpotContent(
             Text(howLine, fontSize = TypeScale.Label, lineHeight = 22.sp, color = if (auto) Paper else Muted)
         }
     }
-    if (!state.monitoring || autoParkMode == AutoParkMode.Limited) {
+    // "AutoPark is off" is the map banner's job (and it can be dismissed there).
+    if (state.monitoring && autoParkMode == AutoParkMode.Limited) {
         Text(
-            stringResource(if (!state.monitoring) R.string.autopark_off else R.string.autopark_on_limited),
+            stringResource(R.string.autopark_on_limited),
             fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted
         )
     }
@@ -928,21 +930,27 @@ private fun PhotoDialog(
 // Actions
 // ============================================================
 
-/** True while the phone has a usable internet connection; updates live. */
+/**
+ * True while the phone has a working internet connection; updates live.
+ * Uses VALIDATED, not just INTERNET: in an underground garage the phone often
+ * keeps a mobile network with no actual data.
+ */
 @Composable
 private fun rememberOnline(): Boolean {
     val context = LocalContext.current
     val cm = remember { context.getSystemService(android.net.ConnectivityManager::class.java) }
-    fun check(): Boolean = runCatching {
-        cm?.getNetworkCapabilities(cm.activeNetwork)
-            ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
-    }.getOrDefault(true)
-    var online by remember { mutableStateOf(check()) }
+    fun usable(caps: android.net.NetworkCapabilities?) = caps != null &&
+        caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    var online by remember {
+        mutableStateOf(runCatching { usable(cm?.getNetworkCapabilities(cm.activeNetwork)) }.getOrDefault(true))
+    }
     DisposableEffect(cm) {
+        // The default-network callback describes one network at a time, so its
+        // own arguments are the truth; no synchronous lookups inside callbacks.
         val callback = object : android.net.ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: android.net.Network) { online = check() }
-            override fun onLost(network: android.net.Network) { online = check() }
-            override fun onCapabilitiesChanged(network: android.net.Network, caps: android.net.NetworkCapabilities) { online = check() }
+            override fun onCapabilitiesChanged(network: android.net.Network, caps: android.net.NetworkCapabilities) { online = usable(caps) }
+            override fun onLost(network: android.net.Network) { online = false }
         }
         runCatching { cm?.registerDefaultNetworkCallback(callback) }
         onDispose { runCatching { cm?.unregisterNetworkCallback(callback) } }

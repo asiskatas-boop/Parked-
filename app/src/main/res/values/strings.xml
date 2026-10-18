@@ -89,7 +89,7 @@
     <string name="notif_tap_to_save_title">Just parked?</string>
     <string name="notif_tap_to_save_body">Parked! couldn\'t get your location. Tap to save this spot now.</string>
     <string name="notif_autopark_stopped_title">AutoPark stopped</string>
-    <string name="notif_autopark_stopped_body">Android stopped it. Tap to turn it back on.</string>
+    <string name="notif_autopark_stopped_body">Android stopped it. Tap to open Parked! and turn it on again.</string>
     <string name="notif_service_due_title">%1$s is due</string>
     <string name="notif_service_due_body">Tap to see what\'s due and mark it done.</string>
 
@@ -149,7 +149,7 @@
     <string name="service_title">Service reminders</string>
     <string name="service_row_empty">Oil, tyres and inspection, by km or by date</string>
     <string name="service_empty">No reminders yet. Add one for oil changes, tyres or the yearly inspection.</string>
-    <string name="service_needs_odometer">Set your odometer in Settings so kilometre reminders can count down.</string>
+    <string name="service_needs_odometer">Set your odometer on the Car tab so kilometre reminders can count down.</string>
     <string name="service_add">Add reminder</string>
     <string name="service_edit">Edit reminder</string>
     <string name="service_sheet_subtitle">Remind me after a distance, a time, or whichever comes first.</string>
@@ -298,12 +298,11 @@
     <string name="car_this_month">This month</string>
     <string name="about_section">About</string>
     <string name="about_version">Version</string>
-    <string name="autopark_using_car">Using %1$s as your car. You can change it in Settings.</string>
     <string name="device_kind_car">Car</string>
     <string name="device_kind_other">Other device</string>
-    <string name="home_saved_auto">Saved automatically when %1$s disconnected</string>
-    <string name="home_saved_auto_nodevice">Saved automatically by AutoPark</string>
+    <string name="home_saved_auto">Saved automatically when your car disconnected</string>
     <string name="home_saved_manual">Saved by you</string>
     <string name="map_offline">The map needs a connection to load. Your spot is still saved.</string>
     <string name="autopark_turned_on">AutoPark is on. Next time you park, the spot is saved for you.</string>
+    <string name="autopark_turned_on_car">AutoPark is on for %1$s. Next time you park, the spot is saved for you.</string>
 </resources>

@@ -115,7 +115,11 @@ private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> U
         }
 
         Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 24.dp)) {
-            PageTitle(state?.deviceName ?: stringResource(R.string.home_car_title))
+            PageTitle(stringResource(R.string.home_car_title))
+            // The Bluetooth name (often a head unit like "SYNC") goes underneath, not as the title.
+            state?.deviceName?.let {
+                Text(it, fontSize = TypeScale.Label, lineHeight = 22.sp, color = Muted, modifier = Modifier.padding(top = 4.dp))
+            }
             Spacer(Modifier.height(24.dp))
 
             // ---- Service and ΚΤΕΟ first ----

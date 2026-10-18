@@ -103,6 +103,12 @@ private fun SettingsMain(
     var confirmHistoryOff by remember { mutableStateOf(false) }
     var pendingAutoStart by remember { mutableStateOf(false) }
     var pendingDevicePickerOnly by remember { mutableStateOf(false) }
+    // True only after the flow sent the user to Android's Location settings page.
+    var sentToLocationSettings by remember { mutableStateOf(false) }
+    // A car picked automatically, named in the final "AutoPark is on" message.
+    var autoPickedCar by remember { mutableStateOf<String?>(null) }
+    // The notification prompt is asked at most once per setup.
+    var askedNotifications by remember { mutableStateOf(false) }
     var systemNotificationsAllowed by remember { mutableStateOf(Channels.canPost(context, Channels.ALERTS)) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -119,18 +125,19 @@ private fun SettingsMain(
     val sAlertsInSettings = stringResource(R.string.alerts_enable_in_settings)
     val sBtPermission = stringResource(R.string.bluetooth_permission_needed)
     val sCarSaved = stringResource(R.string.car_bluetooth_saved)
-    val sUsingCar = stringResource(R.string.autopark_using_car)
+    val sAutoReadyCar = stringResource(R.string.autopark_turned_on_car)
     val sCarFallback = stringResource(R.string.car_bluetooth)
 
     fun say(text: String) {
         scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(text) }
     }
 
-    fun needsNotificationPermission(): Boolean = Build.VERSION.SDK_INT >= 33 &&
+    fun needsNotificationPermission(): Boolean = Build.VERSION.SDK_INT >= 33 && !askedNotifications &&
         fuel.notificationsEnabled &&
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
 
     fun openLocationSettings() {
+        sentToLocationSettings = pendingAutoStart
         runCatching {
             context.startActivity(Intent(AndroidSettings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
@@ -140,7 +147,9 @@ private fun SettingsMain(
         scope.launch {
             // Persist first so the service never sees an event while the switch says off.
             store.setMonitoring(true)
-            if (ParkingMonitorService.start(context)) say(sAutoReady) else {
+            val picked = autoPickedCar
+            autoPickedCar = null
+            if (ParkingMonitorService.start(context)) say(if (picked != null) sAutoReadyCar.format(picked) else sAutoReady) else {
                 store.setMonitoring(false)
                 say(sAutoFailed)
             }
@@ -157,7 +166,8 @@ private fun SettingsMain(
             val car = cars.single()
             scope.launch {
                 store.selectDevice(car.name ?: sCarFallback, car.address)
-                say(sUsingCar.format(car.name ?: sCarFallback))
+                // Named in the final message, so it isn't wiped by the next snackbar.
+                autoPickedCar = car.name ?: sCarFallback
                 continueAutoPark()
             }
         } else { say(sChooseCar); showDevicePicker = true }
@@ -179,6 +189,7 @@ private fun SettingsMain(
         com.google.android.gms.location.LocationServices.getSettingsClient(context).checkLocationSettings(request)
             .addOnSuccessListener { if (pendingAutoStart) { pendingAutoStart = false; startMonitorReady() } }
             .addOnFailureListener { e ->
+                if (!pendingAutoStart) return@addOnFailureListener
                 val resolvable = e as? com.google.android.gms.common.api.ResolvableApiException
                 if (resolvable != null) {
                     runCatching {
@@ -234,6 +245,7 @@ private fun SettingsMain(
                     if (!hasBluetoothPermission(context) && Build.VERSION.SDK_INT >= 31) add(Manifest.permission.BLUETOOTH_CONNECT)
                     if (needsNotificationPermission()) add(Manifest.permission.POST_NOTIFICATIONS)
                 }
+                if (Manifest.permission.POST_NOTIFICATIONS in required) askedNotifications = true
                 autoPermissionLauncher.launch(required.toTypedArray())
             }
             !isBluetoothEnabled(context) -> bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
@@ -271,10 +283,13 @@ private fun SettingsMain(
                     ) {
                         pendingAutoStart = false
                         startMonitorReady()
-                    } else if (!isLocationServicesEnabled(context)) {
-                        // Came back from Location settings without turning it on: cancel
-                        // the request so AutoPark can't switch on during a later resume.
+                    } else if (sentToLocationSettings && !isLocationServicesEnabled(context)) {
+                        // Came back from the system Location settings without turning it
+                        // on: cancel, so AutoPark can't switch on during a later resume.
+                        // (The in-app Location dialog reports back through its launcher.)
+                        sentToLocationSettings = false
                         pendingAutoStart = false
+                        say(sLocationNeeded)
                     }
                 }
             }
@@ -543,11 +558,14 @@ private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, Strin
                     else -> LazyColumn {
                         item { DividerRow() }
                         items(devices, key = { it.address }) { device ->
+                            val kind = stringResource(if (device.isCar) R.string.device_kind_car else R.string.device_kind_other)
+                            // The address only helps when two devices share a name.
+                            val repeated = devices.count { it.name == device.name } > 1
                             ActionRow(
                                 icon = if (device.isCar) Ph.car else Ph.bluetooth,
                                 iconTint = if (device.isCar) Accent else Muted,
                                 title = device.name ?: stringResource(R.string.unnamed_device),
-                                subtitle = stringResource(if (device.isCar) R.string.device_kind_car else R.string.device_kind_other),
+                                subtitle = if (repeated) "$kind · ${device.address}" else kind,
                                 onClick = { onSelected(device.name ?: fallbackName, device.address) }
                             )
                         }
@@ -559,7 +577,7 @@ private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, Strin
     )
 }
 
-/** A paired Bluetooth device; [isCar] when Android reports it as car audio or a hands-free kit. */
+/** A paired Bluetooth device; [isCar] when Android reports it as car audio. */
 internal data class PairedDevice(val name: String?, val address: String, val isCar: Boolean)
 
 @android.annotation.SuppressLint("MissingPermission") // Callers check hasBluetoothPermission first.
@@ -572,8 +590,9 @@ internal fun pairedDevices(context: android.content.Context): List<PairedDevice>
             PairedDevice(
                 name = runCatching { d.name }.getOrNull(),
                 address = d.address,
-                isCar = cls == android.bluetooth.BluetoothClass.Device.AUDIO_VIDEO_CAR_AUDIO ||
-                    cls == android.bluetooth.BluetoothClass.Device.AUDIO_VIDEO_HANDSFREE,
+                // Car audio only: many headsets also report "hands-free", and
+                // auto-picking one would save a spot every time it disconnects.
+                isCar = cls == android.bluetooth.BluetoothClass.Device.AUDIO_VIDEO_CAR_AUDIO,
             )
         }
     }.getOrDefault(emptyList())
