@@ -131,6 +131,8 @@ object Backup {
             timerEndsAt = p.long("timer_ends_at"),
             historyEnabled = historyOn,
             history = history,
+            source = if (hasSpot) p.text("spot_source", 10)?.takeIf { it == ParkingStore.SOURCE_AUTO || it == ParkingStore.SOURCE_MANUAL } else null,
+            accuracy = if (hasSpot) p.finite("spot_accuracy")?.takeIf { it in 0.0..10_000.0 }?.toFloat() else null,
         )
     }
 

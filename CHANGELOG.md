@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.5.0
+
+Focus on the one thing: know where your car is without doing anything.
+
+Removed
+- The splash video. The app opens straight to your car.
+- Trip cost calculator, the old level-checks page, the draggable fuel gauge and
+  the tank-size setting. Stored data is kept and still in backups.
+
+AutoPark
+- Setup asks for all permissions at once, turns Location on with Android's
+  in-app dialog, and picks your car automatically when only one paired device
+  is a car. The device list shows cars first and says "Car" or "Other device"
+  instead of a Bluetooth address.
+- Home shows how the spot was saved: "Saved automatically when Golf
+  disconnected · ±8 m" or "Saved by you".
+
+Home
+- Directions comes right after the distance; Share is an icon by the heading;
+  note, photo and parking time sit below; Save here is a quiet link.
+- Without a connection the map says so, and that the spot is still saved.
+
+Car tab (was Fuel)
+- The car in its colour, then service and ΚΤΕΟ reminders first, then refuels
+  with this month's spend and average consumption, then odometer and colour.
+
+Settings
+- AutoPark, preferences and backup, plus an About section with the version and
+  the crash report.
+
+Details
+- New black and orange "P" app icon, with a themed-icon layer.
+- Clearer notification copy in English and Greek.
+- Backups are named "Parked backup YYYY-MM-DD.json".
+
 ## 0.4.1
 
 - Backup: Settings → Backup exports one file with the car, spot, note,

@@ -43,6 +43,7 @@ import androidx.core.content.FileProvider
 import com.parked.app.R
 import com.parked.app.data.FuelLevelLog
 import com.parked.app.data.FuelStore
+import com.parked.app.data.ParkingStore
 import com.parked.app.data.MonthlySpend
 import com.parked.app.data.Refuel
 import com.parked.app.data.ReminderStatus
@@ -51,180 +52,162 @@ import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
 
-private enum class FuelPage { Main, Refuels, LevelChecks, Service }
+private enum class CarPage { Main, Refuels, Service }
 
+/**
+ * The Car tab: what the car needs (ΚΤΕΟ, oil, tyres) and what it costs
+ * (refuels). Service comes first because nothing else in Greece reminds you.
+ */
 @Composable
-fun FuelScreen(fuel: FuelStore, openServiceRequest: Boolean, onServiceRequestHandled: () -> Unit) {
-    var page by rememberSaveable { mutableStateOf(FuelPage.Main) }
+fun FuelScreen(fuel: FuelStore, store: ParkingStore, openServiceRequest: Boolean, onServiceRequestHandled: () -> Unit) {
+    var page by rememberSaveable { mutableStateOf(CarPage.Main) }
 
     LaunchedEffect(openServiceRequest) {
         if (openServiceRequest) {
-            page = FuelPage.Service
+            page = CarPage.Service
             onServiceRequestHandled()
         }
     }
 
-    if (page != FuelPage.Main) BackHandler { page = FuelPage.Main }
+    if (page != CarPage.Main) BackHandler { page = CarPage.Main }
     androidx.compose.animation.AnimatedContent(
         targetState = page,
-        transitionSpec = { pageTransition(forward = targetState != FuelPage.Main) },
-        label = "fuelPages"
+        transitionSpec = { pageTransition(forward = targetState != CarPage.Main) },
+        label = "carPages"
     ) { current ->
         when (current) {
-            FuelPage.Main -> FuelMain(fuel, onOpen = { page = it })
-            FuelPage.Refuels -> RefuelHistoryPage(fuel, onBack = { page = FuelPage.Main })
-            FuelPage.LevelChecks -> LevelChecksPage(fuel, onBack = { page = FuelPage.Main })
-            FuelPage.Service -> ServiceRemindersPage(fuel, onBack = { page = FuelPage.Main })
+            CarPage.Main -> CarMain(fuel, store, onOpen = { page = it })
+            CarPage.Refuels -> RefuelHistoryPage(fuel, onBack = { page = CarPage.Main })
+            CarPage.Service -> ServiceRemindersPage(fuel, onBack = { page = CarPage.Main })
         }
     }
 }
 
 @Composable
-private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
-    val context = LocalContext.current
+private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> Unit) {
     val snackbar = LocalSnackbar.current
     val scope = rememberCoroutineScope()
-    val configuredTank = fuel.tankCapacity.takeIf { it.isFinite() && it > 0 }
-    val hasSavedFuelLevel = fuel.levelUpdatedAt > 0L
-
-    // The gauge shows the saved level minus the fuel used since, so range drops
-    // as you drive. Rounded to whole kilometres so GPS updates don't jitter it.
-    val drivenKm = fuel.kmSinceLevelSet()?.roundToInt()
-    val estimatedFraction = (fuel.estimateLevelPct() / 100.0).coerceIn(0.0, 1.0).toFloat()
-    var sliderFraction by remember {
-        mutableFloatStateOf(if (hasSavedFuelLevel) estimatedFraction else 0.5f)
-    }
-    var userAdjusting by remember { mutableStateOf(false) }
-    LaunchedEffect(estimatedFraction, fuel.levelUpdatedAt) {
-        if (hasSavedFuelLevel && !userAdjusting) sliderFraction = estimatedFraction
-    }
-
+    val state by store.state.collectAsState(initial = null)
     var showRefuel by remember { mutableStateOf(false) }
-    var showTripCost by remember { mutableStateOf(false) }
-    var showTank by remember { mutableStateOf(false) }
+    var showOdo by remember { mutableStateOf(false) }
+    var showAppearance by remember { mutableStateOf(false) }
     val msgRefuel = stringResource(R.string.refuel_saved)
+    val swatch = carColours.firstOrNull { it.first == fuel.accentName }?.second ?: carColours[4].second
 
-    val litersInTank = configuredTank?.times(sliderFraction)
-    val averageConsumption = fuel.averageL100km()
-    val fullTankRangeKm = fuel.estimatedRangeKm()
-    val rangeFromCurrentLevel = if (hasSavedFuelLevel) fullTankRangeKm?.times(sliderFraction.toDouble()) else null
-    val updatedText = when {
-        !hasSavedFuelLevel -> stringResource(R.string.fuel_not_set)
-        drivenKm != null && !userAdjusting -> stringResource(R.string.fuel_estimated_since, dateTime(context, fuel.levelUpdatedAt), drivenKm)
-        else -> stringResource(R.string.fuel_updated, dateTime(context, fuel.levelUpdatedAt))
-    }
+    Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState())) {
+        // The car, in its colour. Tap to change the colour.
+        Box(
+            Modifier
+                .statusBarsPadding()
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp)
+                .fillMaxWidth()
+                .height(200.dp)
+                .background(Panel)
+                .clickable(role = Role.Button) { showAppearance = true },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Ph.carProfile,
+                contentDescription = stringResource(R.string.cd_car_preview, colourLabel(fuel.accentName)),
+                tint = visibleOnPanel(swatch),
+                modifier = Modifier.size(200.dp)
+            )
+        }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Ink)
-            .verticalScroll(rememberScrollState())
-            .statusBarsPadding()
-            .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 24.dp)
-    ) {
-        PageTitle(stringResource(R.string.tab_fuel))
-        Spacer(Modifier.height(24.dp))
-        FuelGauge(
-            fraction = sliderFraction,
-            litersInTank = litersInTank,
-            updatedText = updatedText,
-            onFractionChange = { userAdjusting = true; sliderFraction = it },
-            // Saved as soon as you let go, with Undo, so a change is never
-            // lost by leaving the tab before pressing a button.
-            onCommit = {
-                val before = Triple(fuel.levelPct, fuel.odoForLevel, fuel.levelUpdatedAt)
-                val hadLevel = before.third > 0L
-                fuel.setLevel(sliderFraction * 100.0)
-                userAdjusting = false
-                val pct = (sliderFraction * 100).roundToInt()
-                scope.launch {
-                    snackbar.currentSnackbarData?.dismiss()
-                    val result = snackbar.showSnackbar(
-                        context.getString(R.string.fuel_level_set_to, pct),
-                        actionLabel = if (hadLevel) context.getString(R.string.undo) else null,
-                        withDismissAction = true,
-                    )
-                    if (result == SnackbarResult.ActionPerformed) {
-                        fuel.restoreLevel(before.first, before.second, before.third)
-                    }
-                }
-            },
-            onSetTank = { showTank = true },
-        )
-        Spacer(Modifier.height(24.dp))
-        PrimaryButton(text = stringResource(R.string.refuel), onClick = { showRefuel = true })
-        Spacer(Modifier.height(32.dp))
+        Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 24.dp)) {
+            PageTitle(state?.deviceName ?: stringResource(R.string.home_car_title))
+            Spacer(Modifier.height(24.dp))
 
-        SectionTitle(stringResource(R.string.fuel_at_a_glance))
-        Spacer(Modifier.height(12.dp))
-        if (averageConsumption != null && rangeFromCurrentLevel != null) {
+            // ---- Service and ΚΤΕΟ first ----
+            SectionTitle(stringResource(R.string.car_section_service), modifier = Modifier.padding(bottom = 12.dp))
             DividerRow()
-            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                FuelStat(stringResource(R.string.fuel_range), "~${formatKm(rangeFromCurrentLevel)}", Modifier.weight(1f).padding(vertical = 16.dp))
-                VerticalDivider(color = Line)
-                FuelStat(
-                    stringResource(R.string.fuel_average), "${formatDecimal(averageConsumption, 1)} L/100 km",
-                    Modifier.weight(1f).padding(start = 16.dp, top = 16.dp, bottom = 16.dp)
+            val sorted = fuel.reminders.sortedByDescending { fuel.progress(it).status.ordinal }
+            if (sorted.isEmpty()) {
+                ActionRow(
+                    icon = Ph.wrench,
+                    title = stringResource(R.string.service_add),
+                    subtitle = stringResource(R.string.service_row_empty),
+                    onClick = { onOpen(CarPage.Service) }
+                )
+            } else {
+                sorted.take(3).forEach { r ->
+                    val (statusText, statusColor) = reminderStatus(fuel, r)
+                    ActionRow(
+                        icon = when (fuel.progress(r).status) {
+                            ReminderStatus.Due -> Ph.warning
+                            ReminderStatus.Soon -> Ph.clockCounter
+                            ReminderStatus.Ok -> Ph.checkCircle
+                        },
+                        title = r.name,
+                        subtitle = statusText,
+                        onClick = { onOpen(CarPage.Service) },
+                        trailing = { AccentArrow() },
+                        iconTint = statusColor,
+                    )
+                }
+                LinkButton(
+                    stringResource(if (sorted.size > 3) R.string.service_all else R.string.service_manage),
+                    modifier = Modifier.padding(top = 4.dp),
+                    onClick = { onOpen(CarPage.Service) }
                 )
             }
-            DividerRow()
-        } else {
-            // Information only, so it is plain text with an info icon, not a
-            // block that looks tappable.
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
-                Icon(Ph.info, contentDescription = null, tint = Muted, modifier = Modifier.padding(top = 2.dp).size(20.dp))
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.fuel_insights_title), fontSize = TypeScale.Body, lineHeight = 24.sp, color = Paper)
-                    Spacer(Modifier.height(4.dp))
+
+            // ---- Refuels ----
+            Spacer(Modifier.height(32.dp))
+            SectionTitle(stringResource(R.string.refuels), modifier = Modifier.padding(bottom = 12.dp))
+            PrimaryButton(text = stringResource(R.string.refuel), onClick = { showRefuel = true })
+            Spacer(Modifier.height(16.dp))
+            val average = fuel.averageL100km()
+            val thisMonth = remember(fuel.refuels) { fuel.monthlySpend(1).firstOrNull() }
+            if (fuel.refuels.isNotEmpty()) {
+                DividerRow()
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    FuelStat(
+                        stringResource(R.string.car_this_month),
+                        formatMoney(fuel.currency, thisMonth?.cost ?: 0.0),
+                        Modifier.weight(1f).padding(vertical = 16.dp)
+                    )
+                    VerticalDivider(color = Line)
+                    FuelStat(
+                        stringResource(R.string.fuel_average),
+                        average?.let { "${formatDecimal(it, 1)} L/100 km" } ?: "–",
+                        Modifier.weight(1f).padding(start = 16.dp, top = 16.dp, bottom = 16.dp)
+                    )
+                }
+            }
+            if (average == null) {
+                // Information only, so plain text, not something that looks tappable.
+                Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.Top) {
+                    Icon(Ph.info, contentDescription = null, tint = Muted, modifier = Modifier.padding(top = 2.dp).size(20.dp))
+                    Spacer(Modifier.width(12.dp))
                     Text(stringResource(R.string.fuel_insights_body), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
                 }
             }
-        }
-
-        SpendingCard(fuel)
-
-        Spacer(Modifier.height(24.dp))
-        DividerRow()
-        val latest = fuel.refuels.firstOrNull()
-        ActionRow(
-            icon = Ph.clockCounter,
-            title = stringResource(R.string.refuel_history),
-            subtitle = if (latest == null) stringResource(R.string.refuel_history_empty)
-            else stringResource(
-                R.string.refuel_history_summary,
-                shortDate(latest.date), formatDecimal(latest.litres, 1), fuel.refuels.size
-            ),
-            onClick = { onOpen(FuelPage.Refuels) }
-        )
-
-        val dueCount = fuel.reminders.count { fuel.progress(it).status != ReminderStatus.Ok }
-        ActionRow(
-            icon = Ph.wrench,
-            title = stringResource(R.string.service_title),
-            subtitle = when {
-                fuel.reminders.isEmpty() -> stringResource(R.string.service_row_empty)
-                dueCount > 0 -> pluralStringResource(R.plurals.service_row_due, dueCount, dueCount)
-                else -> stringResource(R.string.service_row_ok)
-            },
-            onClick = { onOpen(FuelPage.Service) }
-        )
-
-        ActionRow(
-            icon = Ph.road,
-            title = stringResource(R.string.trip_cost),
-            subtitle = stringResource(R.string.trip_cost_row),
-            onClick = { showTripCost = true }
-        )
-
-        // Level checks saved by older builds stay visible for people who upgraded.
-        if (fuel.fuelLogs.isNotEmpty()) {
+            DividerRow()
+            val latest = fuel.refuels.firstOrNull()
             ActionRow(
-                icon = Ph.gauge,
-                title = stringResource(R.string.level_checks),
-                subtitle = stringResource(R.string.level_checks_row, fuel.fuelLogs.size),
-                onClick = { onOpen(FuelPage.LevelChecks) }
+                icon = Ph.clockCounter,
+                title = stringResource(R.string.refuel_history),
+                subtitle = if (latest == null) stringResource(R.string.refuel_history_empty)
+                else stringResource(
+                    R.string.refuel_history_summary,
+                    shortDate(latest.date), formatDecimal(latest.litres, 1), fuel.refuels.size
+                ),
+                onClick = { onOpen(CarPage.Refuels) }
             )
+
+            SpendingCard(fuel)
+
+            // ---- The car itself ----
+            Spacer(Modifier.height(32.dp))
+            SettingsCard {
+                TextRow(
+                    stringResource(R.string.odometer),
+                    fuel.currentOdo.takeIf { it > 0 }?.let { formatKm(it) } ?: stringResource(R.string.not_set)
+                ) { showOdo = true }
+                DividerRow()
+                TextRow(stringResource(R.string.car_appearance), colourLabel(fuel.accentName)) { showAppearance = true }
+            }
         }
     }
 
@@ -234,13 +217,36 @@ private fun FuelMain(fuel: FuelStore, onOpen: (FuelPage) -> Unit) {
             onDismiss = { showRefuel = false },
             onSaved = {
                 showRefuel = false
-                userAdjusting = false
                 scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(msgRefuel) }
             }
         )
     }
-    if (showTripCost) TripCostSheet(fuel = fuel, onDismiss = { showTripCost = false })
-    if (showTank) TankSheet(fuel = fuel, onDismiss = { showTank = false })
+    if (showOdo) OdometerSheet(fuel = fuel, onDismiss = { showOdo = false })
+    if (showAppearance) AppearanceDialog(fuel = fuel, onDismiss = { showAppearance = false })
+}
+
+/** A reminder's status in words plus its colour; words first, never colour alone. */
+@Composable
+private fun reminderStatus(fuel: FuelStore, reminder: ServiceReminder): Pair<String, Color> {
+    val p = fuel.progress(reminder)
+    val status = when (p.status) {
+        ReminderStatus.Due -> stringResource(R.string.service_status_due)
+        ReminderStatus.Soon -> stringResource(R.string.service_status_soon)
+        ReminderStatus.Ok -> stringResource(R.string.service_status_ok)
+    }
+    val detail = listOfNotNull(
+        p.kmLeft?.let {
+            if (it > 0) stringResource(R.string.service_km_left, formatKm(it))
+            else stringResource(R.string.service_km_over, formatKm(-it))
+        },
+        p.dueAt?.let { stringResource(R.string.service_due_on, shortDateYear(it)) },
+    ).joinToString(" · ").ifEmpty { stringResource(R.string.service_no_odometer_short) }
+    val color = when (p.status) {
+        ReminderStatus.Due -> Danger
+        ReminderStatus.Soon -> Warn
+        ReminderStatus.Ok -> Muted
+    }
+    return "$status · $detail" to color
 }
 
 @Composable
@@ -249,113 +255,6 @@ private fun FuelStat(label: String, value: String, modifier: Modifier = Modifier
         Text(label, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
         Spacer(Modifier.height(4.dp))
         Text(value, fontSize = TypeScale.Section, lineHeight = 26.sp, color = Paper)
-    }
-}
-
-@Composable
-private fun FuelGauge(
-    fraction: Float,
-    litersInTank: Double?,
-    updatedText: String,
-    onFractionChange: (Float) -> Unit,
-    onCommit: () -> Unit,
-    onSetTank: () -> Unit,
-) {
-    val normalized = fraction.coerceIn(0f, 1f)
-    val pct = (normalized * 100f).roundToInt()
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "$pct%", fontSize = TypeScale.BigNumber, lineHeight = TypeScale.BigNumber,
-                    fontWeight = FontWeight.Light, color = Paper, letterSpacing = (-1).sp
-                )
-                Text(stringResource(R.string.fuel_current_level), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
-            }
-            if (litersInTank != null) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("${formatDecimal(litersInTank, 0)} L", fontSize = TypeScale.Section, lineHeight = 26.sp, color = Paper)
-                    Text(stringResource(R.string.fuel_approx), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
-                }
-            } else {
-                // Without a tank size there are no litres to show, so offer to set it.
-                LinkButton(stringResource(R.string.fuel_set_tank), onClick = onSetTank)
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        FuelBar(value = normalized, pct = pct, onChange = onFractionChange, onCommit = onCommit)
-        Spacer(Modifier.height(12.dp))
-        Text(updatedText, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
-    }
-}
-
-/**
- * Fuel gauge bar: a thin track with an orange fill and a square handle. Drawn
- * by hand so the E, ¼, ½, ¾, F marks sit exactly under the handle positions.
- * The whole 48 dp tall strip takes taps and drags.
- */
-@Composable
-private fun FuelBar(value: Float, pct: Int, onChange: (Float) -> Unit, onCommit: () -> Unit) {
-    val latestChange by rememberUpdatedState(onChange)
-    val latestCommit by rememberUpdatedState(onCommit)
-    val label = stringResource(R.string.fuel_level)
-    val inset = 10.dp
-    Column(Modifier.fillMaxWidth()) {
-        Canvas(
-            Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .pointerInput(Unit) {
-                    val insetPx = inset.toPx()
-                    fun at(x: Float): Float {
-                        val span = size.width - 2 * insetPx
-                        return if (span <= 0f) value else ((x - insetPx) / span).coerceIn(0f, 1f)
-                    }
-                    detectTapGestures { latestChange(at(it.x)); latestCommit() }
-                }
-                .pointerInput(Unit) {
-                    val insetPx = inset.toPx()
-                    fun at(x: Float): Float {
-                        val span = size.width - 2 * insetPx
-                        return if (span <= 0f) value else ((x - insetPx) / span).coerceIn(0f, 1f)
-                    }
-                    detectHorizontalDragGestures(
-                        onDragStart = { latestChange(at(it.x)) },
-                        onHorizontalDrag = { change, _ -> change.consume(); latestChange(at(change.position.x)) },
-                        onDragEnd = { latestCommit() },
-                        onDragCancel = { latestCommit() }
-                    )
-                }
-                .semantics {
-                    contentDescription = label
-                    stateDescription = "$pct%"
-                    progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f, steps = 19)
-                    setProgress { target -> latestChange(target.coerceIn(0f, 1f)); latestCommit(); true }
-                }
-        ) {
-            val insetPx = inset.toPx()
-            val left = insetPx
-            val right = size.width - insetPx
-            val cy = size.height / 2f
-            val trackH = 4.dp.toPx()
-            val x = left + (right - left) * value
-            drawRect(Line, Offset(left, cy - trackH / 2), Size(right - left, trackH))
-            if (x > left) drawRect(Accent, Offset(left, cy - trackH / 2), Size(x - left, trackH))
-            val knob = 20.dp.toPx()
-            drawRect(Paper, Offset(x - knob / 2, cy - knob / 2), Size(knob, knob))
-        }
-        BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = inset).height(26.dp)) {
-            val mark = 28.dp
-            listOf(0f to "E", 0.25f to "¼", 0.5f to "½", 0.75f to "¾", 1f to "F").forEach { (position, text) ->
-                Column(
-                    Modifier.offset(x = maxWidth * position - mark / 2).width(mark),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(Modifier.width(1.dp).height(6.dp).background(Line))
-                    Text(text, fontSize = TypeScale.Caption, color = Muted)
-                }
-            }
-        }
     }
 }
 
@@ -514,51 +413,6 @@ private fun exportCsv(context: Context, fuel: FuelStore) {
     }
 }
 
-@Composable
-private fun LevelChecksPage(fuel: FuelStore, onBack: () -> Unit) {
-    val context = LocalContext.current
-    val snackbar = LocalSnackbar.current
-    val scope = rememberCoroutineScope()
-    val msgDeleted = stringResource(R.string.level_check_deleted)
-    val msgUndo = stringResource(R.string.undo)
-    SubPage(
-        title = stringResource(R.string.level_checks),
-        onBack = onBack,
-        emptyText = if (fuel.fuelLogs.isEmpty()) stringResource(R.string.level_checks_empty) else null,
-    ) {
-        itemsIndexed(fuel.fuelLogs, key = { _, log -> log.date }) { idx, log ->
-            LevelCheckRow(log = log, index = idx, label = dateTime(context, log.date)) {
-                fuel.deleteFuelLog(log.date)
-                scope.launch {
-                    val result = snackbar.showSnackbar(msgDeleted, actionLabel = msgUndo, withDismissAction = true)
-                    if (result == SnackbarResult.ActionPerformed) fuel.restoreFuelLog(log)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LevelCheckRow(log: FuelLevelLog, index: Int, label: String, onDelete: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = 64.dp)
-            .padding(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(label, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper)
-            if (log.odometer > 0) Text(formatKm(log.odometer), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
-        }
-        Text("${log.levelPct.roundToInt()}%", fontSize = TypeScale.Emphasis, color = Paper)
-        IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
-            Icon(Ph.trash, contentDescription = stringResource(R.string.delete), tint = Muted, modifier = Modifier.size(24.dp))
-        }
-    }
-    DividerRow(Modifier.padding(horizontal = 24.dp))
-}
-
 // ============================================================
 // Sheets
 // ============================================================
@@ -641,64 +495,6 @@ private fun RefuelSheet(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
             }
         })
         QuietButton(stringResource(R.string.cancel), onClick = onDismiss)
-    }
-}
-
-@Composable
-private fun TripCostSheet(fuel: FuelStore, onDismiss: () -> Unit) {
-    val learnedConsumption = remember { fuel.averageL100km() }
-    val learnedPrice = remember { fuel.latestPricePerLitre() }
-    var distance by remember { mutableStateOf("") }
-    var consumption by remember { mutableStateOf(learnedConsumption?.let { formatDecimal(it, 1) } ?: "") }
-    var price by remember { mutableStateOf(learnedPrice?.let { formatDecimal(it, 3) } ?: "") }
-    var roundTrip by remember { mutableStateOf(false) }
-
-    fun positive(text: String): Double? = parseNumber(text)?.takeIf { it > 0 }
-    val tripDistance = positive(distance)?.times(if (roundTrip) 2.0 else 1.0)
-    val consumptionValue = positive(consumption)
-    val litresNeeded = if (tripDistance != null && consumptionValue != null) tripDistance * consumptionValue / 100.0 else null
-    val tripCost = positive(price)?.let { p -> litresNeeded?.times(p) }
-
-    ParkedSheet(
-        title = stringResource(R.string.trip_cost),
-        subtitle = stringResource(R.string.trip_cost_subtitle),
-        onDismiss = onDismiss
-    ) {
-        NumberField(distance, { distance = it }, stringResource(R.string.trip_distance))
-        Spacer(Modifier.height(12.dp))
-        NumberField(
-            consumption, { consumption = it }, stringResource(R.string.trip_consumption),
-            supporting = stringResource(if (learnedConsumption != null) R.string.trip_consumption_learned else R.string.trip_consumption_enter)
-        )
-        Spacer(Modifier.height(4.dp))
-        NumberField(
-            price, { price = it }, stringResource(R.string.trip_price, fuel.currency),
-            supporting = if (learnedPrice != null) stringResource(R.string.trip_price_learned) else null
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(
-            Modifier.fillMaxWidth().clickable(role = Role.Switch) { roundTrip = !roundTrip }.heightIn(min = 56.dp).padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(stringResource(R.string.trip_round), fontSize = TypeScale.Emphasis, color = Paper, modifier = Modifier.weight(1f))
-            ParkedSwitch(checked = roundTrip, onCheckedChange = null)
-        }
-        Spacer(Modifier.height(16.dp))
-        DividerRow()
-        Column(Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
-            Text(stringResource(R.string.trip_estimated), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
-            Text(
-                tripCost?.let { formatMoney(fuel.currency, it) } ?: "–",
-                fontSize = TypeScale.BigNumber, lineHeight = TypeScale.BigNumber, fontWeight = FontWeight.Light,
-                color = if (tripCost != null) Accent else Muted
-            )
-            if (litresNeeded != null && tripDistance != null) {
-                Text("${formatKm(tripDistance)} · ~${formatDecimal(litresNeeded, 1)} L", fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
-            }
-        }
-        DividerRow()
-        Spacer(Modifier.height(16.dp))
-        PrimaryButton(stringResource(R.string.done), onClick = onDismiss)
     }
 }
 

@@ -300,6 +300,7 @@ fun ActionRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     trailing: @Composable (() -> Unit)? = null,
+    iconTint: Color = Paper,
 ) {
     Column(modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick)) {
         Row(
@@ -307,7 +308,7 @@ fun ActionRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (icon != null) {
-                Icon(icon, contentDescription = null, tint = Paper, modifier = Modifier.size(24.dp))
+                Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(16.dp))
             }
             Column(Modifier.weight(1f)) {

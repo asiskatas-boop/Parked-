@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
@@ -36,8 +37,8 @@
     <application
         android:name=".ParkedApplication"
         android:allowBackup="false"
-        android:icon="@drawable/ic_parked_logo"
-        android:roundIcon="@drawable/ic_parked_logo"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:label="${appLabel}"
         android:supportsRtl="true"
         android:localeConfig="@xml/locales_config"

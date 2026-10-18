@@ -24,6 +24,10 @@ data class ParkingState(
     val timerEndsAt: Long? = null,
     val historyEnabled: Boolean = false,
     val history: List<ParkingHistoryEntry> = emptyList(),
+    /** "auto" when AutoPark saved the spot, "manual" when the user did; null for spots saved before 0.5. */
+    val source: String? = null,
+    /** Accuracy of the saved fix in metres, when known. */
+    val accuracy: Float? = null,
 ) {
     val hasSpot: Boolean
         get() = parkedLat != null && parkedLng != null && !(parkedLat == 0.0 && parkedLng == 0.0)
@@ -47,6 +51,8 @@ data class ParkingBackup(
     val timerEndsAt: Long?,
     val historyEnabled: Boolean,
     val history: List<ParkingHistoryEntry>,
+    val source: String? = null,
+    val accuracy: Float? = null,
 )
 
 /** Everything about the current spot, so a save can be undone exactly. */
@@ -57,6 +63,8 @@ data class SavedSpot(
     val note: String?,
     val photoPath: String?,
     val timerEndsAt: Long?,
+    val source: String? = null,
+    val accuracy: Float? = null,
 )
 
 class ParkingStore(context: Context) {
@@ -74,6 +82,8 @@ class ParkingStore(context: Context) {
         val timerEndsAt = longPreferencesKey("timer_ends_at")
         val historyEnabled = booleanPreferencesKey("history_enabled")
         val history = stringPreferencesKey("history_json")
+        val source = stringPreferencesKey("spot_source")
+        val accuracy = floatPreferencesKey("spot_accuracy")
     }
 
     val state: Flow<ParkingState> = this.context.dataStore.data.map { p ->
@@ -89,6 +99,8 @@ class ParkingStore(context: Context) {
             timerEndsAt = p[Keys.timerEndsAt],
             historyEnabled = p[Keys.historyEnabled] ?: false,
             history = parseHistory(p[Keys.history]),
+            source = p[Keys.source],
+            accuracy = p[Keys.accuracy],
         )
     }
 
@@ -107,16 +119,25 @@ class ParkingStore(context: Context) {
      * Saves a new spot. The note, photo and timer belonged to the previous spot,
      * so they are cleared. Returns the previous spot so the caller can offer Undo.
      */
-    suspend fun saveParking(lat: Double, lng: Double, at: Long = System.currentTimeMillis()): SavedSpot {
+    suspend fun saveParking(
+        lat: Double,
+        lng: Double,
+        at: Long = System.currentTimeMillis(),
+        source: String = SOURCE_MANUAL,
+        accuracy: Float? = null,
+    ): SavedSpot {
         var previous: SavedSpot? = null
         context.dataStore.edit {
             previous = SavedSpot(
                 lat = it[Keys.parkedLat], lng = it[Keys.parkedLng], at = it[Keys.parkedAt],
                 note = it[Keys.note], photoPath = it[Keys.photoPath], timerEndsAt = it[Keys.timerEndsAt],
+                source = it[Keys.source], accuracy = it[Keys.accuracy],
             )
             it[Keys.parkedLat] = lat
             it[Keys.parkedLng] = lng
             it[Keys.parkedAt] = at
+            it[Keys.source] = source
+            if (accuracy != null && accuracy.isFinite()) it[Keys.accuracy] = accuracy else it.remove(Keys.accuracy)
             it.remove(Keys.note)
             it.remove(Keys.photoPath)
             it.remove(Keys.timerEndsAt)
@@ -144,6 +165,8 @@ class ParkingStore(context: Context) {
             if (spot.note != null) it[Keys.note] = spot.note else it.remove(Keys.note)
             if (spot.photoPath != null) it[Keys.photoPath] = spot.photoPath else it.remove(Keys.photoPath)
             if (spot.timerEndsAt != null) it[Keys.timerEndsAt] = spot.timerEndsAt else it.remove(Keys.timerEndsAt)
+            if (spot.source != null) it[Keys.source] = spot.source else it.remove(Keys.source)
+            if (spot.accuracy != null) it[Keys.accuracy] = spot.accuracy else it.remove(Keys.accuracy)
             // The undone save must not stay in history either.
             if (replacedAt != null) {
                 val history = parseHistory(it[Keys.history])
@@ -218,6 +241,10 @@ class ParkingStore(context: Context) {
             }
             s.note?.let { put("spot_note", it) }
             s.timerEndsAt?.let { put("timer_ends_at", it) }
+            if (s.hasSpot) {
+                s.source?.let { put("spot_source", it) }
+                s.accuracy?.takeIf { it.isFinite() }?.let { put("spot_accuracy", it.toDouble()) }
+            }
             put("history_enabled", s.historyEnabled)
             put("history", JSONArray(encodeHistory(s.history)))
         }
@@ -242,6 +269,10 @@ class ParkingStore(context: Context) {
             b.note?.let { v -> it[Keys.note] = v }
             photoPath?.let { v -> it[Keys.photoPath] = v }
             b.timerEndsAt?.let { v -> it[Keys.timerEndsAt] = v }
+            if (b.lat != null && b.lng != null) {
+                b.source?.let { v -> it[Keys.source] = v }
+                b.accuracy?.let { v -> it[Keys.accuracy] = v }
+            }
             it[Keys.historyEnabled] = b.historyEnabled
             if (b.historyEnabled && b.history.isNotEmpty()) it[Keys.history] = encodeHistory(b.history.take(MAX_HISTORY))
             it[Keys.monitoring] = monitoring
@@ -277,6 +308,8 @@ class ParkingStore(context: Context) {
 
     companion object {
         const val MAX_HISTORY = 50
+        const val SOURCE_AUTO = "auto"
+        const val SOURCE_MANUAL = "manual"
 
         fun photoDir(context: Context): File =
             File(context.applicationContext.filesDir, "spot_photos").apply { mkdirs() }

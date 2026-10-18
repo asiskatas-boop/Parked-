@@ -99,17 +99,14 @@ private fun SettingsMain(
     val latestState by rememberUpdatedState(state)
     val autoParkMode by ParkingMonitorService.mode.collectAsState()
 
-    var showOdo by remember { mutableStateOf(false) }
-    var showTank by remember { mutableStateOf(false) }
     var showDevicePicker by remember { mutableStateOf(false) }
-    var showAppearance by remember { mutableStateOf(false) }
     var confirmHistoryOff by remember { mutableStateOf(false) }
     var pendingAutoStart by remember { mutableStateOf(false) }
     var pendingDevicePickerOnly by remember { mutableStateOf(false) }
     var systemNotificationsAllowed by remember { mutableStateOf(Channels.canPost(context, Channels.ALERTS)) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    val sAutoReady = stringResource(R.string.autopark_ready)
+    val sAutoReady = stringResource(R.string.autopark_turned_on)
     val sAutoFailed = stringResource(R.string.autopark_failed)
     val sAutoOff = stringResource(R.string.autopark_off)
     val sBtNeeded = stringResource(R.string.bluetooth_needed)
@@ -122,6 +119,8 @@ private fun SettingsMain(
     val sAlertsInSettings = stringResource(R.string.alerts_enable_in_settings)
     val sBtPermission = stringResource(R.string.bluetooth_permission_needed)
     val sCarSaved = stringResource(R.string.car_bluetooth_saved)
+    val sUsingCar = stringResource(R.string.autopark_using_car)
+    val sCarFallback = stringResource(R.string.car_bluetooth)
 
     fun say(text: String) {
         scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(text) }
@@ -148,6 +147,48 @@ private fun SettingsMain(
         }
     }
 
+    // Set below; lets the launchers declared before beginAutoPark continue the flow.
+    var continueAutoPark: () -> Unit = {}
+
+    /** One car among the paired devices: use it instead of asking. Otherwise show the list. */
+    fun chooseCar() {
+        val cars = pairedDevices(context).filter { it.isCar }
+        if (cars.size == 1) {
+            val car = cars.single()
+            scope.launch {
+                store.selectDevice(car.name ?: sCarFallback, car.address)
+                say(sUsingCar.format(car.name ?: sCarFallback))
+                continueAutoPark()
+            }
+        } else { say(sChooseCar); showDevicePicker = true }
+    }
+
+    // Location on with Android's own in-app dialog (one tap), instead of
+    // sending people to the system settings and hoping they come back.
+    val locationOnLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { _ ->
+        if (!pendingAutoStart) return@rememberLauncherForActivityResult
+        if (isLocationServicesEnabled(context)) { pendingAutoStart = false; startMonitorReady() }
+        else { pendingAutoStart = false; say(sLocationNeeded) }
+    }
+
+    fun askLocationOn() {
+        val request = com.google.android.gms.location.LocationSettingsRequest.Builder()
+            .addLocationRequest(
+                com.google.android.gms.location.LocationRequest.Builder(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, 10_000L).build()
+            ).build()
+        com.google.android.gms.location.LocationServices.getSettingsClient(context).checkLocationSettings(request)
+            .addOnSuccessListener { if (pendingAutoStart) { pendingAutoStart = false; startMonitorReady() } }
+            .addOnFailureListener { e ->
+                val resolvable = e as? com.google.android.gms.common.api.ResolvableApiException
+                if (resolvable != null) {
+                    runCatching {
+                        locationOnLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(resolvable.resolution).build())
+                    }.onFailure { openLocationSettings(); say(sLocationNeeded) }
+                } else { openLocationSettings(); say(sLocationNeeded) }
+            }
+    }
+
+
     val bluetoothEnableLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { _ ->
         if (!pendingAutoStart && !pendingDevicePickerOnly) return@rememberLauncherForActivityResult
         when {
@@ -158,8 +199,8 @@ private fun SettingsMain(
                 say(if (wasAutoPark) sBtNeeded else sBtOn)
             }
             pendingDevicePickerOnly -> { pendingDevicePickerOnly = false; showDevicePicker = true }
-            latestState.deviceAddress == null -> { say(sChooseCar); showDevicePicker = true }
-            !isLocationServicesEnabled(context) -> { openLocationSettings(); say(sLocationNeeded) }
+            latestState.deviceAddress == null -> chooseCar()
+            !isLocationServicesEnabled(context) -> askLocationOn()
             else -> { pendingAutoStart = false; startMonitorReady() }
         }
     }
@@ -175,8 +216,8 @@ private fun SettingsMain(
         when {
             !hasLocationPermission(context) || !hasBluetoothPermission(context) -> { pendingAutoStart = false; say(sPermsNeeded) }
             !isBluetoothEnabled(context) -> bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
-            latestState.deviceAddress == null -> { say(sChooseCar); showDevicePicker = true }
-            !isLocationServicesEnabled(context) -> { openLocationSettings(); say(sLocationNeeded) }
+            latestState.deviceAddress == null -> chooseCar()
+            !isLocationServicesEnabled(context) -> askLocationOn()
             else -> { pendingAutoStart = false; startMonitorReady() }
         }
     }
@@ -196,11 +237,12 @@ private fun SettingsMain(
                 autoPermissionLauncher.launch(required.toTypedArray())
             }
             !isBluetoothEnabled(context) -> bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
-            !deviceReady -> { say(sChooseCar); showDevicePicker = true }
-            !isLocationServicesEnabled(context) -> { openLocationSettings(); say(sLocationNeeded) }
+            !deviceReady -> chooseCar()
+            !isLocationServicesEnabled(context) -> askLocationOn()
             else -> { pendingAutoStart = false; startMonitorReady() }
         }
     }
+    continueAutoPark = { beginAutoPark(deviceReady = true) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         fuel.updateNotificationsEnabled(granted)
@@ -276,43 +318,10 @@ private fun SettingsMain(
     val notificationsChecked = fuel.notificationsEnabled && systemNotificationsAllowed
     var hasCrashReport by remember { mutableStateOf(ParkedApplication.crashFile(context).exists()) }
 
-    val carSwatch = carColours.firstOrNull { it.first == fuel.accentName }?.second ?: carColours[4].second
-    val autoParkLabel = stringResource(
-        when {
-            !state.monitoring -> R.string.autopark_off
-            autoParkMode == AutoParkMode.Limited -> R.string.autopark_on_limited
-            else -> R.string.autopark_on
-        }
-    )
-
     Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState())) {
-        // The car, in its colour, on a dark panel. Tap to change the colour.
-        Box(
-            Modifier
-                .statusBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, top = 16.dp)
-                .fillMaxWidth()
-                .height(240.dp)
-                .background(Panel)
-                .clickable(role = androidx.compose.ui.semantics.Role.Button) { showAppearance = true },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Ph.carProfile,
-                contentDescription = stringResource(R.string.cd_car_preview, colourLabel(fuel.accentName)),
-                tint = visibleOnPanel(carSwatch),
-                modifier = Modifier.size(240.dp)
-            )
-        }
-
-        Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp)) {
-            PageTitle(state.deviceName ?: stringResource(R.string.home_car_title))
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "${colourLabel(fuel.accentName)} · $autoParkLabel",
-                fontSize = TypeScale.Label, lineHeight = 22.sp, color = Muted
-            )
-            Spacer(Modifier.height(20.dp))
+        Column(Modifier.statusBarsPadding().padding(start = 24.dp, end = 24.dp, top = 24.dp)) {
+            PageTitle(stringResource(R.string.tab_settings))
+            Spacer(Modifier.height(24.dp))
             SettingsCard {
                 ToggleRow(
                     label = stringResource(R.string.autopark),
@@ -341,18 +350,6 @@ private fun SettingsMain(
                         else -> { pendingDevicePickerOnly = false; showDevicePicker = true }
                     }
                 }
-                DividerRow()
-                TextRow(
-                    stringResource(R.string.odometer),
-                    fuel.currentOdo.takeIf { it > 0 }?.let { formatKm(it) } ?: stringResource(R.string.not_set)
-                ) { showOdo = true }
-                DividerRow()
-                TextRow(
-                    stringResource(R.string.tank_capacity),
-                    fuel.tankCapacity.takeIf { it > 0 }?.let { "${formatDecimal(it, 0)} L" } ?: stringResource(R.string.not_set)
-                ) { showTank = true }
-                DividerRow()
-                TextRow(stringResource(R.string.car_appearance), colourLabel(fuel.accentName)) { showAppearance = true }
             }
 
             SectionTitle(stringResource(R.string.settings_preferences), modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
@@ -410,13 +407,6 @@ private fun SettingsMain(
                         locale.getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) }
                     ) { openAppLanguageSettings(context) }
                 }
-                if (hasCrashReport) {
-                    DividerRow()
-                    TextRow(stringResource(R.string.crash_report), stringResource(R.string.crash_report_share)) {
-                        shareCrashReport(context)
-                        hasCrashReport = false
-                    }
-                }
             }
 
             SectionTitle(stringResource(R.string.backup_section), modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
@@ -427,7 +417,7 @@ private fun SettingsMain(
                 subtitle = stringResource(R.string.backup_export_sub),
                 onClick = {
                     val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-                    runCatching { exportLauncher.launch("parked-backup-$day.json") }
+                    runCatching { exportLauncher.launch("Parked backup $day.json") }
                 }
             )
             ActionRow(
@@ -439,13 +429,26 @@ private fun SettingsMain(
                     runCatching { importLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }
                 }
             )
+
+            // About: the version, and the crash report when there is one.
+            SectionTitle(stringResource(R.string.about_section), modifier = Modifier.padding(top = 32.dp, bottom = 12.dp))
+            SettingsCard {
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.about_version), fontSize = TypeScale.Emphasis, color = Paper, modifier = Modifier.weight(1f))
+                    Text(com.parked.app.BuildConfig.VERSION_NAME, fontSize = TypeScale.Body, color = Muted)
+                }
+                if (hasCrashReport) {
+                    DividerRow()
+                    TextRow(stringResource(R.string.crash_report), stringResource(R.string.crash_report_share)) {
+                        shareCrashReport(context)
+                        hasCrashReport = false
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(16.dp))
     }
 
-    if (showOdo) OdometerSheet(fuel = fuel, onDismiss = { showOdo = false })
-    if (showTank) TankSheet(fuel = fuel, onDismiss = { showTank = false })
-    if (showAppearance) AppearanceDialog(fuel = fuel, onDismiss = { showAppearance = false })
     pendingRestore?.let { r ->
         val message = listOfNotNull(
             r.exportedAt.takeIf { it > 0 }?.let { stringResource(R.string.backup_restore_made, dateTime(context, it)) },
@@ -521,11 +524,9 @@ private fun SettingsMain(
 @Composable
 private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, String) -> Unit) {
     val context = LocalContext.current
-    val adapter: BluetoothAdapter? = context.getSystemService(BluetoothManager::class.java)?.adapter
     val canRead = hasBluetoothPermission(context)
-    val devices = remember {
-        if (canRead) runCatching { adapter?.bondedDevices?.toList().orEmpty() }.getOrDefault(emptyList()) else emptyList()
-    }
+    // Cars first; headphones, watches and speakers after them.
+    val devices = remember { if (canRead) pairedDevices(context).sortedByDescending { it.isCar } else emptyList() }
     val fallbackName = stringResource(R.string.car_bluetooth)
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -542,12 +543,12 @@ private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, Strin
                     else -> LazyColumn {
                         item { DividerRow() }
                         items(devices, key = { it.address }) { device ->
-                            val name = runCatching { device.name }.getOrNull()
                             ActionRow(
-                                icon = Ph.bluetooth,
-                                title = name ?: stringResource(R.string.unnamed_device),
-                                subtitle = device.address,
-                                onClick = { onSelected(name ?: fallbackName, device.address) }
+                                icon = if (device.isCar) Ph.car else Ph.bluetooth,
+                                iconTint = if (device.isCar) Accent else Muted,
+                                title = device.name ?: stringResource(R.string.unnamed_device),
+                                subtitle = stringResource(if (device.isCar) R.string.device_kind_car else R.string.device_kind_other),
+                                onClick = { onSelected(device.name ?: fallbackName, device.address) }
                             )
                         }
                     }
@@ -558,7 +559,27 @@ private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, Strin
     )
 }
 
-private val carColours = listOf(
+/** A paired Bluetooth device; [isCar] when Android reports it as car audio or a hands-free kit. */
+internal data class PairedDevice(val name: String?, val address: String, val isCar: Boolean)
+
+@android.annotation.SuppressLint("MissingPermission") // Callers check hasBluetoothPermission first.
+internal fun pairedDevices(context: android.content.Context): List<PairedDevice> {
+    if (!hasBluetoothPermission(context)) return emptyList()
+    val adapter: BluetoothAdapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return emptyList()
+    return runCatching {
+        adapter.bondedDevices.orEmpty().map { d ->
+            val cls = runCatching { d.bluetoothClass?.deviceClass }.getOrNull()
+            PairedDevice(
+                name = runCatching { d.name }.getOrNull(),
+                address = d.address,
+                isCar = cls == android.bluetooth.BluetoothClass.Device.AUDIO_VIDEO_CAR_AUDIO ||
+                    cls == android.bluetooth.BluetoothClass.Device.AUDIO_VIDEO_HANDSFREE,
+            )
+        }
+    }.getOrDefault(emptyList())
+}
+
+internal val carColours = listOf(
     "White" to Color(0xFFF4F4F2),
     "Silver" to Color(0xFFBFC3C7),
     "Gray" to Color(0xFF70757A),
@@ -575,7 +596,7 @@ private val carColours = listOf(
 
 /** Stored colour names stay English for compatibility; the label is translated. */
 @Composable
-private fun colourLabel(name: String): String = stringResource(
+internal fun colourLabel(name: String): String = stringResource(
     when (name) {
         "White" -> R.string.colour_white
         "Silver" -> R.string.colour_silver
@@ -592,7 +613,7 @@ private fun colourLabel(name: String): String = stringResource(
 )
 
 @Composable
-private fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
+internal fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Panel,
@@ -630,7 +651,7 @@ private fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun OdometerSheet(fuel: FuelStore, onDismiss: () -> Unit) {
+internal fun OdometerSheet(fuel: FuelStore, onDismiss: () -> Unit) {
     var odo by remember { mutableStateOf(fuel.currentOdo.takeIf { it > 0 }?.let { formatDecimal(it, 0).filter(Char::isDigit) } ?: "") }
     var error by remember { mutableStateOf<String?>(null) }
     val eOdo = stringResource(R.string.error_odometer)
@@ -641,28 +662,6 @@ private fun OdometerSheet(fuel: FuelStore, onDismiss: () -> Unit) {
         PrimaryButton(text = stringResource(R.string.save), onClick = {
             val value = parseNumber(odo)
             if (value == null || value <= 0) error = eOdo else { fuel.setOdometer(value); onDismiss() }
-        })
-        QuietButton(stringResource(R.string.cancel), onClick = onDismiss)
-    }
-}
-
-@Composable
-internal fun TankSheet(fuel: FuelStore, onDismiss: () -> Unit) {
-    var tank by remember { mutableStateOf(fuel.tankCapacity.takeIf { it > 0 }?.let { formatDecimal(it, 0) } ?: "") }
-    var error by remember { mutableStateOf<String?>(null) }
-    val eInvalid = stringResource(R.string.error_tank)
-    val eHigh = stringResource(R.string.error_tank_high)
-    ParkedSheet(title = stringResource(R.string.tank_capacity), subtitle = stringResource(R.string.tank_subtitle), onDismiss = onDismiss) {
-        NumberField(tank, { tank = it; error = null }, stringResource(R.string.tank_label))
-        ErrorText(error)
-        Spacer(Modifier.height(16.dp))
-        PrimaryButton(text = stringResource(R.string.save), onClick = {
-            val parsed = parseNumber(tank)
-            error = when {
-                parsed == null || parsed <= 0 -> eInvalid
-                parsed > 300 -> eHigh
-                else -> { fuel.updateTankCapacity(parsed); onDismiss(); null }
-            }
         })
         QuietButton(stringResource(R.string.cancel), onClick = onDismiss)
     }
@@ -739,7 +738,7 @@ private fun HistoryRow(entry: ParkingHistoryEntry, label: String, onOpen: () -> 
 }
 
 /** Keeps a black or dark grey car visible on the dark panel. */
-private fun visibleOnPanel(c: Color): Color =
+internal fun visibleOnPanel(c: Color): Color =
     if (c.luminance() < 0.08f) Color(0xFF6B6F74) else c
 
 private fun shareCrashReport(context: android.content.Context) {

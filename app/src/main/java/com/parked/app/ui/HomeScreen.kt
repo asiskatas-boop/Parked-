@@ -162,7 +162,7 @@ fun HomeScreen(
                 showMessage(msgNoFix)
                 return@launch
             }
-            val previous = store.saveParking(loc.lat, loc.lng)
+            val previous = store.saveParking(loc.lat, loc.lng, source = ParkingStore.SOURCE_MANUAL, accuracy = loc.accuracy)
             saving = false
             // Say so when the fix was weak, so a spot a few metres off is no surprise.
             val savedText = loc.accuracy?.takeIf { it > WEAK_GPS_M }
@@ -238,6 +238,7 @@ fun HomeScreen(
     val parkedMarkerIcon = remember { makeParkedMarker(context) }
     val liveMarkerIcon = remember { makeLiveMarker(context) }
 
+    val online = rememberOnline()
     val density = androidx.compose.ui.platform.LocalDensity.current
     // The map fills only the area above the panel, so the car marker and
     // "centre" are never hidden under it.
@@ -266,6 +267,21 @@ fun HomeScreen(
                     Spacer(Modifier.height(6.dp))
                 }
                 OsmAttribution(Modifier)
+            }
+
+            // Without data the tiles can't load (an underground garage). Say so,
+            // and that the spot is safe.
+            if (!online) {
+                Text(
+                    stringResource(R.string.map_offline),
+                    fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Paper,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(horizontal = 32.dp)
+                        .background(Panel)
+                        .border(1.dp, Line)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                )
             }
 
             // Tell the user why the map can't show them, and fix it in one tap.
@@ -449,21 +465,51 @@ private fun SavedSpotContent(
 ) {
     val context = LocalContext.current
     val parked = state.parkedAt?.let { parkedAtLabel(context, it) } ?: stringResource(R.string.parked_recently)
-    val autoPark = stringResource(
-        when {
-            !state.monitoring -> R.string.autopark_off
-            autoParkMode == AutoParkMode.Limited -> R.string.autopark_on_limited
-            else -> R.string.autopark_on
+    // How the spot was saved. "Saved automatically when Golf disconnected"
+    // is the proof that AutoPark works; without it people go back to saving
+    // by hand.
+    val auto = state.source == ParkingStore.SOURCE_AUTO
+    val how = when {
+        auto && state.deviceName != null -> stringResource(R.string.home_saved_auto, state.deviceName)
+        auto -> stringResource(R.string.home_saved_auto_nodevice)
+        state.source == ParkingStore.SOURCE_MANUAL -> stringResource(R.string.home_saved_manual)
+        else -> null
+    }
+    val howLine = how?.let { h -> state.accuracy?.let { stringResource(R.string.gps_accuracy, h, it.roundToInt()) } ?: h }
+    Text(parked, fontSize = TypeScale.Label, lineHeight = 22.sp, color = Muted)
+    if (howLine != null) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+            if (auto) {
+                Icon(Ph.checkCircle, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(howLine, fontSize = TypeScale.Label, lineHeight = 22.sp, color = if (auto) Paper else Muted)
         }
-    )
-    Text("$parked · $autoPark", fontSize = TypeScale.Label, lineHeight = 22.sp, color = Muted)
+    }
+    if (!state.monitoring || autoParkMode == AutoParkMode.Limited) {
+        Text(
+            stringResource(if (!state.monitoring) R.string.autopark_off else R.string.autopark_on_limited),
+            fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted
+        )
+    }
     Spacer(Modifier.height(8.dp))
-    HeroText(stringResource(if (isAtCar) R.string.home_at_car else R.string.home_car_title), Paper, heading = true)
-    if (distance != null && !isAtCar) {
-        HeroText(stringResource(R.string.home_distance, formatDistance(distance), walkingMinutes(distance)), Accent)
+    Row(verticalAlignment = Alignment.Top) {
+        Column(Modifier.weight(1f)) {
+            HeroText(stringResource(if (isAtCar) R.string.home_at_car else R.string.home_car_title), Paper, heading = true)
+            if (distance != null && !isAtCar) {
+                HeroText(stringResource(R.string.home_distance, formatDistance(distance), walkingMinutes(distance)), Accent)
+            }
+        }
+        IconButton(onClick = onShare, modifier = Modifier.size(48.dp)) {
+            Icon(Ph.share, contentDescription = stringResource(R.string.share_spot), tint = Paper, modifier = Modifier.size(24.dp))
+        }
     }
 
-    // Note, photo and parking time: three columns between hairlines.
+    // The one thing to do here: go to the car.
+    Spacer(Modifier.height(20.dp))
+    PrimaryButton(text = stringResource(R.string.get_directions), onClick = onDirections)
+
+    // Details: note, photo and parking time in one row between hairlines.
     val timerEnds = state.timerEndsAt?.takeIf { it > System.currentTimeMillis() - 60 * 60_000L }
     Spacer(Modifier.height(20.dp))
     DividerRow()
@@ -487,19 +533,14 @@ private fun SavedSpotContent(
         TimerCell(endsAt = timerEnds, modifier = Modifier.weight(1f), onClick = onTimer)
     }
     DividerRow()
-
-    Spacer(Modifier.height(20.dp))
-    PrimaryButton(text = stringResource(R.string.get_directions), onClick = onDirections)
-    Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.padding(top = 4.dp)) {
-        LinkButton(stringResource(R.string.share_spot), onClick = onShare)
-        // Replacing the saved spot is the risky action here, so it is the
-        // quietest one on the screen.
-        LinkButton(
-            stringResource(if (saving) R.string.saving else R.string.save_current_spot),
-            color = Muted,
-            onClick = onSave
-        )
-    }
+    // Replacing the saved spot is the risky action here, so it is the
+    // quietest one on the screen.
+    LinkButton(
+        stringResource(if (saving) R.string.saving else R.string.save_current_spot),
+        color = Muted,
+        modifier = Modifier.padding(top = 4.dp),
+        onClick = onSave
+    )
 }
 
 /** One column of the note / photo / timer row. Orange icon = something saved. */
@@ -886,6 +927,28 @@ private fun PhotoDialog(
 // ============================================================
 // Actions
 // ============================================================
+
+/** True while the phone has a usable internet connection; updates live. */
+@Composable
+private fun rememberOnline(): Boolean {
+    val context = LocalContext.current
+    val cm = remember { context.getSystemService(android.net.ConnectivityManager::class.java) }
+    fun check(): Boolean = runCatching {
+        cm?.getNetworkCapabilities(cm.activeNetwork)
+            ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    }.getOrDefault(true)
+    var online by remember { mutableStateOf(check()) }
+    DisposableEffect(cm) {
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) { online = check() }
+            override fun onLost(network: android.net.Network) { online = check() }
+            override fun onCapabilitiesChanged(network: android.net.Network, caps: android.net.NetworkCapabilities) { online = check() }
+        }
+        runCatching { cm?.registerDefaultNetworkCallback(callback) }
+        onDispose { runCatching { cm?.unregisterNetworkCallback(callback) } }
+    }
+    return online
+}
 
 /** A location fix and its accuracy in metres, when Android reports one. */
 private data class Fix(val lat: Double, val lng: Double, val accuracy: Float?)

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon: the orange square "P" from the map marker, on black. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFF7500" android:pathData="M30,30h48v48h-48z" />
+    <path android:fillColor="#FF000000" android:fillType="evenOdd"
+        android:pathData="M44,38H58A10,10 0 0,1 58,58H51V70H44Z M51,44V52H58A4,4 0 0,0 58,44Z" />
+</vector>

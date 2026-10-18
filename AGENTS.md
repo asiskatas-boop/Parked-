@@ -28,7 +28,7 @@ compiler errors are attached to the check run as a single annotation.
   - `service/ParkingMonitorService.kt` — AutoPark foreground service
   - `receiver/` — boot restore and parking-timer alarms
   - `widget/`, `tile/` — home-screen widget and Quick Settings tile
-  - `ui/` — Compose screens (`App`, `HomeScreen`, `FuelScreen`, `SettingsScreen`)
+  - `ui/` — Compose screens (`App`, `HomeScreen`, `FuelScreen` (the Car tab), `SettingsScreen`)
     plus shared `Theme` and `Components`
 - `app/src/main/res/values*/strings.xml` — all user-facing text. English is the
   default; Greek lives in `values-el`. Add every new string to both files.
@@ -39,8 +39,12 @@ compiler errors are attached to the check run as a single annotation.
   re-engagement or "log your fuel" nudges.
 - Parking history is opt-in and off by default. Never collect location history
   silently.
-- Refuels are the only fuel history. The fuel level is a current snapshot that
-  the user corrects only when the car's gauge differs.
+- Refuels are the only fuel history. Since 0.5 there is no fuel-level gauge in
+  the UI; the stored level keys stay for compatibility and backups.
+- No splash screen: opening the app is often the moment someone is looking for
+  their car.
+- Tabs: Home (where the car is), Car (service and ΚΤΕΟ first, then refuels,
+  odometer, colour), Settings (AutoPark, preferences, backup, about).
 - The odometer only advances from GPS after the user has entered a real reading.
 - Keep storage keys backward compatible; users update in place.
 - For now 0.4 builds as a separate app (`applicationIdSuffix = ".next"`,

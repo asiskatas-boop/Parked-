@@ -331,7 +331,11 @@ class ParkingMonitorService : Service() {
         lastLocation = null
         scope.launch {
             try {
-                val previous = store.saveParking(loc.latitude, loc.longitude)
+                val previous = store.saveParking(
+                    loc.latitude, loc.longitude,
+                    source = ParkingStore.SOURCE_AUTO,
+                    accuracy = if (loc.hasAccuracy()) loc.accuracy else null,
+                )
                 // No undo for automatic saves, so the old spot's photo can go now.
                 store.deletePhotoFile(previous.photoPath)
                 if (previous.timerEndsAt != null) ParkingTimer.cancel(this@ParkingMonitorService)

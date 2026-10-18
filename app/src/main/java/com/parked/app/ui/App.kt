@@ -1,14 +1,8 @@
 package com.parked.app.ui
 
-import android.animation.ValueAnimator
 import android.content.Context
 import android.net.Uri
 import android.os.Looper
-import android.graphics.Matrix
-import android.graphics.SurfaceTexture
-import android.media.MediaPlayer
-import android.view.Surface
-import android.view.TextureView
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.scaleIn
@@ -137,14 +131,9 @@ private fun ParkedApp(
         }
     }
 
-    // The brand video plays on every cold start, except when the app was opened
-    // for a quick action (widget, tile, notification) or animations are off.
-    val splashSeenBefore = remember { uiPrefs.getBoolean("splash_seen", false) }
-    var showSplash by rememberSaveable {
-        mutableStateOf(pendingAction == null && ValueAnimator.areAnimatorsEnabled())
-    }
+    // No splash: opening Parked! is often the moment you're looking for the
+    // car, so the app goes straight to it.
     val stage = when {
-        showSplash -> Stage.Splash
         showOnboarding -> Stage.Onboarding
         else -> Stage.Main
     }
@@ -155,15 +144,6 @@ private fun ParkedApp(
         label = "appStage"
     ) { current ->
         when (current) {
-            Stage.Splash -> VideoSplash(
-                // Full speed the first time; after that the same animation at
-                // double speed, so it doesn't hold you up when you need the car.
-                fast = splashSeenBefore,
-                onFinished = {
-                    uiPrefs.edit().putBoolean("splash_seen", true).apply()
-                    showSplash = false
-                }
-            )
             Stage.Onboarding -> OnboardingPage(
                 onNext = { setUp ->
                     uiPrefs.edit().putBoolean("onboarding_done", true).apply()
@@ -181,119 +161,7 @@ private fun ParkedApp(
     }
 }
 
-private enum class Stage { Splash, Onboarding, Main }
-
-// ============================================================
-// Splash video
-// ============================================================
-
-/**
- * Plays res/raw/onboarding_car.mp4 once, full screen. Uses a TextureView: a
- * VideoView draws on a surface behind the window, where the screen's own
- * background hid it completely. Tap anywhere to skip.
- */
-@Composable
-private fun VideoSplash(fast: Boolean, onFinished: () -> Unit) {
-    val finish by rememberUpdatedState(onFinished)
-    var done by remember { mutableStateOf(false) }
-    val end: () -> Unit = {
-        if (!done) {
-            done = true
-            finish()
-        }
-    }
-    // Never get stuck here if the video can't play.
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(if (fast) 3_500L else 6_000L)
-        end()
-    }
-    val skipLabel = stringResource(R.string.splash_skip)
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Ink)
-            .clickable(role = Role.Button, onClickLabel = skipLabel) { end() }
-    ) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx -> SplashVideoView(ctx, speed = if (fast) 2f else 1f, onEnd = { end() }) },
-            onRelease = { it.release() }
-        )
-        Text(
-            skipLabel,
-            fontSize = TypeScale.Supporting,
-            color = Muted,
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 32.dp)
-        )
-    }
-}
-
-private class SplashVideoView(
-    context: Context,
-    private val speed: Float,
-    private val onEnd: () -> Unit,
-) : TextureView(context),
-    TextureView.SurfaceTextureListener {
-    private var player: MediaPlayer? = null
-    private var surface: Surface? = null
-    private var videoWidth = 0
-    private var videoHeight = 0
-
-    init {
-        surfaceTextureListener = this
-        isOpaque = false
-        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-    }
-
-    override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
-        val s = Surface(texture).also { surface = it }
-        runCatching {
-            player = MediaPlayer().apply {
-                setDataSource(context, Uri.parse("android.resource://${context.packageName}/${R.raw.onboarding_car}"))
-                setSurface(s)
-                setVolume(0f, 0f)
-                isLooping = false
-                setOnPreparedListener { mp ->
-                    this@SplashVideoView.videoWidth = mp.videoWidth
-                    this@SplashVideoView.videoHeight = mp.videoHeight
-                    applyCenterCrop()
-                    mp.start()
-                    if (speed != 1f) runCatching { mp.playbackParams = mp.playbackParams.setSpeed(speed) }
-                }
-                setOnCompletionListener { onEnd() }
-                setOnErrorListener { _, _, _ -> onEnd(); true }
-                prepareAsync()
-            }
-        }.onFailure { onEnd() }
-    }
-
-    override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) = applyCenterCrop()
-
-    override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
-        release()
-        return true
-    }
-
-    override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
-
-    /** Fill the screen without stretching: scale up and crop the overflow. */
-    private fun applyCenterCrop() {
-        if (videoWidth == 0 || videoHeight == 0 || width == 0 || height == 0) return
-        val viewW = width.toFloat()
-        val viewH = height.toFloat()
-        val scale = maxOf(viewW / videoWidth, viewH / videoHeight)
-        val sx = videoWidth * scale / viewW
-        val sy = videoHeight * scale / viewH
-        setTransform(Matrix().apply { setScale(sx, sy, viewW / 2f, viewH / 2f) })
-    }
-
-    fun release() {
-        runCatching { player?.release() }
-        player = null
-        runCatching { surface?.release() }
-        surface = null
-    }
-}
+private enum class Stage { Onboarding, Main }
 
 // ============================================================
 // Intro
@@ -382,7 +250,7 @@ internal fun openAppLanguageSettings(context: Context) {
 
 enum class AppTab(val labelRes: Int, val icon: Int) {
     Home(R.string.tab_home, R.drawable.ph_squares_four),
-    Fuel(R.string.tab_fuel, R.drawable.ph_gas_pump),
+    Fuel(R.string.tab_car, R.drawable.ph_car),
     Settings(R.string.tab_settings, R.drawable.ph_sliders),
 }
 
@@ -550,6 +418,7 @@ private fun MainContent(
                     )
                     AppTab.Fuel -> FuelScreen(
                         fuel = fuel,
+                        store = store,
                         openServiceRequest = openServiceRequest,
                         onServiceRequestHandled = { openServiceRequest = false }
                     )
