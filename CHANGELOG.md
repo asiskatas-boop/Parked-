@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.7.0
+
+A new look: light, warm and green. The dark orange theme is gone.
+
+- Cream background, white bordered cards, Parked green for every action.
+  Headings in Literata (a serif with full Greek), text in Open Sans.
+- Home is one page: AutoPark, GPS and parking time as status chips at the top,
+  then how far the car is as one big number, the map in a card, how the spot
+  was saved ("Saved automatically when VW Golf disconnected"), Get directions,
+  and four quick actions (share, level, photo, timer). The note has its own row.
+- Light map tiles (CARTO Voyager) with a green P and a blue "you" dot.
+- The Car tab shows your car, drawn in its colour, with the two most urgent
+  reminders as chips, service and ΚΤΕΟ in a card, and this month's fuel spend
+  as one big number above the monthly bars.
+- The fuel gauge is back: the estimated level, the range it gives, and
+  "Correct" to match your car's gauge (with Undo). Add a tank size there to
+  see the range.
+- Tab bar with labels; the active tab sits on a soft green pill.
+- Buttons and tiles give a little when pressed, switches and toggles tick,
+  and motion uses springs so it can be interrupted.
+- New green launcher icon and a light home-screen widget.
+
 ## 0.6.0
 
 The app is the green Parked! again (com.parked.app), no longer "Parked! Next".
