@@ -515,7 +515,7 @@ private var orphanCleanupDone = false
 /** AutoPark, GPS and the parking timer as small status chips. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StatusChips(
+internal fun StatusChips(
     state: ParkingState,
     autoParkMode: AutoParkMode,
     gps: GpsReading?,
@@ -570,7 +570,7 @@ private fun TimerChip(endsAt: Long, onClick: () -> Unit) {
 
 /** The map in a bordered card, with its credit and the centre button inside. */
 @Composable
-private fun MapCard(
+internal fun MapCard(
     modifier: Modifier,
     inCard: Boolean,
     online: Boolean,
@@ -620,7 +620,7 @@ private fun MapCard(
 }
 
 @Composable
-private fun EmptySpotContent(
+internal fun EmptySpotContent(
     autoPark: Boolean,
     saving: Boolean,
     map: @Composable (Modifier, Boolean) -> Unit,
@@ -652,7 +652,7 @@ private fun EmptySpotContent(
 }
 
 @Composable
-private fun SavedSpotContent(
+internal fun SavedSpotContent(
     state: ParkingState,
     autoParkMode: AutoParkMode,
     isAtCar: Boolean,
@@ -842,7 +842,7 @@ private const val GPS_STALE_MS = 20_000L
  * No recent fix reads "Looking for GPS"; approximate-only permission says so.
  */
 @Composable
-private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
+internal fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier, preciseOverride: Boolean? = null) {
     val context = LocalContext.current
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -851,8 +851,8 @@ private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
             now = System.currentTimeMillis()
         }
     }
-    val precise = androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-        android.content.pm.PackageManager.PERMISSION_GRANTED
+    val precise = preciseOverride ?: (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED)
     val acc = gps?.takeIf { maxOf(now, it.at) - it.at <= GPS_STALE_MS }?.accuracy
     val fresh = gps != null && maxOf(now, gps.at) - gps.at <= GPS_STALE_MS
     val bars = when {
@@ -895,10 +895,10 @@ private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
     }
 }
 
-private enum class MapIssue { Permission, LocationOff, BluetoothOff, AutoParkLost, AutoParkOff }
+internal enum class MapIssue { Permission, LocationOff, BluetoothOff, AutoParkLost, AutoParkOff }
 
 @Composable
-private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Unit) {
+internal fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Unit) {
     val (text, action) = when (issue) {
         MapIssue.Permission -> R.string.banner_permission to R.string.banner_permission_action
         MapIssue.LocationOff -> R.string.banner_location_off to R.string.banner_location_off_action
@@ -984,7 +984,7 @@ private fun garageSummary(s: ParkingState): String? = garageSummaryText(LocalCon
  * optional, so someone in a hurry can tap one button and walk away.
  */
 @Composable
-private fun GarageSheet(
+internal fun GarageSheet(
     level: String?,
     zone: String?,
     space: String?,
@@ -1081,7 +1081,7 @@ private fun GarageField(
 }
 
 @Composable
-private fun NoteSheet(initial: String, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
+internal fun NoteSheet(initial: String, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
     var text by remember { mutableStateOf(initial) }
     ParkedSheet(
         title = stringResource(R.string.note_title),
@@ -1122,7 +1122,7 @@ private fun NoteSheet(initial: String, onDismiss: () -> Unit, onSave: (String?) 
 }
 
 @Composable
-private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> Unit) {
+internal fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> Unit) {
     val context = LocalContext.current
     var custom by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }

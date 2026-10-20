@@ -179,7 +179,7 @@ private enum class Stage { Onboarding, Main }
  * Android's per-app language setting, which exists from Android 13.
  */
 @Composable
-private fun OnboardingPage(onNext: (setUpAutoPark: Boolean) -> Unit) {
+internal fun OnboardingPage(onNext: (setUpAutoPark: Boolean) -> Unit) {
     val context = LocalContext.current
     // Scrolls when large text or a short screen doesn't fit.
     BoxWithConstraints(Modifier.fillMaxSize().background(Bg).systemBarsPadding()) {
@@ -446,7 +446,7 @@ private fun MainContent(
  * tab is green, with a filled icon on a soft green pill that springs in.
  */
 @Composable
-private fun BottomNav(tab: AppTab, onChange: (AppTab) -> Unit) {
+internal fun BottomNav(tab: AppTab, onChange: (AppTab) -> Unit) {
     val view = androidx.compose.ui.platform.LocalView.current
     Column(Modifier.fillMaxWidth().background(Surface)) {
         DividerRow()

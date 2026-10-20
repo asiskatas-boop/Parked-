@@ -54,7 +54,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
 
-private enum class CarPage { Main, Refuels, Service }
+internal enum class CarPage { Main, Refuels, Service }
 
 /**
  * The Car tab: what the car needs (ΚΤΕΟ, oil, tyres) and what it costs
@@ -78,7 +78,10 @@ fun FuelScreen(fuel: FuelStore, store: ParkingStore, openServiceRequest: Boolean
         label = "carPages"
     ) { current ->
         when (current) {
-            CarPage.Main -> CarMain(fuel, store, onOpen = { page = it })
+            CarPage.Main -> {
+                val state by store.state.collectAsState(initial = null)
+                CarMain(fuel, state?.deviceName, onOpen = { page = it })
+            }
             CarPage.Refuels -> RefuelHistoryPage(fuel, onBack = { page = CarPage.Main })
             CarPage.Service -> ServiceRemindersPage(fuel, onBack = { page = CarPage.Main })
         }
@@ -87,10 +90,9 @@ fun FuelScreen(fuel: FuelStore, store: ParkingStore, openServiceRequest: Boolean
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> Unit) {
+internal fun CarMain(fuel: FuelStore, deviceName: String?, onOpen: (CarPage) -> Unit) {
     val snackbar = LocalSnackbar.current
     val scope = rememberCoroutineScope()
-    val state by store.state.collectAsState(initial = null)
     var showRefuel by remember { mutableStateOf(false) }
     var showOdo by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
@@ -110,7 +112,7 @@ private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> U
     ) {
         // Name, then colour and odometer. The Bluetooth name (often a head
         // unit like "SYNC") is the title only because the user has no other.
-        PageTitle(state?.deviceName ?: stringResource(R.string.home_car_title), modifier = Modifier.padding(horizontal = 4.dp))
+        PageTitle(deviceName ?: stringResource(R.string.home_car_title), modifier = Modifier.padding(horizontal = 4.dp))
         Text(
             listOfNotNull(colourLabel(fuel.accentName), fuel.currentOdo.takeIf { it > 0 }?.let { formatKm(it) }).joinToString(" · "),
             fontSize = TypeScale.Label, lineHeight = 22.sp, color = TextMuted,
@@ -260,7 +262,7 @@ private fun statusWord(st: ReminderStatus): String = stringResource(
  * range it gives, a bar with E-to-F marks, and "Correct" to match the car.
  */
 @Composable
-private fun FuelGaugeCard(fuel: FuelStore, onCorrect: () -> Unit) {
+internal fun FuelGaugeCard(fuel: FuelStore, onCorrect: () -> Unit) {
     val set = fuel.levelUpdatedAt > 0L
     val pct = fuel.estimateLevelPct().coerceIn(0.0, 100.0)
     val range = fuel.estimatedRangeKm()?.let { it * pct / 100.0 }
@@ -316,7 +318,7 @@ private fun FuelGaugeCard(fuel: FuelStore, onCorrect: () -> Unit) {
 
 /** Match the car's gauge by dragging; the tank size makes the range possible. */
 @Composable
-private fun FuelLevelSheet(fuel: FuelStore, onDismiss: () -> Unit) {
+internal fun FuelLevelSheet(fuel: FuelStore, onDismiss: () -> Unit) {
     val snackbar = LocalSnackbar.current
     val scope = rememberCoroutineScope()
     val view = androidx.compose.ui.platform.LocalView.current
