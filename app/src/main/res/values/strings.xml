@@ -362,4 +362,5 @@
     <string name="fuel_tank_size">Tank size (L)</string>
     <string name="fuel_tank_hint">Needed for the range estimate</string>
     <string name="fuel_level_saved">Fuel level updated</string>
+    <string name="see_all">All</string>
 </resources>

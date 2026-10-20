@@ -523,6 +523,7 @@ internal fun StatusChips(
     timerEnds: Long?,
     onTimer: () -> Unit,
 ) {
+    val onLabel = stringResource(R.string.chip_autopark)
     androidx.compose.foundation.layout.FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -531,7 +532,7 @@ internal fun StatusChips(
         when {
             !state.monitoring -> StatusChip(stringResource(R.string.autopark_off), ChipKind.Neutral, icon = Ph.bluetooth)
             autoParkMode == AutoParkMode.Limited -> StatusChip(stringResource(R.string.autopark_on_limited), ChipKind.Warn, icon = Ph.bluetooth)
-            else -> StatusChip(stringResource(R.string.chip_autopark), ChipKind.On)
+            else -> StatusChip("AutoPark", ChipKind.On, modifier = Modifier.semantics { contentDescription = onLabel })
         }
         if (showGps) GpsSignal(gps)
         if (timerEnds != null) TimerChip(timerEnds, onTimer)
@@ -553,10 +554,10 @@ private fun TimerChip(endsAt: Long, onClick: () -> Unit) {
     val expired = minutesLeft <= 0
     val warn = minutesLeft <= ParkingTimer.WARNING_MINUTES
     val text = if (expired) stringResource(R.string.timer_short_ended, clockTime(context, endsAt)) else {
-        val left = if (minutesLeft >= 60) stringResource(R.string.duration_hm, minutesLeft / 60, minutesLeft % 60)
+        if (minutesLeft >= 60) stringResource(R.string.duration_hm, minutesLeft / 60, minutesLeft % 60)
         else stringResource(R.string.duration_m, minutesLeft)
-        stringResource(R.string.timer_left, left)
     }
+    val spoken = if (expired) text else stringResource(R.string.timer_left, text)
     StatusChip(
         text,
         if (warn) ChipKind.Warn else ChipKind.Neutral,
@@ -564,7 +565,7 @@ private fun TimerChip(endsAt: Long, onClick: () -> Unit) {
         modifier = Modifier
             .clip(RadiusSmall)
             .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
-            .semantics { liveRegion = LiveRegionMode.Polite }
+            .clearAndSetSemantics { contentDescription = spoken; liveRegion = LiveRegionMode.Polite }
     )
 }
 
@@ -873,7 +874,8 @@ internal fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier, preciseO
         bars == 2 -> stringResource(R.string.gps_fair)
         else -> stringResource(R.string.gps_weak)
     }
-    val shown = if (precise && fresh && acc != null) stringResource(R.string.gps_accuracy, level, acc.roundToInt()) else level
+    // The bars carry the quality; the chip text stays short: "GPS ±8 m".
+    val shown = if (precise && fresh && acc != null) "GPS ±${acc.roundToInt()} m" else level
     Row(
         modifier
             .heightIn(min = 32.dp)
