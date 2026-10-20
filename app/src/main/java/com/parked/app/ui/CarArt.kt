@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -78,6 +79,8 @@ fun CarIllustration(color: Color, modifier: Modifier = Modifier) {
             drawCircle(Color(0xFF26221F), 36.5f, Offset(96f, 120f))
             drawCircle(Color(0xFF26221F), 36.5f, Offset(305f, 120f))
             drawPath(CarPaths.body, Brush.verticalGradient(0f to top, 0.55f to color, 1f to low, startY = 44f, endY = 120f))
+            // A white or silver car would melt into the white studio: give it an edge.
+            if (color.luminance() > 0.6f) drawPath(CarPaths.body, Color(0xFFB8B2AA), style = Stroke(1.5f))
             val glass = Brush.linearGradient(listOf(Color(0xFF2A333C), Color(0xFF46525E)), start = Offset(52f, 50f), end = Offset(261f, 76f))
             drawPath(CarPaths.windowRear, glass)
             drawPath(CarPaths.windowFront, glass)

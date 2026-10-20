@@ -120,7 +120,7 @@ private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> U
 
         // The car, in its colour, on a studio floor. Tap to change the colour.
         CarStudio(
-            visibleOnPanel(swatch),
+            swatch,
             modifier = Modifier
                 .clip(RadiusCard)
                 .clickable(role = Role.Button, onClickLabel = stringResource(R.string.car_appearance)) { showAppearance = true }

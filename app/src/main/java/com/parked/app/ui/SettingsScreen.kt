@@ -34,6 +34,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -364,11 +365,12 @@ private fun SettingsMain(
     var hasCrashReport by remember { mutableStateOf(ParkedApplication.crashFile(context).exists()) }
 
     Column(Modifier.fillMaxSize().background(Bg).verticalScroll(rememberScrollState())) {
-        Column(Modifier.statusBarsPadding().padding(start = 24.dp, end = 24.dp, top = 24.dp)) {
-            PageTitle(stringResource(R.string.tab_settings))
-            Spacer(Modifier.height(24.dp))
+        Column(Modifier.statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+            PageTitle(stringResource(R.string.tab_settings), modifier = Modifier.padding(horizontal = 4.dp))
+            Spacer(Modifier.height(20.dp))
             SettingsCard {
                 ToggleRow(
+                    icon = Ph.bluetooth,
                     label = stringResource(R.string.autopark),
                     checked = state.monitoring,
                     supporting = when {
@@ -386,7 +388,7 @@ private fun SettingsMain(
                     }
                 )
                 DividerRow()
-                TextRow(stringResource(R.string.car_bluetooth), state.deviceName ?: stringResource(R.string.not_set)) {
+                TextRow(stringResource(R.string.car_bluetooth), state.deviceName ?: stringResource(R.string.not_set), icon = Ph.car) {
                     pendingDevicePickerOnly = true
                     when {
                         Build.VERSION.SDK_INT >= 31 && !hasBluetoothPermission(context) ->
@@ -398,9 +400,10 @@ private fun SettingsMain(
                 }
             }
 
-            SectionTitle(stringResource(R.string.settings_preferences), modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
+            SectionTitle(stringResource(R.string.settings_preferences), modifier = Modifier.padding(start = 4.dp, top = 28.dp, bottom = 8.dp))
             SettingsCard {
                 ToggleRow(
+                    icon = Ph.bell,
                     label = stringResource(R.string.parking_alerts),
                     checked = notificationsChecked,
                     onToggle = { enabled ->
@@ -428,6 +431,7 @@ private fun SettingsMain(
                 )
                 DividerRow()
                 ToggleRow(
+                    icon = Ph.clockCounter,
                     label = stringResource(R.string.history_toggle),
                     checked = state.historyEnabled,
                     supporting = stringResource(R.string.history_toggle_supporting),
@@ -442,6 +446,7 @@ private fun SettingsMain(
                     TextRow(
                         stringResource(R.string.history_title),
                         pluralStringResource(R.plurals.history_count, state.history.size, state.history.size),
+                        icon = Ph.mapPin,
                         onClick = onOpenHistory
                     )
                 }
@@ -450,15 +455,16 @@ private fun SettingsMain(
                     val locale = context.resources.configuration.locales[0]
                     TextRow(
                         stringResource(R.string.intro_language),
-                        locale.getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) }
+                        locale.getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) },
+                        icon = Ph.globe,
                     ) { openAppLanguageSettings(context) }
                 }
             }
 
-            SectionTitle(stringResource(R.string.backup_section), modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
-            DividerRow()
+            SectionTitle(stringResource(R.string.backup_section), modifier = Modifier.padding(start = 4.dp, top = 28.dp, bottom = 8.dp))
+            SettingsCard {
             ActionRow(
-                icon = Ph.trayArrowUp,
+                icon = Ph.cloudUp,
                 title = stringResource(R.string.backup_export),
                 subtitle = stringResource(R.string.backup_export_sub),
                 onClick = {
@@ -466,8 +472,9 @@ private fun SettingsMain(
                     runCatching { exportLauncher.launch("Parked backup $day.json") }
                 }
             )
+            DividerRow()
             ActionRow(
-                icon = Ph.trayArrowDown,
+                icon = Ph.download,
                 title = stringResource(R.string.backup_import),
                 subtitle = stringResource(R.string.backup_import_sub),
                 onClick = {
@@ -475,17 +482,20 @@ private fun SettingsMain(
                     runCatching { importLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }
                 }
             )
+            }
 
             // About: the version, and the crash report when there is one.
-            SectionTitle(stringResource(R.string.about_section), modifier = Modifier.padding(top = 32.dp, bottom = 12.dp))
+            SectionTitle(stringResource(R.string.about_section), modifier = Modifier.padding(start = 4.dp, top = 28.dp, bottom = 8.dp))
             SettingsCard {
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.about_version), fontSize = TypeScale.Emphasis, color = TextPrimary, modifier = Modifier.weight(1f))
-                    Text(com.parked.app.BuildConfig.VERSION_NAME, fontSize = TypeScale.Body, color = TextMuted)
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Ph.info, contentDescription = null, tint = Green, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(14.dp))
+                    Text(stringResource(R.string.about_version), fontSize = TypeScale.Label, color = TextPrimary, modifier = Modifier.weight(1f))
+                    Text(com.parked.app.BuildConfig.VERSION_NAME, fontSize = TypeScale.Supporting, color = TextMuted)
                 }
                 if (hasCrashReport) {
                     DividerRow()
-                    TextRow(stringResource(R.string.crash_report), stringResource(R.string.crash_report_share)) {
+                    TextRow(stringResource(R.string.crash_report), stringResource(R.string.crash_report_share), icon = Ph.warning) {
                         shareCrashReport(context)
                         hasCrashReport = false
                     }
@@ -613,10 +623,10 @@ private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, Strin
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Surface,
-        shape = RadiusSmall,
+        shape = RadiusCard,
         titleContentColor = TextPrimary,
         textContentColor = TextMuted,
-        title = { Text(stringResource(R.string.choose_your_car), fontSize = 24.sp) },
+        title = { Text(stringResource(R.string.choose_your_car), fontFamily = HeadingFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp) },
         text = {
             Column {
                 when {
@@ -640,7 +650,7 @@ private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, Strin
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss, shape = RadiusSmall) { Text(stringResource(R.string.close), fontSize = TypeScale.Body, color = TextPrimary) } }
+        confirmButton = { TextButton(onClick = onDismiss, shape = RadiusSmall) { Text(stringResource(R.string.close), fontSize = TypeScale.Body, color = Green, fontWeight = FontWeight.SemiBold) } }
     )
 }
 
@@ -703,8 +713,8 @@ internal fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Surface,
-        shape = RadiusSmall,
-        title = { Text(stringResource(R.string.car_appearance), fontSize = 24.sp, color = TextPrimary) },
+        shape = RadiusCard,
+        title = { Text(stringResource(R.string.car_appearance), fontFamily = HeadingFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = TextPrimary) },
         text = {
             Column {
                 Text(stringResource(R.string.appearance_hint), fontSize = TypeScale.Body, lineHeight = 24.sp, color = TextMuted)
@@ -715,7 +725,7 @@ internal fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .background(if (selected) SurfaceSunk else Color.Transparent)
+                                .clip(RadiusSmall).background(if (selected) GreenSoft else Color.Transparent)
                                 .selectable(selected = selected, role = androidx.compose.ui.semantics.Role.RadioButton) {
                                     fuel.setAccent(name); onDismiss()
                                 }
@@ -723,7 +733,7 @@ internal fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
                                 .padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(Modifier.size(20.dp).border(1.dp, Border).background(swatch))
+                            Box(Modifier.size(22.dp).clip(androidx.compose.foundation.shape.CircleShape).background(swatch).border(1.dp, BorderStrong, androidx.compose.foundation.shape.CircleShape))
                             Spacer(Modifier.width(16.dp))
                             Text(colourLabel(name), modifier = Modifier.weight(1f), fontSize = TypeScale.Emphasis, color = TextPrimary)
                             if (selected) Icon(Ph.check, contentDescription = null, tint = Green, modifier = Modifier.size(20.dp))
@@ -732,7 +742,7 @@ internal fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss, shape = RadiusSmall) { Text(stringResource(R.string.close), fontSize = TypeScale.Body, color = TextPrimary) } }
+        confirmButton = { TextButton(onClick = onDismiss, shape = RadiusSmall) { Text(stringResource(R.string.close), fontSize = TypeScale.Body, color = Green, fontWeight = FontWeight.SemiBold) } }
     )
 }
 
