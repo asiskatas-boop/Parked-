@@ -39,6 +39,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.parked.app.R
 
+/**
+ * True only in screenshot previews: sheets render inline instead of as a
+ * modal window, which the preview renderer can't draw. Never set in the app.
+ */
+val LocalInlineSheets = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 /** One snackbar host for the whole app, so every confirmation looks the same. */
 val LocalSnackbar = compositionLocalOf<SnackbarHostState> { error("No snackbar host") }
 
@@ -208,6 +214,18 @@ fun ParkedSheet(
     subtitle: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    if (LocalInlineSheets.current) {
+        Column(Modifier.fillMaxWidth().background(Panel).padding(start = 24.dp, end = 24.dp, top = 23.dp, bottom = 24.dp)) {
+            Text(title, fontSize = TypeScale.SheetTitle, lineHeight = TypeScale.SheetTitle * 1.15f, color = Paper)
+            if (subtitle != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(subtitle, fontSize = TypeScale.Body, lineHeight = 24.sp, color = Muted)
+            }
+            Spacer(Modifier.height(20.dp))
+            content()
+        }
+        return
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),

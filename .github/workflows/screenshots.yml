@@ -1,0 +1,35 @@
+name: Screenshots
+
+# Renders the app's screens to PNG images (Paparazzi), for previewing changes
+# without installing. Download them from the run's "screenshots" artifact.
+on:
+  push:
+    branches: [ 'preview/**' ]
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Render screens
+        run: |
+          status=0
+          gradle :app:recordPaparazziDebug --console=plain > render.log 2>&1 || status=$?
+          if [ $status -ne 0 ]; then
+            msg=$(grep -E "^e: |error:|Exception|FAILED|What went wrong" -A3 render.log | head -60 | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=Render failed::$msg"
+            tail -80 render.log
+            exit $status
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: app/src/test/snapshots/images/

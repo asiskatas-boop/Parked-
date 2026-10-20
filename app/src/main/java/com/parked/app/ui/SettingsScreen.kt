@@ -845,7 +845,7 @@ private fun shareCrashReport(context: android.content.Context) {
 internal enum class PermStep { Location, Bluetooth, Notifications }
 
 @Composable
-private fun PermissionStepSheet(step: PermStep, onContinue: () -> Unit, onSkip: (() -> Unit)?, onDismiss: () -> Unit) {
+internal fun PermissionStepSheet(step: PermStep, onContinue: () -> Unit, onSkip: (() -> Unit)?, onDismiss: () -> Unit) {
     val (title, body) = when (step) {
         PermStep.Location -> R.string.perm_location_title to R.string.perm_location_body
         PermStep.Bluetooth -> R.string.perm_bluetooth_title to R.string.perm_bluetooth_body

@@ -528,7 +528,7 @@ fun HomeScreen(
 private var orphanCleanupDone = false
 
 @Composable
-private fun HeroText(text: String, color: Color, heading: Boolean = false) {
+internal fun HeroText(text: String, color: Color, heading: Boolean = false) {
     Text(
         text,
         fontSize = TypeScale.Hero,
@@ -540,7 +540,7 @@ private fun HeroText(text: String, color: Color, heading: Boolean = false) {
 }
 
 @Composable
-private fun EmptySpotContent(saving: Boolean, onSave: () -> Unit) {
+internal fun EmptySpotContent(saving: Boolean, onSave: () -> Unit) {
     HeroText(stringResource(R.string.home_empty_title), Paper, heading = true)
     Spacer(Modifier.height(12.dp))
     Text(stringResource(R.string.home_empty_body), fontSize = TypeScale.Body, lineHeight = 24.sp, color = Muted)
@@ -553,7 +553,7 @@ private fun EmptySpotContent(saving: Boolean, onSave: () -> Unit) {
 }
 
 @Composable
-private fun SavedSpotContent(
+internal fun SavedSpotContent(
     state: ParkingState,
     autoParkMode: AutoParkMode,
     isAtCar: Boolean,
@@ -747,7 +747,7 @@ private const val GPS_STALE_MS = 20_000L
  * No recent fix reads "Looking for GPS"; approximate-only permission says so.
  */
 @Composable
-private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
+internal fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier, preciseOverride: Boolean? = null) {
     val context = LocalContext.current
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -756,8 +756,8 @@ private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
             now = System.currentTimeMillis()
         }
     }
-    val precise = androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-        android.content.pm.PackageManager.PERMISSION_GRANTED
+    val precise = preciseOverride ?: (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED)
     val acc = gps?.takeIf { maxOf(now, it.at) - it.at <= GPS_STALE_MS }?.accuracy
     val fresh = gps != null && maxOf(now, gps.at) - gps.at <= GPS_STALE_MS
     val bars = when {
@@ -798,10 +798,10 @@ private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
     }
 }
 
-private enum class MapIssue { Permission, LocationOff, BluetoothOff, AutoParkLost, AutoParkOff }
+internal enum class MapIssue { Permission, LocationOff, BluetoothOff, AutoParkLost, AutoParkOff }
 
 @Composable
-private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Unit) {
+internal fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Unit) {
     val (text, action) = when (issue) {
         MapIssue.Permission -> R.string.banner_permission to R.string.banner_permission_action
         MapIssue.LocationOff -> R.string.banner_location_off to R.string.banner_location_off_action
@@ -836,7 +836,7 @@ private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Un
 }
 
 @Composable
-private fun MapButton(icon: ImageVector, description: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun MapButton(icon: ImageVector, description: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         modifier
             .size(48.dp)
@@ -851,7 +851,7 @@ private fun MapButton(icon: ImageVector, description: String, modifier: Modifier
 }
 
 @Composable
-private fun OsmAttribution(modifier: Modifier) {
+internal fun OsmAttribution(modifier: Modifier) {
     // Required by the OpenStreetMap and CARTO licences. Credit only, not a
     // link: a tiny tap target on the map was easy to hit by accident.
     Text(
@@ -883,7 +883,7 @@ private fun garageSummary(s: ParkingState): String? = garageSummaryText(LocalCon
  * optional, so someone in a hurry can tap one button and walk away.
  */
 @Composable
-private fun GarageSheet(
+internal fun GarageSheet(
     level: String?,
     zone: String?,
     space: String?,

@@ -177,7 +177,7 @@ private enum class Stage { Onboarding, Main }
  * setting, which exists from Android 13.
  */
 @Composable
-private fun OnboardingPage(onNext: (setUpAutoPark: Boolean) -> Unit) {
+internal fun OnboardingPage(onNext: (setUpAutoPark: Boolean) -> Unit) {
     val context = LocalContext.current
     // Scrolls when large text or a short screen doesn't fit; otherwise the
     // title sits at the top and the actions at the bottom.
@@ -444,7 +444,7 @@ private fun MainContent(
  * tab in orange. Each tab still announces its name to screen readers.
  */
 @Composable
-private fun BottomNav(tab: AppTab, onChange: (AppTab) -> Unit) {
+internal fun BottomNav(tab: AppTab, onChange: (AppTab) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
