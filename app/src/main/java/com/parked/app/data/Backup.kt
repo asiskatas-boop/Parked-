@@ -133,6 +133,9 @@ object Backup {
             history = history,
             source = if (hasSpot) p.text("spot_source", 10)?.takeIf { it == ParkingStore.SOURCE_AUTO || it == ParkingStore.SOURCE_MANUAL } else null,
             accuracy = if (hasSpot) p.finite("spot_accuracy")?.takeIf { it in 0.0..10_000.0 }?.toFloat() else null,
+            level = if (hasSpot) p.text("spot_level", 12) else null,
+            zone = if (hasSpot) p.text("spot_zone", 12) else null,
+            space = if (hasSpot) p.text("spot_space", 12) else null,
         )
     }
 

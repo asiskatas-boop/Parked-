@@ -28,6 +28,10 @@ data class ParkingState(
     val source: String? = null,
     /** Accuracy of the saved fix in metres, when known. */
     val accuracy: Float? = null,
+    /** Garage details, all optional: level ("-2", "P2"), zone ("B"), space ("14"). */
+    val level: String? = null,
+    val zone: String? = null,
+    val space: String? = null,
 ) {
     val hasSpot: Boolean
         get() = parkedLat != null && parkedLng != null && !(parkedLat == 0.0 && parkedLng == 0.0)
@@ -53,6 +57,9 @@ data class ParkingBackup(
     val history: List<ParkingHistoryEntry>,
     val source: String? = null,
     val accuracy: Float? = null,
+    val level: String? = null,
+    val zone: String? = null,
+    val space: String? = null,
 )
 
 /** Everything about the current spot, so a save can be undone exactly. */
@@ -65,6 +72,9 @@ data class SavedSpot(
     val timerEndsAt: Long?,
     val source: String? = null,
     val accuracy: Float? = null,
+    val level: String? = null,
+    val zone: String? = null,
+    val space: String? = null,
 )
 
 class ParkingStore(context: Context) {
@@ -84,6 +94,9 @@ class ParkingStore(context: Context) {
         val history = stringPreferencesKey("history_json")
         val source = stringPreferencesKey("spot_source")
         val accuracy = floatPreferencesKey("spot_accuracy")
+        val level = stringPreferencesKey("spot_level")
+        val zone = stringPreferencesKey("spot_zone")
+        val space = stringPreferencesKey("spot_space")
     }
 
     val state: Flow<ParkingState> = this.context.dataStore.data.map { p ->
@@ -101,6 +114,9 @@ class ParkingStore(context: Context) {
             history = parseHistory(p[Keys.history]),
             source = p[Keys.source],
             accuracy = p[Keys.accuracy],
+            level = p[Keys.level],
+            zone = p[Keys.zone],
+            space = p[Keys.space],
         )
     }
 
@@ -132,6 +148,7 @@ class ParkingStore(context: Context) {
                 lat = it[Keys.parkedLat], lng = it[Keys.parkedLng], at = it[Keys.parkedAt],
                 note = it[Keys.note], photoPath = it[Keys.photoPath], timerEndsAt = it[Keys.timerEndsAt],
                 source = it[Keys.source], accuracy = it[Keys.accuracy],
+                level = it[Keys.level], zone = it[Keys.zone], space = it[Keys.space],
             )
             it[Keys.parkedLat] = lat
             it[Keys.parkedLng] = lng
@@ -139,6 +156,9 @@ class ParkingStore(context: Context) {
             it[Keys.source] = source
             if (accuracy != null && accuracy.isFinite()) it[Keys.accuracy] = accuracy else it.remove(Keys.accuracy)
             it.remove(Keys.note)
+            it.remove(Keys.level)
+            it.remove(Keys.zone)
+            it.remove(Keys.space)
             it.remove(Keys.photoPath)
             it.remove(Keys.timerEndsAt)
             if (it[Keys.historyEnabled] == true) {
@@ -167,6 +187,9 @@ class ParkingStore(context: Context) {
             if (spot.timerEndsAt != null) it[Keys.timerEndsAt] = spot.timerEndsAt else it.remove(Keys.timerEndsAt)
             if (spot.source != null) it[Keys.source] = spot.source else it.remove(Keys.source)
             if (spot.accuracy != null) it[Keys.accuracy] = spot.accuracy else it.remove(Keys.accuracy)
+            if (spot.level != null) it[Keys.level] = spot.level else it.remove(Keys.level)
+            if (spot.zone != null) it[Keys.zone] = spot.zone else it.remove(Keys.zone)
+            if (spot.space != null) it[Keys.space] = spot.space else it.remove(Keys.space)
             // The undone save must not stay in history either.
             if (replacedAt != null) {
                 val history = parseHistory(it[Keys.history])
@@ -210,6 +233,32 @@ class ParkingStore(context: Context) {
         if (old != path) deletePhotoFile(old)
     }
 
+    /** Garage details for the current spot; blank values are removed. */
+    suspend fun setGarage(level: String?, zone: String?, space: String?) = context.dataStore.edit {
+        fun put(key: Preferences.Key<String>, v: String?) {
+            val clean = v?.trim()?.take(12)
+            if (clean.isNullOrEmpty()) it.remove(key) else it[key] = clean
+        }
+        put(Keys.level, level); put(Keys.zone, zone); put(Keys.space, space)
+    }
+
+    /** Moves the current spot (the user dragged the pin). Note, photo and timer stay. */
+    suspend fun moveSpot(lat: Double, lng: Double) = context.dataStore.edit {
+        if (it[Keys.parkedLat] == null) return@edit
+        it[Keys.parkedLat] = lat
+        it[Keys.parkedLng] = lng
+        // The user placed it by hand, so the GPS accuracy no longer applies.
+        it.remove(Keys.accuracy)
+        val history = parseHistory(it[Keys.history])
+        val at = it[Keys.parkedAt]
+        if (at != null && history.firstOrNull()?.at == at) {
+            it[Keys.history] = encodeHistory(listOf(history.first().copy(lat = lat, lng = lng)) + history.drop(1))
+        }
+    }
+
+    /** Puts back the accuracy a [moveSpot] removed; used by Undo. */
+    suspend fun restoreAccuracy(accuracy: Float) = context.dataStore.edit { it[Keys.accuracy] = accuracy }
+
     suspend fun setTimerEndsAt(endsAt: Long?) = context.dataStore.edit {
         if (endsAt == null) it.remove(Keys.timerEndsAt) else it[Keys.timerEndsAt] = endsAt
     }
@@ -244,6 +293,9 @@ class ParkingStore(context: Context) {
             if (s.hasSpot) {
                 s.source?.let { put("spot_source", it) }
                 s.accuracy?.takeIf { it.isFinite() }?.let { put("spot_accuracy", it.toDouble()) }
+                s.level?.let { put("spot_level", it) }
+                s.zone?.let { put("spot_zone", it) }
+                s.space?.let { put("spot_space", it) }
             }
             put("history_enabled", s.historyEnabled)
             put("history", JSONArray(encodeHistory(s.history)))
@@ -272,6 +324,9 @@ class ParkingStore(context: Context) {
             if (b.lat != null && b.lng != null) {
                 b.source?.let { v -> it[Keys.source] = v }
                 b.accuracy?.let { v -> it[Keys.accuracy] = v }
+                b.level?.let { v -> it[Keys.level] = v }
+                b.zone?.let { v -> it[Keys.zone] = v }
+                b.space?.let { v -> it[Keys.space] = v }
             }
             it[Keys.historyEnabled] = b.historyEnabled
             if (b.historyEnabled && b.history.isNotEmpty()) it[Keys.history] = encodeHistory(b.history.take(MAX_HISTORY))

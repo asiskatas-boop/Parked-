@@ -14,6 +14,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -98,6 +99,7 @@ fun HomeScreen(
     var saving by remember { mutableStateOf(false) }
     var showNote by remember { mutableStateOf(false) }
     var showTimer by remember { mutableStateOf(false) }
+    var showGarage by remember { mutableStateOf(false) }
     // Saveable: the Activity is often recreated while the camera app is open.
     var showPhoto by rememberSaveable { mutableStateOf(false) }
     var photoTarget by rememberSaveable { mutableStateOf<String?>(null) }
@@ -105,9 +107,27 @@ fun HomeScreen(
     var sheetHeightPx by remember { mutableIntStateOf(0) }
     var confirmReplace by remember { mutableStateOf(false) }
     val uiPrefs = remember { context.getSharedPreferences("parked_ui", Context.MODE_PRIVATE) }
+    // AutoPark health, re-read whenever Home comes back to the front.
+    var bluetoothOn by remember { mutableStateOf(com.parked.app.util.isBluetoothEnabled(context)) }
+    var autoParkLost by remember { mutableStateOf(uiPrefs.getBoolean(AUTOPARK_LOST_KEY, false)) }
+    val homeLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(homeLifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                bluetoothOn = com.parked.app.util.isBluetoothEnabled(context)
+                autoParkLost = uiPrefs.getBoolean(AUTOPARK_LOST_KEY, false)
+            }
+        }
+        homeLifecycle.lifecycle.addObserver(observer)
+        onDispose { homeLifecycle.lifecycle.removeObserver(observer) }
+    }
+    val bluetoothLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        bluetoothOn = com.parked.app.util.isBluetoothEnabled(context)
+    }
     var autoParkTipDismissedFor by remember { mutableLongStateOf(uiPrefs.getLong("autopark_tip_dismissed_for", -1L)) }
 
     val msgSaved = stringResource(R.string.spot_saved)
+    val msgMoved = stringResource(R.string.pin_moved)
     val msgPhotoSaved = stringResource(R.string.photo_saved)
     val msgUndo = stringResource(R.string.undo)
     val msgLocationOff = stringResource(R.string.turn_on_location)
@@ -256,6 +276,21 @@ fun HomeScreen(
                 parkedLabel = stringResource(R.string.map_parked_car),
                 liveLabel = stringResource(R.string.map_you),
                 command = mapCommand,
+                onCarMoved = { lat, lng ->
+                    val before = s
+                    appScope.launch {
+                        store.moveSpot(lat, lng)
+                        ParkedWidget.refresh(context)
+                        snackbar.currentSnackbarData?.dismiss()
+                        val result = snackbar.showSnackbar(msgMoved, actionLabel = msgUndo, withDismissAction = true)
+                        // Undo puts the pin, and its accuracy, back exactly.
+                        if (result == SnackbarResult.ActionPerformed && before?.parkedLat != null && before.parkedLng != null) {
+                            store.moveSpot(before.parkedLat, before.parkedLng)
+                            before.accuracy?.let { store.restoreAccuracy(it) }
+                            ParkedWidget.refresh(context)
+                        }
+                    }
+                },
             )
 
             // GPS quality above the map credit, stacked so large text never
@@ -273,6 +308,10 @@ fun HomeScreen(
             val issue = when {
                 !hasPerm -> MapIssue.Permission
                 !locationOn -> MapIssue.LocationOff
+                // AutoPark is on but can't see the car disconnect.
+                s != null && s.monitoring && !bluetoothOn -> MapIssue.BluetoothOff
+                // The app had to switch AutoPark off (a permission was removed).
+                autoParkLost && s != null && !s.monitoring -> MapIssue.AutoParkLost
                 // "Not now" hides the AutoPark tip until the next spot is saved.
                 // Offline, the "map needs a connection" note takes this spot instead.
                 online && s != null && !s.monitoring && autoParkTipDismissedFor != (s.parkedAt ?: 0L) -> MapIssue.AutoParkOff
@@ -287,15 +326,28 @@ fun HomeScreen(
                 MapBanner(
                     issue = issue ?: MapIssue.Permission,
                     onDismiss = {
-                        val key = s?.parkedAt ?: 0L
-                        uiPrefs.edit().putLong("autopark_tip_dismissed_for", key).apply()
-                        autoParkTipDismissedFor = key
+                        if (issue == MapIssue.AutoParkLost) {
+                            uiPrefs.edit().remove(AUTOPARK_LOST_KEY).apply()
+                            autoParkLost = false
+                        } else {
+                            val key = s?.parkedAt ?: 0L
+                            uiPrefs.edit().putLong("autopark_tip_dismissed_for", key).apply()
+                            autoParkTipDismissedFor = key
+                        }
                     },
                     onAction = {
                         when (issue) {
                             MapIssue.Permission -> requestPerm()
                             MapIssue.LocationOff -> openLocationSettings(context)
                             MapIssue.AutoParkOff -> onSetUpAutoPark()
+                            MapIssue.AutoParkLost -> {
+                                uiPrefs.edit().remove(AUTOPARK_LOST_KEY).apply()
+                                autoParkLost = false
+                                onSetUpAutoPark()
+                            }
+                            MapIssue.BluetoothOff -> runCatching {
+                                bluetoothLauncher.launch(Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_ENABLE))
+                            }
                             null -> Unit
                         }
                     }
@@ -374,6 +426,7 @@ fun HomeScreen(
                             onNote = { showNote = true },
                             onPhoto = { if (s.photoPath == null) takePhoto() else showPhoto = true },
                             onTimer = { showTimer = true },
+                            onGarage = { showGarage = true },
                         )
                     }
                 }
@@ -398,6 +451,18 @@ fun HomeScreen(
             onSave = { note ->
                 showNote = false
                 scope.launch { store.setNote(note); ParkedWidget.refresh(context) }
+            }
+        )
+    }
+    if (showGarage && s != null) {
+        GarageSheet(
+            level = s.level, zone = s.zone, space = s.space,
+            hasPhoto = s.photoPath != null,
+            onPhoto = { showGarage = false; if (s.photoPath == null) takePhoto() else showPhoto = true },
+            onDismiss = { showGarage = false },
+            onSave = { level, zone, space ->
+                showGarage = false
+                scope.launch { store.setGarage(level, zone, space); ParkedWidget.refresh(context) }
             }
         )
     }
@@ -465,6 +530,7 @@ private fun SavedSpotContent(
     onNote: () -> Unit,
     onPhoto: () -> Unit,
     onTimer: () -> Unit,
+    onGarage: () -> Unit,
 ) {
     val context = LocalContext.current
     val parked = state.parkedAt?.let { parkedAtLabel(context, it) } ?: stringResource(R.string.parked_recently)
@@ -535,7 +601,24 @@ private fun SavedSpotContent(
         VerticalDivider(color = Line)
         TimerCell(endsAt = timerEnds, modifier = Modifier.weight(1f), onClick = onTimer)
     }
-    DividerRow()
+    // Garage mode: GPS alone isn't enough underground, so level, zone and
+    // space are one tap away, and all optional.
+    val garage = garageSummary(state)
+    ActionRow(
+        icon = Ph.squaresFour,
+        iconTint = if (garage != null) Accent else Paper,
+        title = garage ?: stringResource(R.string.garage_add),
+        subtitle = if (garage == null) stringResource(R.string.garage_add_sub) else null,
+        onClick = onGarage,
+    )
+    // A pin that may be off can be put right by hand.
+    if (state.accuracy == null || state.accuracy > WEAK_GPS_M) {
+        Text(
+            stringResource(R.string.pin_drag_hint),
+            fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+    }
     // Replacing the saved spot is the risky action here, so it is the
     // quietest one on the screen.
     LinkButton(
@@ -675,7 +758,7 @@ private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
     }
 }
 
-private enum class MapIssue { Permission, LocationOff, AutoParkOff }
+private enum class MapIssue { Permission, LocationOff, BluetoothOff, AutoParkLost, AutoParkOff }
 
 @Composable
 private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Unit) {
@@ -683,13 +766,19 @@ private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Un
         MapIssue.Permission -> R.string.banner_permission to R.string.banner_permission_action
         MapIssue.LocationOff -> R.string.banner_location_off to R.string.banner_location_off_action
         MapIssue.AutoParkOff -> R.string.banner_autopark_off to R.string.banner_autopark_off_action
+        MapIssue.BluetoothOff -> R.string.banner_bluetooth_off to R.string.banner_bluetooth_off_action
+        MapIssue.AutoParkLost -> R.string.banner_autopark_lost to R.string.banner_autopark_lost_action
     }
     Column(Modifier.fillMaxWidth().background(Panel).padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 4.dp)) {
         Row(Modifier.padding(end = 8.dp), verticalAlignment = Alignment.Top) {
             Icon(
-                if (issue == MapIssue.AutoParkOff) Ph.bluetooth else Ph.mapPin,
+                when (issue) {
+                    MapIssue.AutoParkOff, MapIssue.BluetoothOff -> Ph.bluetooth
+                    MapIssue.AutoParkLost -> Ph.warning
+                    else -> Ph.mapPin
+                },
                 contentDescription = null,
-                tint = Accent,
+                tint = if (issue == MapIssue.AutoParkLost || issue == MapIssue.BluetoothOff) Warn else Accent,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(Modifier.width(12.dp))
@@ -697,7 +786,7 @@ private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Un
         }
         Row(Modifier.fillMaxWidth().padding(start = 32.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             LinkButton(stringResource(action), onClick = onAction)
-            if (issue == MapIssue.AutoParkOff) {
+            if (issue == MapIssue.AutoParkOff || issue == MapIssue.AutoParkLost) {
                 TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp), shape = androidx.compose.ui.graphics.RectangleShape) {
                     Text(stringResource(R.string.banner_not_now), fontSize = TypeScale.Emphasis, color = Muted)
                 }
@@ -738,6 +827,97 @@ private fun OsmAttribution(modifier: Modifier) {
 // ============================================================
 // Note, timer and photo
 // ============================================================
+
+/** "Level −2 · Zone B · Space 14", or null when nothing is set. */
+private fun garageSummaryText(context: Context, s: ParkingState): String? = listOfNotNull(
+    s.level?.let { context.getString(R.string.garage_level_value, it.replace("-", "−")) },
+    s.zone?.let { context.getString(R.string.garage_zone_value, it) },
+    s.space?.let { context.getString(R.string.garage_space_value, it) },
+).joinToString(" · ").ifEmpty { null }
+
+@Composable
+private fun garageSummary(s: ParkingState): String? = garageSummaryText(LocalContext.current, s)
+
+/**
+ * Garage mode: big level buttons, then zone and space. Everything is
+ * optional, so someone in a hurry can tap one button and walk away.
+ */
+@Composable
+private fun GarageSheet(
+    level: String?,
+    zone: String?,
+    space: String?,
+    hasPhoto: Boolean,
+    onPhoto: () -> Unit,
+    onDismiss: () -> Unit,
+    onSave: (String?, String?, String?) -> Unit,
+) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    var lvl by remember { mutableStateOf(level.orEmpty()) }
+    var zn by remember { mutableStateOf(zone.orEmpty()) }
+    var sp by remember { mutableStateOf(space.orEmpty()) }
+    ParkedSheet(
+        title = stringResource(R.string.garage_title),
+        subtitle = stringResource(R.string.garage_subtitle),
+        onDismiss = onDismiss
+    ) {
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf("-3", "-2", "-1", "0", "1", "2", "3").forEach { v ->
+                val selected = lvl == v
+                Box(
+                    Modifier
+                        .size(56.dp)
+                        .background(if (selected) Accent else Field)
+                        .border(1.dp, if (selected) Accent else Line)
+                        .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) {
+                            lvl = if (selected) "" else v
+                            view.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(v.replace("-", "−"), fontSize = TypeScale.Section, color = if (selected) Ink else Paper)
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            GarageField(lvl, { lvl = it }, stringResource(R.string.garage_level_other), Modifier.weight(1f))
+            GarageField(zn, { zn = it }, stringResource(R.string.garage_zone), Modifier.weight(1f))
+            GarageField(sp, { sp = it }, stringResource(R.string.garage_space), Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(16.dp))
+        SecondaryButton(
+            stringResource(if (hasPhoto) R.string.chip_add_photo else R.string.garage_photo),
+            icon = Ph.camera,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onPhoto
+        )
+        Spacer(Modifier.height(16.dp))
+        PrimaryButton(stringResource(R.string.save)) { onSave(lvl, zn, sp) }
+        if (level != null || zone != null || space != null) {
+            QuietButton(stringResource(R.string.garage_clear), color = Danger) { onSave(null, null, null) }
+        }
+        QuietButton(stringResource(R.string.cancel), onClick = onDismiss)
+    }
+}
+
+@Composable
+private fun GarageField(value: String, onChange: (String) -> Unit, label: String, modifier: Modifier) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { onChange(it.take(12)) },
+        label = { Text(label, maxLines = 1) },
+        singleLine = true,
+        shape = androidx.compose.ui.graphics.RectangleShape,
+        colors = parkedFieldColors(),
+        textStyle = androidx.compose.ui.text.TextStyle(fontFamily = SofiaSans, fontSize = TypeScale.Emphasis),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+        modifier = modifier
+    )
+}
 
 @Composable
 private fun NoteSheet(initial: String, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
@@ -1015,8 +1195,9 @@ private fun shareSpot(context: Context, s: ParkingState) {
     val lat = s.parkedLat ?: return
     val lng = s.parkedLng ?: return
     val link = "https://maps.google.com/?q=$lat,$lng"
-    val msg = if (s.note.isNullOrBlank()) context.getString(R.string.share_text, link)
-    else context.getString(R.string.share_text_note, s.note, link)
+    val details = listOfNotNull(garageSummaryText(context, s), s.note?.takeIf { it.isNotBlank() }).joinToString(", ")
+    val msg = if (details.isEmpty()) context.getString(R.string.share_text, link)
+    else context.getString(R.string.share_text_note, details, link)
     val share = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, msg)

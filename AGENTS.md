@@ -47,9 +47,9 @@ compiler errors are attached to the check run as a single annotation.
   odometer, colour), Settings (AutoPark, preferences, backup, about).
 - The odometer only advances from GPS after the user has entered a real reading.
 - Keep storage keys backward compatible; users update in place.
-- For now 0.4 builds as a separate app (`applicationIdSuffix = ".next"`,
-  label "Parked! Next") so it runs beside the installed 0.3.x. Removing the
-  suffix makes it an in-place update again.
+- The app is `com.parked.app` ("Parked!"). Builds are signed with the fixed CI
+  key (SHA-256 a779dc23…); 0.3.1 and earlier used throwaway keys and can't be
+  updated in place.
 
 ## Design tokens
 

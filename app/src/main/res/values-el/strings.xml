@@ -302,4 +302,32 @@
     <string name="map_offline">Ο χάρτης θέλει σύνδεση για να φορτώσει. Το σημείο σου παραμένει αποθηκευμένο.</string>
     <string name="autopark_turned_on">Το AutoPark είναι ενεργό. Την επόμενη φορά που θα παρκάρεις, το σημείο θα αποθηκευτεί μόνο του.</string>
     <string name="autopark_turned_on_car">Το AutoPark είναι ενεργό για το %1$s. Την επόμενη φορά που θα παρκάρεις, το σημείο θα αποθηκευτεί μόνο του.</string>
+    <!-- 0.6 garage mode -->
+    <string name="garage_add">Πρόσθεσε επίπεδο και θέση</string>
+    <string name="garage_add_sub">Για γκαράζ και μεγάλα πάρκινγκ</string>
+    <string name="garage_title">Πού στο πάρκινγκ;</string>
+    <string name="garage_subtitle">Πάτησε ό,τι βλέπεις. Όλα είναι προαιρετικά.</string>
+    <string name="garage_level_other">Επίπεδο</string>
+    <string name="garage_zone">Ζώνη</string>
+    <string name="garage_space">Θέση</string>
+    <string name="garage_photo">Φωτογράφισε την πινακίδα</string>
+    <string name="garage_clear">Διαγραφή στοιχείων πάρκινγκ</string>
+    <string name="garage_level_value">Επίπεδο %1$s</string>
+    <string name="garage_zone_value">Ζώνη %1$s</string>
+    <string name="garage_space_value">Θέση %1$s</string>
+    <string name="pin_drag_hint">Δεν είναι σωστό το σημείο; Πάτησε παρατεταμένα το P και σύρε το.</string>
+    <string name="pin_moved">Το σημείο μετακινήθηκε.</string>
+    <string name="banner_bluetooth_off">Το Bluetooth είναι κλειστό, οπότε το AutoPark δεν καταλαβαίνει πότε αποσυνδέεται το αυτοκίνητο.</string>
+    <string name="banner_bluetooth_off_action">Άνοιγμα</string>
+    <string name="banner_autopark_lost">Το AutoPark απενεργοποιήθηκε επειδή το Parked! έχασε μια άδεια που χρειάζεται.</string>
+    <string name="banner_autopark_lost_action">Ενεργοποίηση ξανά</string>
+    <!-- 0.6 one permission at a time -->
+    <string name="perm_location_title">Πρώτα, η τοποθεσία σου</string>
+    <string name="perm_location_body">Για να αποθηκεύει το Parked! το σημείο όταν παρκάρεις. Η τοποθεσία σου μένει σε αυτό το κινητό.</string>
+    <string name="perm_bluetooth_title">Μετά, το Bluetooth</string>
+    <string name="perm_bluetooth_body">Για να καταλαβαίνει το Parked! πότε αποσυνδέεται το Bluetooth του αυτοκινήτου. Παρακολουθεί μόνο το αυτοκίνητο που διαλέγεις.</string>
+    <string name="perm_notif_title">Τέλος, οι ειδοποιήσεις</string>
+    <string name="perm_notif_body">Για να επιβεβαιώνει το Parked! κάθε αποθήκευση και να σου λέει πότε λήγει ένα χρονόμετρο στάθμευσης που έβαλες. Μπορείς να το παραλείψεις.</string>
+    <string name="perm_continue">Συνέχεια</string>
+    <string name="perm_skip">Παράλειψη</string>
 </resources>

@@ -107,6 +107,8 @@ private fun SettingsMain(
     var sentToLocationSettings by remember { mutableStateOf(false) }
     // A car picked automatically, named in the final "AutoPark is on" message.
     var autoPickedCar by remember { mutableStateOf<String?>(null) }
+    // The permission being explained right now, one at a time.
+    var permStep by remember { mutableStateOf<PermStep?>(null) }
     // The notification prompt is asked at most once while Settings is open.
     var askedNotifications by remember { mutableStateOf(false) }
     var systemNotificationsAllowed by remember { mutableStateOf(Channels.canPost(context, Channels.ALERTS)) }
@@ -149,7 +151,11 @@ private fun SettingsMain(
             store.setMonitoring(true)
             val picked = autoPickedCar
             autoPickedCar = null
-            if (ParkingMonitorService.start(context)) say(if (picked != null) sAutoReadyCar.format(picked) else sAutoReady) else {
+            if (ParkingMonitorService.start(context)) {
+                // Back on: the "AutoPark was switched off" banner no longer applies.
+                context.getSharedPreferences("parked_ui", android.content.Context.MODE_PRIVATE).edit().remove(AUTOPARK_LOST_KEY).apply()
+                say(if (picked != null) sAutoReadyCar.format(picked) else sAutoReady)
+            } else {
                 store.setMonitoring(false)
                 say(sAutoFailed)
             }
@@ -158,6 +164,7 @@ private fun SettingsMain(
 
     // Set below; lets the launchers declared before beginAutoPark continue the flow.
     var continueAutoPark: () -> Unit = {}
+    var resumeAutoPark: () -> Unit = {}
 
     /** One car among the paired devices: use it instead of asking. Otherwise show the list. */
     fun chooseCar() {
@@ -224,12 +231,13 @@ private fun SettingsMain(
             fuel.updateNotificationsEnabled(false)
             systemNotificationsAllowed = false
         }
+        val askedLocation = Manifest.permission.ACCESS_FINE_LOCATION in results || Manifest.permission.ACCESS_COARSE_LOCATION in results
+        val askedBluetooth = Build.VERSION.SDK_INT >= 31 && Manifest.permission.BLUETOOTH_CONNECT in results
         when {
-            !hasLocationPermission(context) || !hasBluetoothPermission(context) -> { pendingAutoStart = false; say(sPermsNeeded) }
-            !isBluetoothEnabled(context) -> bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
-            latestState.deviceAddress == null -> chooseCar()
-            !isLocationServicesEnabled(context) -> askLocationOn()
-            else -> { pendingAutoStart = false; startMonitorReady() }
+            // Location and Bluetooth are required; notifications are not.
+            (askedLocation && !hasLocationPermission(context)) || (askedBluetooth && !hasBluetoothPermission(context)) ->
+                { pendingAutoStart = false; say(sPermsNeeded) }
+            else -> resumeAutoPark()
         }
     }
 
@@ -239,18 +247,11 @@ private fun SettingsMain(
         sentToLocationSettings = false
         if (!fromAutoPick) autoPickedCar = null
         when {
-            !hasLocationPermission(context) || !hasBluetoothPermission(context) || needsNotificationPermission() -> {
-                val required = buildList {
-                    if (!hasLocationPermission(context)) {
-                        add(Manifest.permission.ACCESS_FINE_LOCATION)
-                        add(Manifest.permission.ACCESS_COARSE_LOCATION)
-                    }
-                    if (!hasBluetoothPermission(context) && Build.VERSION.SDK_INT >= 31) add(Manifest.permission.BLUETOOTH_CONNECT)
-                    if (needsNotificationPermission()) add(Manifest.permission.POST_NOTIFICATIONS)
-                }
-                if (Manifest.permission.POST_NOTIFICATIONS in required) askedNotifications = true
-                autoPermissionLauncher.launch(required.toTypedArray())
-            }
+            // One permission at a time, each explained in a sentence before
+            // Android's own prompt appears.
+            !hasLocationPermission(context) -> permStep = PermStep.Location
+            !hasBluetoothPermission(context) -> permStep = PermStep.Bluetooth
+            needsNotificationPermission() -> permStep = PermStep.Notifications
             !isBluetoothEnabled(context) -> bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
             !deviceReady -> chooseCar()
             !isLocationServicesEnabled(context) -> askLocationOn()
@@ -258,6 +259,7 @@ private fun SettingsMain(
         }
     }
     continueAutoPark = { beginAutoPark(deviceReady = true, fromAutoPick = true) }
+    resumeAutoPark = { beginAutoPark(fromAutoPick = true) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         fuel.updateNotificationsEnabled(granted)
@@ -503,6 +505,24 @@ private fun SettingsMain(
                     }
                 }
             }
+        )
+    }
+    permStep?.let { step ->
+        PermissionStepSheet(
+            step = step,
+            onContinue = {
+                permStep = null
+                val perms = when (step) {
+                    PermStep.Location -> arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                    PermStep.Bluetooth -> arrayOf(Manifest.permission.BLUETOOTH_CONNECT)
+                    PermStep.Notifications -> { askedNotifications = true; arrayOf(Manifest.permission.POST_NOTIFICATIONS) }
+                }
+                runCatching { autoPermissionLauncher.launch(perms) }.onFailure { pendingAutoStart = false }
+            },
+            onSkip = if (step == PermStep.Notifications) {
+                { permStep = null; askedNotifications = true; resumeAutoPark() }
+            } else null,
+            onDismiss = { permStep = null; pendingAutoStart = false },
         )
     }
     ConfirmDialog(
@@ -777,4 +797,21 @@ private fun shareCrashReport(context: android.content.Context) {
         )
     }
     file.delete()
+}
+
+/** The permissions AutoPark asks for, in order. Notifications can be skipped. */
+internal enum class PermStep { Location, Bluetooth, Notifications }
+
+@Composable
+private fun PermissionStepSheet(step: PermStep, onContinue: () -> Unit, onSkip: (() -> Unit)?, onDismiss: () -> Unit) {
+    val (title, body) = when (step) {
+        PermStep.Location -> R.string.perm_location_title to R.string.perm_location_body
+        PermStep.Bluetooth -> R.string.perm_bluetooth_title to R.string.perm_bluetooth_body
+        PermStep.Notifications -> R.string.perm_notif_title to R.string.perm_notif_body
+    }
+    ParkedSheet(title = stringResource(title), subtitle = stringResource(body), onDismiss = onDismiss) {
+        PrimaryButton(stringResource(R.string.perm_continue), onClick = onContinue)
+        if (onSkip != null) QuietButton(stringResource(R.string.perm_skip), onClick = onSkip)
+        else QuietButton(stringResource(R.string.cancel), onClick = onDismiss)
+    }
 }

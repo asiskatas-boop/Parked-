@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.0
+
+The app is the green Parked! again (com.parked.app), no longer "Parked! Next".
+Phones with 0.3.1 or older need one uninstall first: those builds were signed
+with a throwaway key. From here on every update installs in place.
+
+- Garage mode: right under the spot, "Add level and space" opens big level
+  buttons (−3 to 3), zone and space fields, and a photo shortcut. All optional.
+  Shown on Home, included when sharing the spot and in backups.
+- Drag the pin: long-press the P and drag it to correct the spot, with Undo.
+  Home suggests it when the GPS fix was weak.
+- AutoPark warnings on Home: when Bluetooth is off, and when Parked! had to
+  switch AutoPark off because a permission was removed, each with a one-tap fix.
+- AutoPark setup asks for one permission at a time, each with one sentence of
+  why. Notifications can be skipped.
+
 ## 0.5.0
 
 Focus on the one thing: know where your car is without doing anything.

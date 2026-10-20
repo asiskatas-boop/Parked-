@@ -57,7 +57,15 @@ fun ParkedMap(
     liveLabel: String,
     command: MapCommand?,
     modifier: Modifier = Modifier,
+    /** Called when the user long-presses and drags the car marker to a new place. */
+    onCarMoved: ((Double, Double) -> Unit)? = null,
 ) {
+    val latestOnCarMoved by rememberUpdatedState(onCarMoved)
+    val view = androidx.compose.ui.platform.LocalView.current
+    // A drag moves the spot on purpose: keep the camera where the user left it.
+    var movedByDrag by remember { mutableStateOf(false) }
+    // While a finger holds the marker, recompositions must not snap it back.
+    val dragging = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     var hasCenteredOnParked by remember { mutableStateOf(false) }
     var hasCenteredOnLive by remember { mutableStateOf(false) }
     var handledCommand by remember { mutableIntStateOf(-1) }
@@ -65,8 +73,8 @@ fun ParkedMap(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     LaunchedEffect(parkedLat, parkedLng) {
-        // A newly saved spot becomes the map focus.
-        hasCenteredOnParked = false
+        // A newly saved spot becomes the map focus; a dragged one stays put.
+        if (movedByDrag) movedByDrag = false else hasCenteredOnParked = false
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -103,6 +111,21 @@ fun ParkedMap(
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                     setInfoWindow(null)
                     isEnabled = false
+                    // Long-press and drag to correct the spot (garages, GPS drift).
+                    isDraggable = true
+                    setOnMarkerDragListener(object : Marker.OnMarkerDragListener {
+                        override fun onMarkerDragStart(marker: Marker) {
+                            dragging.set(true)
+                            view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                        }
+                        override fun onMarkerDrag(marker: Marker) = Unit
+                        override fun onMarkerDragEnd(marker: Marker) {
+                            dragging.set(false)
+                            val p = marker.position
+                            movedByDrag = true
+                            latestOnCarMoved?.invoke(p.latitude, p.longitude)
+                        }
+                    })
                 })
                 overlays.add(Marker(this).apply {
                     id = MARKER_YOU
@@ -124,7 +147,7 @@ fun ParkedMap(
             val you = map.overlays.firstOrNull { (it as? Marker)?.id == MARKER_YOU } as? Marker
 
             if (parkedLat != null && parkedLng != null) {
-                car?.position = GeoPoint(parkedLat, parkedLng)
+                if (!dragging.get()) car?.position = GeoPoint(parkedLat, parkedLng)
                 car?.isEnabled = true
             } else car?.isEnabled = false
             if (liveLat != null && liveLng != null) {

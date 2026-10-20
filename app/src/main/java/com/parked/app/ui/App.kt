@@ -60,6 +60,9 @@ import com.parked.app.util.Channels
 import com.parked.app.util.hasBluetoothPermission
 import com.parked.app.util.hasLocationPermission
 
+/** parked_ui flag: the app had to switch AutoPark off (a permission or the car went missing). */
+const val AUTOPARK_LOST_KEY = "autopark_lost"
+
 /** Requests that arrive from a widget, the Quick Settings tile or a notification. */
 enum class AppAction { SaveSpot, FindCar, OpenSettings, OpenService, SetUpAutoPark }
 
@@ -84,12 +87,17 @@ fun ParkedRoot(pendingAction: AppAction?, onActionHandled: () -> Unit) {
         // Location being switched off for a while is fine: the service then sends a
         // tap-to-save alert. Missing permissions or car are not recoverable.
         val canRecover = state.deviceAddress != null && hasLocationPermission(context) && hasBluetoothPermission(context)
+        // Remember that the app, not the user, switched AutoPark off, so Home
+        // can say so instead of leaving people to find out at the next park.
+        fun markLost() = context.getSharedPreferences("parked_ui", Context.MODE_PRIVATE)
+            .edit().putBoolean(AUTOPARK_LOST_KEY, true).apply()
         if (!canRecover) {
             // Never show AutoPark as on when Android can no longer run it.
             ParkingMonitorService.stop(context)
             parkingStore.setMonitoring(false)
+            markLost()
         } else if (ParkingMonitorService.mode.value != AutoParkMode.Full) {
-            if (!ParkingMonitorService.start(context)) parkingStore.setMonitoring(false)
+            if (!ParkingMonitorService.start(context)) { parkingStore.setMonitoring(false); markLost() }
         }
     }
 
