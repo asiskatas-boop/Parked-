@@ -334,4 +334,16 @@
     <string name="garage_edit_sub">Πάτησε για αλλαγή</string>
     <string name="perm_blocked">Το Parked! δεν μπορεί να ζητήσει ξανά τοποθεσία ή Bluetooth. Επίτρεψέ τα στις ρυθμίσεις του για να χρησιμοποιήσεις το AutoPark.</string>
     <string name="perm_open_settings">Ρυθμίσεις</string>
+    <!-- 0.7 Home -->
+    <string name="chip_autopark">AutoPark ενεργό</string>
+    <string name="home_empty_auto_title">Οδηγείς. Θα το θυμηθούμε εμείς.</string>
+    <string name="home_empty_auto_body">Όταν σβήσεις και αποσυνδεθεί το Bluetooth του αυτοκινήτου, το σημείο αποθηκεύεται μόνο του.</string>
+    <string name="home_walk_minutes">%1$d λεπτά με τα πόδια</string>
+    <string name="home_saved_auto_named">Αποθηκεύτηκε αυτόματα όταν αποσυνδέθηκε το %1$s</string>
+    <string name="home_car_here">Το αυτοκίνητο είναι στον χάρτη</string>
+    <string name="tile_share">Κοινοποίηση</string>
+    <string name="tile_level">Επίπεδο</string>
+    <string name="tile_timer">Χρόνος</string>
+    <string name="home_note_add">Πρόσθεσε σημείωση</string>
+    <string name="home_note_hint">Σειρά, χρώμα, ό,τι βοηθά</string>
 </resources>

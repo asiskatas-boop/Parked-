@@ -29,16 +29,16 @@ sealed interface MapCommand {
 }
 
 /**
- * CARTO Dark Matter: a dark basemap built from OpenStreetMap data. Both
- * credits are shown on Home (osm_attribution).
+ * CARTO Voyager: a light, warm basemap built from OpenStreetMap data, which
+ * sits well on the cream page. Both credits are shown on Home (osm_attribution).
  */
-private val DarkMatter = XYTileSource(
-    "CartoDarkMatter", 0, 20, 256, ".png",
+private val Voyager = XYTileSource(
+    "CartoVoyager", 0, 20, 256, ".png",
     arrayOf(
-        "https://a.basemaps.cartocdn.com/dark_all/",
-        "https://b.basemaps.cartocdn.com/dark_all/",
-        "https://c.basemaps.cartocdn.com/dark_all/",
-        "https://d.basemaps.cartocdn.com/dark_all/",
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/",
     ),
     "© OpenStreetMap contributors © CARTO",
 )
@@ -101,11 +101,21 @@ fun ParkedMap(
         modifier = modifier.fillMaxSize(),
         factory = { ctx ->
             MapView(ctx).apply {
-                setTileSource(DarkMatter)
-                setBackgroundColor(android.graphics.Color.BLACK)
-                // Black while tiles load, instead of osmdroid's light grey grid.
-                overlayManager.tilesOverlay.loadingBackgroundColor = android.graphics.Color.BLACK
-                overlayManager.tilesOverlay.loadingLineColor = 0xFF1A1A1A.toInt()
+                setTileSource(Voyager)
+                setBackgroundColor(0xFFF3EEE6.toInt())
+                // Warm sand while tiles load, instead of osmdroid's grey grid.
+                overlayManager.tilesOverlay.loadingBackgroundColor = 0xFFF3EEE6.toInt()
+                overlayManager.tilesOverlay.loadingLineColor = 0xFFE7E5E4.toInt()
+                // The map sits inside a scrolling page: while a finger is on
+                // it, panning belongs to the map, not to the page.
+                setOnTouchListener { v, e ->
+                    when (e.actionMasked) {
+                        android.view.MotionEvent.ACTION_DOWN -> v.parent?.requestDisallowInterceptTouchEvent(true)
+                        android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                            v.parent?.requestDisallowInterceptTouchEvent(false)
+                    }
+                    false
+                }
                 setMultiTouchControls(true)
                 zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
                 isTilesScaledToDpi = true
@@ -267,22 +277,25 @@ private class PassiveMarker(map: MapView) : Marker(map) {
 private const val MARKER_CAR = "car"
 private const val MARKER_YOU = "you"
 
-/** Orange square "P" in a soft orange halo, as in the design. */
+/** Green rounded "P" tile with a white edge, in a soft green halo. */
 fun makeParkedMarker(ctx: Context): BitmapDrawable {
     val density = ctx.resources.displayMetrics.density
-    val size = (48 * density).toInt()
+    val size = (52 * density).toInt()
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val c = Canvas(bmp)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val cx = size / 2f
     val cy = size / 2f
-    paint.color = 0x33FF7500
+    paint.color = 0x293F7A22
     c.drawCircle(cx, cy, size / 2f, paint)
-    val half = 14 * density
-    paint.color = 0xFFFF7500.toInt()
-    c.drawRect(cx - half, cy - half, cx + half, cy + half, paint)
-    paint.color = android.graphics.Color.BLACK
-    paint.textSize = 17 * density
+    val half = 15 * density
+    val r = 5 * density
+    paint.color = android.graphics.Color.WHITE
+    c.drawRoundRect(cx - half - 2 * density, cy - half - 2 * density, cx + half + 2 * density, cy + half + 2 * density, r + 2 * density, r + 2 * density, paint)
+    paint.color = 0xFF3F7A22.toInt()
+    c.drawRoundRect(cx - half, cy - half, cx + half, cy + half, r, r, paint)
+    paint.color = android.graphics.Color.WHITE
+    paint.textSize = 18 * density
     paint.textAlign = Paint.Align.CENTER
     paint.typeface = runCatching { androidx.core.content.res.ResourcesCompat.getFont(ctx, com.parked.app.R.font.open_sans) }
         .getOrNull()?.let { Typeface.create(it, Typeface.BOLD) } ?: Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
@@ -291,18 +304,20 @@ fun makeParkedMarker(ctx: Context): BitmapDrawable {
     return BitmapDrawable(ctx.resources, bmp)
 }
 
-/** You: a white dot with a black ring. */
+/** You: the familiar blue dot with a white ring and a soft halo. */
 fun makeLiveMarker(ctx: Context): BitmapDrawable {
     val density = ctx.resources.displayMetrics.density
-    val size = (20 * density).toInt()
+    val size = (32 * density).toInt()
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val c = Canvas(bmp)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val cx = size / 2f
     val cy = size / 2f
-    paint.color = android.graphics.Color.BLACK
-    c.drawCircle(cx, cy, 10 * density, paint)
+    paint.color = 0x2E3B82F6
+    c.drawCircle(cx, cy, 16 * density, paint)
     paint.color = android.graphics.Color.WHITE
-    c.drawCircle(cx, cy, 7 * density, paint)
+    c.drawCircle(cx, cy, 9 * density, paint)
+    paint.color = 0xFF3B82F6.toInt()
+    c.drawCircle(cx, cy, 6.5f * density, paint)
     return BitmapDrawable(ctx.resources, bmp)
 }

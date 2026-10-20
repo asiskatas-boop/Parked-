@@ -10,6 +10,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -105,7 +107,6 @@ fun HomeScreen(
     var showPhoto by rememberSaveable { mutableStateOf(false) }
     var photoTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var mapCommand by remember { mutableStateOf<MapCommand?>(null) }
-    var sheetHeightPx by remember { mutableIntStateOf(0) }
     var confirmReplace by remember { mutableStateOf(false) }
     val uiPrefs = remember { context.getSharedPreferences("parked_ui", Context.MODE_PRIVATE) }
     // AutoPark health. "Lost" is observable, so the banner appears the moment
@@ -283,13 +284,35 @@ fun HomeScreen(
     val liveMarkerIcon = remember { makeLiveMarker(context) }
 
     val online = rememberOnline()
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    // The map fills only the area above the panel, so the car marker and
-    // "centre" are never hidden under it.
-    val sheetHeight = with(density) { sheetHeightPx.toDp() }
+    val timerEnds = s?.timerEndsAt?.takeIf { it > System.currentTimeMillis() - 60 * 60_000L }
 
-    Box(Modifier.fillMaxSize().background(Bg)) {
-        Box(Modifier.fillMaxSize().padding(bottom = sheetHeight)) {
+    // Tell the user what stops AutoPark or the map from working, and fix it in one tap.
+    val issue = when {
+        !hasPerm -> MapIssue.Permission
+        !locationOn -> MapIssue.LocationOff
+        // AutoPark is on but can't see the car disconnect. (Without the
+        // Bluetooth permission the state can't be read; recovery then
+        // switches AutoPark off and the "lost" banner explains.)
+        s != null && s.monitoring && hasBtPerm && !bluetoothOn && !bluetoothBannerDismissed -> MapIssue.BluetoothOff
+        // The app had to switch AutoPark off (a permission was removed).
+        autoParkLost && s != null && !s.monitoring -> MapIssue.AutoParkLost
+        // "Not now" hides the AutoPark tip until the next spot is saved.
+        s != null && !s.monitoring && autoParkTipDismissedFor != (s.parkedAt ?: 0L) -> MapIssue.AutoParkOff
+        else -> null
+    }
+
+    val map: @Composable (Modifier, Boolean) -> Unit = { mod, inCard ->
+        MapCard(
+            modifier = mod,
+            inCard = inCard,
+            online = online,
+            showCenter = hasSpot,
+            showBoth = hasSpot && live != null && distance != null && distance >= 40,
+            onCenter = { both ->
+                val next = (mapCommand?.id ?: 0) + 1
+                mapCommand = if (both) MapCommand.ShowBoth(next) else MapCommand.CenterOnCar(next)
+            },
+        ) {
             ParkedMap(
                 parkedLat = if (hasSpot) s?.parkedLat else null,
                 parkedLng = if (hasSpot) s?.parkedLng else null,
@@ -305,7 +328,7 @@ fun HomeScreen(
                     if (before?.parkedLat != null && before.parkedLng != null) appScope.launch {
                         store.moveSpot(lat, lng, expectedAt = before.parkedAt)
                         ParkedWidget.refresh(context)
-                        if (android.os.Build.VERSION.SDK_INT >= 30) view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                        Haptics.confirm(view)
                         snackbar.currentSnackbarData?.dismiss()
                         val result = snackbar.showSnackbar(
                             msgMoved, actionLabel = msgUndo, duration = SnackbarDuration.Long, withDismissAction = true
@@ -322,39 +345,24 @@ fun HomeScreen(
                     }
                 },
             )
+        }
+    }
 
-            // GPS quality above the map credit, stacked so large text never
-            // makes one cover the other. The banner covers permission and
-            // Location being off, so the signal only shows when both are fine.
-            Column(Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 8.dp)) {
-                if (hasPerm && locationOn) {
-                    GpsSignal(gps = gps)
-                    Spacer(Modifier.height(6.dp))
-                }
-                OsmAttribution(Modifier)
-            }
-
-            // Tell the user why the map can't show them, and fix it in one tap.
-            val issue = when {
-                !hasPerm -> MapIssue.Permission
-                !locationOn -> MapIssue.LocationOff
-                // AutoPark is on but can't see the car disconnect. (Without the
-                // Bluetooth permission the state can't be read; recovery then
-                // switches AutoPark off and the "lost" banner explains.)
-                s != null && s.monitoring && hasBtPerm && !bluetoothOn && !bluetoothBannerDismissed -> MapIssue.BluetoothOff
-                // The app had to switch AutoPark off (a permission was removed).
-                autoParkLost && s != null && !s.monitoring -> MapIssue.AutoParkLost
-                // "Not now" hides the AutoPark tip until the next spot is saved.
-                // Offline, the "map needs a connection" note takes this spot instead.
-                online && s != null && !s.monitoring && autoParkTipDismissedFor != (s.parkedAt ?: 0L) -> MapIssue.AutoParkOff
-                else -> null
-            }
-            androidx.compose.animation.AnimatedVisibility(
-                visible = issue != null,
-                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it / 2 },
-                exit = androidx.compose.animation.fadeOut(),
-                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp, start = 16.dp, end = 16.dp)
-            ) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Bg)
+            .verticalScroll(rememberScrollState())
+            .statusBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp)
+            .animateContentSize(Motion.spatial())
+    ) {
+        androidx.compose.animation.AnimatedVisibility(
+            visible = issue != null,
+            enter = androidx.compose.animation.fadeIn(Motion.effects()) + androidx.compose.animation.expandVertically(Motion.spatial()),
+            exit = androidx.compose.animation.fadeOut(Motion.effects()) + androidx.compose.animation.shrinkVertically(Motion.spatial()),
+        ) {
+            Column {
                 MapBanner(
                     issue = issue ?: MapIssue.Permission,
                     onDismiss = {
@@ -381,83 +389,60 @@ fun HomeScreen(
                         }
                     }
                 )
-            }
-
-            // Without data the tiles can't load (an underground garage). Say so,
-            // at the top edge so the car marker in the middle stays visible.
-            if (!online && issue == null) {
-                Text(
-                    stringResource(R.string.map_offline),
-                    fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextPrimary,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .statusBarsPadding()
-                        .padding(top = 12.dp, start = 16.dp, end = 16.dp)
-                        .fillMaxWidth()
-                        .background(Surface)
-                        .border(1.dp, Border)
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                )
-            }
-
-            // One button: centre on the car, or when you're away from it, fit
-            // both you and the car on screen.
-            if (hasSpot) {
-                val both = live != null && distance != null && distance >= 40
-                MapButton(
-                    icon = if (both) Ph.cornersOut else Ph.mapPin,
-                    description = stringResource(if (both) R.string.map_show_both else R.string.map_center_car),
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp)
-                ) {
-                    val next = (mapCommand?.id ?: 0) + 1
-                    mapCommand = if (both) MapCommand.ShowBoth(next) else MapCommand.CenterOnCar(next)
-                }
+                Spacer(Modifier.height(12.dp))
             }
         }
 
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .background(Bg)
-                .onSizeChanged { sheetHeightPx = it.height }
-                // Never more than about 60% of the screen, so the map stays usable.
-                .heightIn(max = minOf(520.dp, (LocalConfiguration.current.screenHeightDp * 0.6f).dp))
-                .animateContentSize(tween(260))
-                .verticalScroll(rememberScrollState())
-                .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 8.dp)
-        ) {
-            androidx.compose.animation.Crossfade(
-                targetState = when {
-                    s == null -> 0
-                    !hasSpot -> 1
-                    else -> 2
-                },
-                animationSpec = tween(220),
-                label = "homeSheet"
-            ) { mode ->
-                Column {
-                    when {
-                        mode == 0 || s == null -> Spacer(Modifier.height(160.dp))
-                        mode == 1 -> EmptySpotContent(saving = saving, onSave = onSaveSpot)
-                        else -> SavedSpotContent(
-                            state = s,
-                            autoParkMode = autoParkMode,
-                            isAtCar = isAtCar,
-                            distance = distance,
-                            saving = saving,
-                            onDirections = { openDirections(context, s) },
-                            onSave = {
-                                // Far from the saved car, saving here is probably a mistake: ask first.
-                                if (distance != null && distance > 50) confirmReplace = true else onSaveSpot()
-                            },
-                            onShare = { shareSpot(context, s) },
-                            onNote = { showNote = true },
-                            onPhoto = { if (s.photoPath == null) takePhoto() else showPhoto = true },
-                            onTimer = { showTimer = true },
-                            onGarage = { showGarage = true },
-                        )
-                    }
+        // Status first, as in Rivian's app: is AutoPark on, how good is GPS,
+        // how long is left on the meter.
+        if (s != null) {
+            StatusChips(
+                state = s,
+                autoParkMode = autoParkMode,
+                gps = gps,
+                showGps = hasPerm && locationOn,
+                timerEnds = if (hasSpot) timerEnds else null,
+                onTimer = { showTimer = true },
+            )
+        }
+
+        androidx.compose.animation.Crossfade(
+            targetState = when {
+                s == null -> 0
+                !hasSpot -> 1
+                else -> 2
+            },
+            animationSpec = Motion.effects(),
+            label = "home"
+        ) { mode ->
+            Column {
+                when {
+                    mode == 0 || s == null -> Spacer(Modifier.height(240.dp))
+                    mode == 1 -> EmptySpotContent(
+                        autoPark = s.monitoring,
+                        saving = saving,
+                        map = map,
+                        onSave = onSaveSpot,
+                    )
+                    else -> SavedSpotContent(
+                        state = s,
+                        autoParkMode = autoParkMode,
+                        isAtCar = isAtCar,
+                        distance = distance,
+                        saving = saving,
+                        timerEnds = timerEnds,
+                        map = map,
+                        onDirections = { openDirections(context, s) },
+                        onSave = {
+                            // Far from the saved car, saving here is probably a mistake: ask first.
+                            if (distance != null && distance > 50) confirmReplace = true else onSaveSpot()
+                        },
+                        onShare = { shareSpot(context, s) },
+                        onNote = { showNote = true },
+                        onPhoto = { if (s.photoPath == null) takePhoto() else showPhoto = true },
+                        onTimer = { showTimer = true },
+                        onGarage = { showGarage = true },
+                    )
                 }
             }
         }
@@ -527,29 +512,143 @@ fun HomeScreen(
 
 private var orphanCleanupDone = false
 
+/** AutoPark, GPS and the parking timer as small status chips. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HeroText(text: String, color: Color, heading: Boolean = false) {
-    Text(
+private fun StatusChips(
+    state: ParkingState,
+    autoParkMode: AutoParkMode,
+    gps: GpsReading?,
+    showGps: Boolean,
+    timerEnds: Long?,
+    onTimer: () -> Unit,
+) {
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+    ) {
+        when {
+            !state.monitoring -> StatusChip(stringResource(R.string.autopark_off), ChipKind.Neutral, icon = Ph.bluetooth)
+            autoParkMode == AutoParkMode.Limited -> StatusChip(stringResource(R.string.autopark_on_limited), ChipKind.Warn, icon = Ph.bluetooth)
+            else -> StatusChip(stringResource(R.string.chip_autopark), ChipKind.On)
+        }
+        if (showGps) GpsSignal(gps)
+        if (timerEnds != null) TimerChip(timerEnds, onTimer)
+    }
+}
+
+/** Time left on the meter; amber in the last minutes and after the end. */
+@Composable
+private fun TimerChip(endsAt: Long, onClick: () -> Unit) {
+    val context = LocalContext.current
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(endsAt) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(15_000L)
+        }
+    }
+    val minutesLeft = kotlin.math.ceil((endsAt - now) / 60_000.0).toInt()
+    val expired = minutesLeft <= 0
+    val warn = minutesLeft <= ParkingTimer.WARNING_MINUTES
+    val text = if (expired) stringResource(R.string.timer_short_ended, clockTime(context, endsAt)) else {
+        val left = if (minutesLeft >= 60) stringResource(R.string.duration_hm, minutesLeft / 60, minutesLeft % 60)
+        else stringResource(R.string.duration_m, minutesLeft)
+        stringResource(R.string.timer_left, left)
+    }
+    StatusChip(
         text,
-        fontSize = TypeScale.Hero,
-        lineHeight = TypeScale.Hero * 1.1f,
-        color = color,
-        letterSpacing = (-0.5).sp,
-        modifier = if (heading) Modifier.semantics { heading() } else Modifier
+        if (warn) ChipKind.Warn else ChipKind.Neutral,
+        icon = Ph.timer,
+        modifier = Modifier
+            .clip(RadiusSmall)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .semantics { liveRegion = LiveRegionMode.Polite }
     )
 }
 
+/** The map in a bordered card, with its credit and the centre button inside. */
 @Composable
-private fun EmptySpotContent(saving: Boolean, onSave: () -> Unit) {
-    HeroText(stringResource(R.string.home_empty_title), TextPrimary, heading = true)
-    Spacer(Modifier.height(12.dp))
-    Text(stringResource(R.string.home_empty_body), fontSize = TypeScale.Body, lineHeight = 24.sp, color = TextMuted)
-    Spacer(Modifier.height(24.dp))
-    PrimaryButton(
-        text = stringResource(if (saving) R.string.saving else R.string.save_parking_spot),
-        onClick = onSave
-    )
+private fun MapCard(
+    modifier: Modifier,
+    inCard: Boolean,
+    online: Boolean,
+    showCenter: Boolean,
+    showBoth: Boolean,
+    onCenter: (both: Boolean) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    // Inside a card the outer card draws the frame; on its own the map has one.
+    val shape = if (inCard) RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp) else RadiusCard
+    Box(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(SurfaceSunk)
+            .then(if (inCard) Modifier else Modifier.border(1.dp, Border, shape))
+    ) {
+        content()
+        OsmAttribution(Modifier.align(Alignment.BottomStart).padding(8.dp))
+        // Without data the tiles can't load (an underground garage). Say so,
+        // at the top edge so the car marker in the middle stays visible.
+        if (!online) {
+            Text(
+                stringResource(R.string.map_offline),
+                fontSize = TypeScale.Caption, lineHeight = 18.sp, color = TextPrimary,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(10.dp)
+                    .fillMaxWidth()
+                    .clip(RadiusSmall)
+                    .background(Surface)
+                    .border(1.dp, Border, RadiusSmall)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            )
+        }
+        // One button: centre on the car, or when you're away from it, fit
+        // both you and the car on screen.
+        if (showCenter) {
+            MapButton(
+                icon = if (showBoth) Ph.cornersOut else Ph.crosshair,
+                description = stringResource(if (showBoth) R.string.map_show_both else R.string.map_center_car),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
+                onClick = { onCenter(showBoth) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptySpotContent(
+    autoPark: Boolean,
+    saving: Boolean,
+    map: @Composable (Modifier, Boolean) -> Unit,
+    onSave: () -> Unit,
+) {
     Spacer(Modifier.height(16.dp))
+    // With AutoPark on there is nothing to do: say so, calmly.
+    Text(
+        stringResource(if (autoPark) R.string.home_empty_auto_title else R.string.home_empty_title),
+        fontFamily = HeadingFont,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = TypeScale.PageTitle,
+        lineHeight = TypeScale.PageTitle * 1.2f,
+        color = TextPrimary,
+        modifier = Modifier.padding(horizontal = 4.dp).semantics { heading() }
+    )
+    Spacer(Modifier.height(8.dp))
+    Text(
+        stringResource(if (autoPark) R.string.home_empty_auto_body else R.string.home_empty_body),
+        fontSize = TypeScale.Label, lineHeight = 23.sp, color = TextMuted,
+        modifier = Modifier.padding(horizontal = 4.dp)
+    )
+    Spacer(Modifier.height(18.dp))
+    map(Modifier.height(220.dp), false)
+    Spacer(Modifier.height(16.dp))
+    val label = stringResource(if (saving) R.string.saving else R.string.save_parking_spot)
+    if (autoPark) SecondaryButton(label, modifier = Modifier.fillMaxWidth(), icon = Ph.mapPin, onClick = onSave)
+    else PrimaryButton(label, icon = Ph.mapPin, onClick = onSave)
 }
 
 @Composable
@@ -559,6 +658,8 @@ private fun SavedSpotContent(
     isAtCar: Boolean,
     distance: Double?,
     saving: Boolean,
+    timerEnds: Long?,
+    map: @Composable (Modifier, Boolean) -> Unit,
     onDirections: () -> Unit,
     onSave: () -> Unit,
     onShare: () -> Unit,
@@ -568,172 +669,166 @@ private fun SavedSpotContent(
     onGarage: () -> Unit,
 ) {
     val context = LocalContext.current
-    val parked = state.parkedAt?.let { parkedAtLabel(context, it) } ?: stringResource(R.string.parked_recently)
-    // How the spot was saved. "Saved automatically when Golf disconnected"
-    // is the proof that AutoPark works; without it people go back to saving
-    // by hand.
-    val auto = state.source == ParkingStore.SOURCE_AUTO
-    val how = when {
-        auto -> stringResource(R.string.home_saved_auto)
-        state.source == ParkingStore.SOURCE_MANUAL -> stringResource(R.string.home_saved_manual)
+    val garage = garageSummary(state)
+
+    // One big number, Revolut-style: how far the car is.
+    Spacer(Modifier.height(18.dp))
+    Overline(stringResource(R.string.home_car_title), modifier = Modifier.padding(horizontal = 4.dp))
+    Spacer(Modifier.height(4.dp))
+    val big = when {
+        isAtCar -> stringResource(R.string.home_at_car)
+        distance != null -> formatDistance(distance)
         else -> null
     }
-    val howLine = how?.let { h -> state.accuracy?.let { stringResource(R.string.gps_accuracy, h, it.roundToInt()) } ?: h }
-    Text(parked, fontSize = TypeScale.Label, lineHeight = 22.sp, color = TextMuted)
-    if (howLine != null) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-            if (auto) {
-                Icon(Ph.checkCircle, contentDescription = null, tint = Green, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-            }
-            Text(howLine, fontSize = TypeScale.Label, lineHeight = 22.sp, color = if (auto) TextPrimary else TextMuted)
+    androidx.compose.animation.AnimatedContent(
+        targetState = big,
+        transitionSpec = {
+            (androidx.compose.animation.fadeIn(Motion.effects()) + androidx.compose.animation.slideInVertically(Motion.spatial()) { it / 3 })
+                .togetherWith(androidx.compose.animation.fadeOut(Motion.effects()))
+        },
+        label = "distance",
+        modifier = Modifier.padding(horizontal = 4.dp).semantics { heading(); liveRegion = LiveRegionMode.Polite },
+    ) { text ->
+        when {
+            // No live fix yet: the garage details are the most useful thing to show.
+            text == null -> BigNumber(garage ?: stringResource(R.string.home_car_here), size = 30.sp)
+            isAtCar -> BigNumber(text, size = 34.sp)
+            else -> BigNumber(text)
         }
     }
-    // "AutoPark is off" is the map banner's job (and it can be dismissed there).
-    if (state.monitoring && autoParkMode == AutoParkMode.Limited) {
-        Text(
-            stringResource(R.string.autopark_on_limited),
-            fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted
-        )
+    val sub = listOfNotNull(
+        if (distance != null && !isAtCar) stringResource(R.string.home_walk_minutes, walkingMinutes(distance)) else null,
+        garage.takeIf { big != null },
+    ).joinToString(" · ")
+    if (sub.isNotEmpty()) {
+        Text(sub, fontSize = TypeScale.Label, lineHeight = 22.sp, color = TextMuted, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
     }
-    Spacer(Modifier.height(8.dp))
-    Row(verticalAlignment = Alignment.Top) {
-        Column(Modifier.weight(1f)) {
-            HeroText(stringResource(if (isAtCar) R.string.home_at_car else R.string.home_car_title), TextPrimary, heading = true)
-            if (distance != null && !isAtCar) {
-                HeroText(stringResource(R.string.home_distance, formatDistance(distance), walkingMinutes(distance)), Green)
-            }
+
+    Spacer(Modifier.height(16.dp))
+    // The map card, with the proof line underneath it: "Saved automatically
+    // when VW Golf disconnected" is what makes people trust AutoPark.
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RadiusCard)
+            .background(Surface)
+            .border(1.dp, Border, RadiusCard)
+    ) {
+        map(Modifier.height(200.dp), true)
+        DividerRow()
+        val auto = state.source == ParkingStore.SOURCE_AUTO
+        val how = when {
+            auto && state.deviceName != null -> stringResource(R.string.home_saved_auto_named, state.deviceName)
+            auto -> stringResource(R.string.home_saved_auto)
+            state.source == ParkingStore.SOURCE_MANUAL -> stringResource(R.string.home_saved_manual)
+            else -> null
         }
-        IconButton(onClick = onShare, modifier = Modifier.size(48.dp)) {
-            Icon(Ph.share, contentDescription = stringResource(R.string.share_spot), tint = TextPrimary, modifier = Modifier.size(24.dp))
+        val parked = state.parkedAt?.let { parkedAtLabel(context, it) } ?: stringResource(R.string.parked_recently)
+        val detail = listOfNotNull(parked, state.accuracy?.let { "±${it.roundToInt()} m" }).joinToString(" · ")
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.Top) {
+            Icon(
+                if (auto) Ph.checkCircleFill else Ph.mapPin,
+                contentDescription = null,
+                tint = Green,
+                modifier = Modifier.padding(top = 1.dp).size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(how ?: parked, fontSize = TypeScale.Supporting, lineHeight = 20.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text(if (how != null) detail else listOfNotNull(state.accuracy?.let { "±${it.roundToInt()} m" }).joinToString(), fontSize = TypeScale.Caption, lineHeight = 18.sp, color = TextMuted)
+            }
         }
     }
 
-    // The one thing to do here: go to the car.
-    Spacer(Modifier.height(20.dp))
-    PrimaryButton(text = stringResource(R.string.get_directions), onClick = onDirections)
-
-    // Details: note, photo and parking time in one row between hairlines.
-    val timerEnds = state.timerEndsAt?.takeIf { it > System.currentTimeMillis() - 60 * 60_000L }
-    Spacer(Modifier.height(20.dp))
-    DividerRow()
-    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-        SpotCell(
-            icon = Ph.note,
-            label = state.note?.takeIf { it.isNotBlank() } ?: stringResource(R.string.chip_add_note),
-            active = !state.note.isNullOrBlank(),
-            modifier = Modifier.weight(1f),
-            onClick = onNote
-        )
-        VerticalDivider(color = Border)
-        SpotCell(
-            icon = Ph.camera,
-            label = stringResource(R.string.chip_add_photo),
-            active = state.photoPath != null,
-            modifier = Modifier.weight(1f),
-            onClick = onPhoto
-        )
-        VerticalDivider(color = Border)
-        TimerCell(endsAt = timerEnds, modifier = Modifier.weight(1f), onClick = onTimer)
-    }
-    // Garage mode: GPS alone isn't enough underground, so level, zone and
-    // space are one tap away, and all optional.
-    val garage = garageSummary(state)
-    ActionRow(
-        icon = Ph.squaresFour,
-        iconTint = if (garage != null) Green else TextPrimary,
-        title = garage ?: stringResource(R.string.garage_add),
-        subtitle = stringResource(if (garage == null) R.string.garage_add_sub else R.string.garage_edit_sub),
-        onClick = onGarage,
-    )
-    // A pin that may be off can be put right by hand.
-    // Not after the user already placed it, and not for TalkBack users, who
-    // can't drag (they can add level and space, or a note, instead).
+    // A pin that may be off can be put right by hand. Not after the user
+    // already placed it, and not for TalkBack users, who can't drag (they can
+    // add level and space, or a note, instead).
     val touchExploration = remember {
         context.getSystemService(android.view.accessibility.AccessibilityManager::class.java)?.isTouchExplorationEnabled == true
     }
     if (!state.adjusted && !touchExploration && (state.accuracy == null || state.accuracy > WEAK_GPS_M)) {
         Text(
             stringResource(R.string.pin_drag_hint),
-            fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted,
-            modifier = Modifier.padding(top = 8.dp)
+            fontSize = TypeScale.Caption, lineHeight = 19.sp, color = TextMuted,
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 8.dp)
         )
     }
+
+    // The one thing to do here: go to the car.
+    Spacer(Modifier.height(16.dp))
+    PrimaryButton(text = stringResource(R.string.get_directions), icon = Ph.navigationFill, onClick = onDirections)
+
+    // Quick actions: share, garage level, photo, parking time.
+    Spacer(Modifier.height(12.dp))
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        QuickTile(Ph.shareNetwork, stringResource(R.string.tile_share), active = false, modifier = Modifier.weight(1f), onClick = onShare)
+        QuickTile(
+            Ph.stack,
+            state.level?.let { stringResource(R.string.garage_level_value, it.replace("-", "−")) } ?: stringResource(R.string.tile_level),
+            active = garage != null, modifier = Modifier.weight(1f), onClick = onGarage,
+        )
+        QuickTile(Ph.camera, stringResource(R.string.chip_add_photo), active = state.photoPath != null, modifier = Modifier.weight(1f), onClick = onPhoto)
+        QuickTile(
+            Ph.timer,
+            timerEnds?.let { clockTime(context, it) } ?: stringResource(R.string.tile_timer),
+            active = timerEnds != null, modifier = Modifier.weight(1f), onClick = onTimer,
+        )
+    }
+
+    // The note, in its own row.
+    Spacer(Modifier.height(12.dp))
+    SettingsCard {
+        val note = state.note?.takeIf { it.isNotBlank() }
+        ActionRow(
+            icon = Ph.notePencil,
+            title = note ?: stringResource(R.string.home_note_add),
+            subtitle = if (note == null) stringResource(R.string.home_note_hint) else null,
+            onClick = onNote,
+        )
+    }
+
     // Replacing the saved spot is the risky action here, so it is the
     // quietest one on the screen.
-    LinkButton(
-        stringResource(if (saving) R.string.saving else R.string.save_current_spot),
-        color = TextMuted,
-        modifier = Modifier.padding(top = 4.dp),
-        onClick = onSave
-    )
+    Spacer(Modifier.height(4.dp))
+    QuietButton(stringResource(if (saving) R.string.saving else R.string.save_current_spot), onClick = onSave)
 }
 
-/** One column of the note / photo / timer row. Orange icon = something saved. */
+/** One square-ish quick action: icon over a short label. Green when something is set. */
 @Composable
-private fun SpotCell(
+private fun QuickTile(
     icon: ImageVector,
     label: String,
     active: Boolean,
     modifier: Modifier,
-    labelColor: Color = TextPrimary,
-    detail: String? = null,
     onClick: () -> Unit,
 ) {
     val saved = stringResource(R.string.cd_has_content)
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val bg by androidx.compose.animation.animateColorAsState(if (active) GreenSoft else Surface, Motion.effects(), label = "tileBg")
+    val line by androidx.compose.animation.animateColorAsState(if (active) Green else Border, Motion.effects(), label = "tileLine")
     Column(
         modifier
             .fillMaxHeight()
-            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .pressScale(interaction)
+            .clip(RadiusCard)
+            .background(bg)
+            .border(1.dp, line, RadiusCard)
+            .clickable(interactionSource = interaction, indication = androidx.compose.material3.ripple(), role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
             .semantics { if (active) stateDescription = saved }
-            .heightIn(min = 88.dp)
-            .padding(horizontal = 12.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .heightIn(min = 72.dp)
+            .padding(horizontal = 4.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = if (active) Green else TextPrimary, modifier = Modifier.size(24.dp))
-        Column {
-            Text(label, fontSize = TypeScale.Label, lineHeight = 20.sp, color = labelColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (detail != null) Text(detail, fontSize = TypeScale.Caption, lineHeight = 18.sp, color = labelColor.takeIf { it != TextPrimary } ?: TextMuted)
-        }
+        Icon(icon, contentDescription = null, tint = Green, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.height(6.dp))
+        Text(
+            label, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold,
+            color = if (active) Forest else TextPrimary,
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
     }
-}
-
-/**
- * Parking time: the end time and the time left. It turns amber in the last
- * ParkingTimer.WARNING_MINUTES and after the end, as before.
- */
-@Composable
-private fun TimerCell(endsAt: Long?, modifier: Modifier, onClick: () -> Unit) {
-    val context = LocalContext.current
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(endsAt) {
-        while (endsAt != null) {
-            now = System.currentTimeMillis()
-            delay(15_000L)
-        }
-    }
-    val minutesLeft = endsAt?.let { kotlin.math.ceil((it - now) / 60_000.0).toInt() }
-    val expired = minutesLeft != null && minutesLeft <= 0
-    val warn = minutesLeft != null && minutesLeft <= ParkingTimer.WARNING_MINUTES
-    val label = when {
-        endsAt == null -> stringResource(R.string.chip_timer)
-        expired -> stringResource(R.string.timer_short_ended, clockTime(context, endsAt))
-        else -> stringResource(R.string.timer_short_ends, clockTime(context, endsAt))
-    }
-    val detail = if (minutesLeft != null && !expired) {
-        val left = if (minutesLeft >= 60) stringResource(R.string.duration_hm, minutesLeft / 60, minutesLeft % 60)
-        else stringResource(R.string.duration_m, minutesLeft)
-        stringResource(R.string.timer_left, left)
-    } else null
-    SpotCell(
-        icon = Ph.timer,
-        label = label,
-        detail = detail,
-        active = endsAt != null,
-        labelColor = if (warn) Warn else TextPrimary,
-        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
-        onClick = onClick
-    )
 }
 
 /** Accuracy above this many metres counts as weak GPS. */
@@ -743,7 +838,7 @@ private const val WEAK_GPS_M = 30f
 private const val GPS_STALE_MS = 20_000L
 
 /**
- * Three bars and a label: good (up to 15 m), fair (up to 30 m), weak (worse).
+ * Three bars and a label in a chip: good (up to 15 m), fair (up to 30 m), weak.
  * No recent fix reads "Looking for GPS"; approximate-only permission says so.
  */
 @Composable
@@ -767,7 +862,7 @@ private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
         acc <= WEAK_GPS_M -> 2
         else -> 1
     }
-    val color = when (bars) { 3 -> Green; 2 -> Warn; 1 -> Danger; else -> TextMuted }
+    val color = when (bars) { 3 -> Green; 2 -> Warn; 1 -> Danger; else -> TextFaint }
     // The spoken label is the level only, so TalkBack isn't re-reading a
     // changing number every few seconds; the screen shows the metres.
     val level = when {
@@ -781,20 +876,22 @@ private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
     val shown = if (precise && fresh && acc != null) stringResource(R.string.gps_accuracy, level, acc.roundToInt()) else level
     Row(
         modifier
-            .background(Bg.copy(alpha = 0.8f))
-            .border(1.dp, Border)
-            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .heightIn(min = 32.dp)
+            .clip(RadiusSmall)
+            .background(Surface)
+            .border(1.dp, BorderStrong, RadiusSmall)
+            .padding(horizontal = 10.dp)
             .clearAndSetSemantics { contentDescription = level },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             listOf(5.dp, 9.dp, 13.dp).forEachIndexed { i, h ->
-                Box(Modifier.size(width = 3.dp, height = h).background(if (i < bars) color else Color(0xFF616161))) // 3.3:1 on black
+                Box(Modifier.size(width = 3.dp, height = h).clip(RoundedCornerShape(1.dp)).background(if (i < bars) color else Border))
             }
         }
         Spacer(Modifier.width(8.dp))
         // Status is in words too, never colour alone.
-        Text(shown, fontSize = TypeScale.Caption, color = TextPrimary)
+        Text(shown, fontSize = TypeScale.Caption, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
     }
 }
 
@@ -809,26 +906,27 @@ private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Un
         MapIssue.BluetoothOff -> R.string.banner_bluetooth_off to R.string.banner_bluetooth_off_action
         MapIssue.AutoParkLost -> R.string.banner_autopark_lost to R.string.banner_autopark_lost_action
     }
-    Column(Modifier.fillMaxWidth().background(Surface).padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 4.dp)) {
-        Row(Modifier.padding(end = 8.dp), verticalAlignment = Alignment.Top) {
-            Icon(
-                when (issue) {
-                    MapIssue.AutoParkOff, MapIssue.BluetoothOff -> Ph.bluetooth
-                    MapIssue.AutoParkLost -> Ph.warning
-                    else -> Ph.mapPin
-                },
-                contentDescription = null,
-                tint = if (issue == MapIssue.AutoParkLost || issue == MapIssue.BluetoothOff) Warn else Green,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(stringResource(text), fontSize = TypeScale.Label, lineHeight = 22.sp, color = TextPrimary, modifier = Modifier.weight(1f))
-        }
-        Row(Modifier.fillMaxWidth().padding(start = 32.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            LinkButton(stringResource(action), onClick = onAction)
-            if (issue == MapIssue.AutoParkOff || issue == MapIssue.AutoParkLost || issue == MapIssue.BluetoothOff) {
-                TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp), shape = RadiusSmall) {
-                    Text(stringResource(R.string.banner_not_now), fontSize = TypeScale.Emphasis, color = TextMuted)
+    val warn = issue == MapIssue.AutoParkLost || issue == MapIssue.BluetoothOff
+    ParkedCard(color = if (warn) WarnBg else Surface, border = if (warn) Color(0xFFFCD34D) else Border) {
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 4.dp)) {
+            Row(Modifier.padding(end = 8.dp), verticalAlignment = Alignment.Top) {
+                Icon(
+                    when (issue) {
+                        MapIssue.AutoParkOff, MapIssue.BluetoothOff -> Ph.bluetooth
+                        MapIssue.AutoParkLost -> Ph.warning
+                        else -> Ph.mapPin
+                    },
+                    contentDescription = null,
+                    tint = if (warn) Warn else Green,
+                    modifier = Modifier.padding(top = 1.dp).size(20.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(stringResource(text), fontSize = TypeScale.Label, lineHeight = 22.sp, color = TextPrimary, modifier = Modifier.weight(1f))
+            }
+            Row(Modifier.fillMaxWidth().padding(start = 28.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LinkButton(stringResource(action), color = if (warn) Warn else Green, onClick = onAction)
+                if (issue == MapIssue.AutoParkOff || issue == MapIssue.AutoParkLost || issue == MapIssue.BluetoothOff) {
+                    LinkButton(stringResource(R.string.banner_not_now), color = TextMuted, onClick = onDismiss)
                 }
             }
         }
@@ -839,14 +937,15 @@ private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Un
 private fun MapButton(icon: ImageVector, description: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         modifier
-            .size(48.dp)
-            .background(Bg)
-            .border(1.dp, Border)
+            .size(44.dp)
+            .clip(RadiusSmall)
+            .background(Surface)
+            .border(1.dp, BorderStrong, RadiusSmall)
             .clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = description, onClick = onClick)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = null, tint = Green, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -856,10 +955,12 @@ private fun OsmAttribution(modifier: Modifier) {
     // link: a tiny tap target on the map was easy to hit by accident.
     Text(
         stringResource(R.string.osm_attribution),
-        fontSize = 11.sp,
+        fontSize = 10.sp,
+        lineHeight = 13.sp,
         color = TextMuted,
         modifier = modifier
-            .background(Bg.copy(alpha = 0.7f))
+            .clip(RadiusSmall)
+            .background(Surface.copy(alpha = 0.85f))
             .padding(horizontal = 6.dp, vertical = 2.dp)
     )
 }

@@ -337,4 +337,16 @@
     <string name="garage_edit_sub">Tap to change</string>
     <string name="perm_blocked">Parked! can\'t ask for Location or Bluetooth again. Allow them in its settings to use AutoPark.</string>
     <string name="perm_open_settings">Settings</string>
+    <!-- 0.7 Home -->
+    <string name="chip_autopark">AutoPark on</string>
+    <string name="home_empty_auto_title">You drive. We\'ll remember.</string>
+    <string name="home_empty_auto_body">When you switch off and your car\'s Bluetooth disconnects, the spot saves itself.</string>
+    <string name="home_walk_minutes">%1$d min walk</string>
+    <string name="home_saved_auto_named">Saved automatically when %1$s disconnected</string>
+    <string name="home_car_here">Your car is on the map</string>
+    <string name="tile_share">Share</string>
+    <string name="tile_level">Level</string>
+    <string name="tile_timer">Timer</string>
+    <string name="home_note_add">Add a note</string>
+    <string name="home_note_hint">Row, colour, anything that helps</string>
 </resources>
