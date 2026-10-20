@@ -39,12 +39,12 @@ compiler errors are attached to the check run as a single annotation.
   re-engagement or "log your fuel" nudges.
 - Parking history is opt-in and off by default. Never collect location history
   silently.
-- Refuels are the only fuel history. Since 0.5 there is no fuel-level gauge in
-  the UI; the stored level keys stay for compatibility and backups.
+- Refuels are the only fuel history. The fuel gauge (estimated level, range,
+  "Correct") came back in 0.7 on the Car tab; the level keys are unchanged.
 - No splash screen: opening the app is often the moment someone is looking for
   their car.
-- Tabs: Home (where the car is), Car (service and ΚΤΕΟ first, then refuels,
-  odometer, colour), Settings (AutoPark, preferences, backup, about).
+- Tabs: Home (where the car is), Car (the car, fuel level, service and ΚΤΕΟ,
+  then refuels, odometer, colour), Settings (AutoPark, preferences, backup, about).
 - The odometer only advances from GPS after the user has entered a real reading.
 - Keep storage keys backward compatible; users update in place.
 - The app is `com.parked.app` ("Parked!"). Builds are signed with the fixed CI
@@ -53,15 +53,25 @@ compiler errors are attached to the check run as a single annotation.
 
 ## Design tokens
 
-Dark only. Colours and type live in `ui/Theme.kt`: background `Ink` #000000,
-`Panel` #1A1A1A, `Field` #262626, `Line` #333333, text `Paper` #FFFFFF,
-secondary text `Muted` #9A9A9A (7.4:1 on black), one accent `Accent` #FF7500,
-`Danger` and `Warn` for status. Font: Sofia Sans (`res/font/sofia_sans.ttf`,
-variable, OFL). Icons: Phosphor light (`res/drawable/ph_*.xml`, MIT), reached
-through `Ph` in `ui/Components.kt`. Shapes are square. Touch targets are at
-least 48 dp; body text 15-17 sp with a line height of at least 1.5.
+Light only (since 0.7). Based on a warm, flat design system with the accent in
+Parked green; Rivian-style status first, Revolut-style one big number per
+screen. Colours and type live in `ui/Theme.kt`: page `Bg` #FFFBF5 (cream),
+cards `Surface` #FFFFFF, `SurfaceSunk` #F3EEE6, borders `Border` #E7E5E4 and
+`BorderStrong` #D6D3D1, text `TextPrimary` #1C1917, `TextMuted` #57534E
+(7.3:1), `TextFaint` #A8A29E (decoration only), one accent `Green` #3F7A22
+(white on it 5.5:1) with `GreenSoft` #EEF5E8 for "on" states, `Forest`, `Sand`,
+and `Danger`, `Warn`/`WarnBg`, `Ok`/`OkBg` for status. No shadows: cards are
+white with a 1 dp border. Radii: `RadiusSmall` 4 dp (buttons, chips, fields),
+`RadiusCard` 12 dp (cards, sheets). Fonts: `HeadingFont` Literata (titles and
+big numbers, has Greek) and `BodyFont` Open Sans, both variable and OFL in
+`res/font/`. Icons: Phosphor regular (`res/drawable/ph_*.xml`, MIT, fill
+variants for the active tab), reached through `Ph` in `ui/Components.kt`.
+Touch targets are at least 48 dp; body text 15-17 sp with a line height of at
+least 1.5.
 
-Shared building blocks (white primary button with an orange arrow, text links,
-hairline rows, square switch, fields, sheets, dialogs) are in
-`ui/Components.kt`; reuse them rather than restyling per screen. Map tiles are
-CARTO Dark Matter; keep the "© OpenStreetMap © CARTO" credit visible.
+Shared building blocks (green primary button, outline secondary button, text
+links, `ParkedCard`/`SettingsCard`, rows with a chevron, `StatusChip`, pill
+switch, fields, sheets, dialogs, `BigNumber`/`Overline`, `Motion` springs,
+`Haptics`, `pressScale`) are in `ui/Components.kt`; the car drawing is in
+`ui/CarArt.kt`. Reuse them rather than restyling per screen. Map tiles are
+CARTO Voyager; keep the "© OpenStreetMap © CARTO" credit visible.
