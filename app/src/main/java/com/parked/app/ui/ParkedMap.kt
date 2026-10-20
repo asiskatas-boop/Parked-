@@ -61,6 +61,7 @@ fun ParkedMap(
     onCarMoved: ((Double, Double) -> Unit)? = null,
 ) {
     val latestOnCarMoved by rememberUpdatedState(onCarMoved)
+    val latestParked by rememberUpdatedState(if (parkedLat != null && parkedLng != null) GeoPoint(parkedLat, parkedLng) else null)
     val view = androidx.compose.ui.platform.LocalView.current
     // A drag moves the spot on purpose: keep the camera where the user left it.
     var movedByDrag by remember { mutableStateOf(false) }
@@ -81,7 +82,14 @@ fun ParkedMap(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> mapView?.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView?.onPause()
+                Lifecycle.Event.ON_PAUSE -> {
+                    // A drag cut short by leaving the app must not freeze the pin.
+                    if (dragging.getAndSet(false)) {
+                        (mapView?.overlays?.firstOrNull { (it as? Marker)?.id == MARKER_CAR } as? Marker)
+                            ?.let { m -> latestParked?.let { m.position = it } }
+                    }
+                    mapView?.onPause()
+                }
                 else -> Unit
             }
         }
@@ -104,7 +112,11 @@ fun ParkedMap(
                 controller.setZoom(16.0)
                 contentDescription = parkedLabel
                 // Markers are created once and only moved afterwards.
-                overlays.add(Marker(this).apply {
+                overlays.add(CarMarker(this, onCancel = { marker ->
+                    // ACTION_CANCEL (back gesture, a call) ends a drag without
+                    // onMarkerDragEnd: release it and put the pin back.
+                    if (dragging.getAndSet(false)) latestParked?.let { p -> marker.position = p; invalidate() }
+                }).apply {
                     id = MARKER_CAR
                     title = parkedLabel
                     icon = parkedMarkerIcon
@@ -121,13 +133,23 @@ fun ParkedMap(
                         override fun onMarkerDrag(marker: Marker) = Unit
                         override fun onMarkerDragEnd(marker: Marker) {
                             dragging.set(false)
+                            val car = marker as CarMarker
+                            // A long-press without moving is not a move: osmdroid has
+                            // already snapped the pin to the finger, so put it back.
+                            val slop = 24f * resources.displayMetrics.density
+                            if (car.fingerTravel() < slop) {
+                                latestParked?.let { marker.position = it }
+                                invalidate()
+                                return
+                            }
                             val p = marker.position
                             movedByDrag = true
                             latestOnCarMoved?.invoke(p.latitude, p.longitude)
                         }
                     })
                 })
-                overlays.add(Marker(this).apply {
+                // "You" never takes a long-press, so the car under it can still be dragged.
+                overlays.add(PassiveMarker(this).apply {
                     id = MARKER_YOU
                     title = liveLabel
                     icon = liveMarkerIcon
@@ -201,6 +223,35 @@ private fun showBoth(map: MapView, parkedLat: Double?, parkedLng: Double?, liveL
             runCatching { map.zoomToBoundingBox(box, true, border) }
         }
     }
+}
+
+/** The car pin: remembers how far the finger moved, and reports a cancelled touch. */
+private class CarMarker(map: MapView, private val onCancel: (Marker) -> Unit) : Marker(map) {
+    private var downX = 0f
+    private var downY = 0f
+    private var upX = 0f
+    private var upY = 0f
+
+    fun fingerTravel(): Float = kotlin.math.hypot(upX - downX, upY - downY)
+
+    override fun onTouchEvent(event: android.view.MotionEvent, mapView: MapView): Boolean {
+        when (event.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> { downX = event.x; downY = event.y; upX = downX; upY = downY }
+            android.view.MotionEvent.ACTION_MOVE, android.view.MotionEvent.ACTION_UP -> { upX = event.x; upY = event.y }
+            android.view.MotionEvent.ACTION_CANCEL -> onCancel(this)
+        }
+        return super.onTouchEvent(event, mapView)
+    }
+
+    // A hidden pin (no spot saved) must not start a drag.
+    override fun onLongPress(event: android.view.MotionEvent, mapView: MapView): Boolean =
+        isEnabled && super.onLongPress(event, mapView)
+}
+
+/** A marker that ignores taps and long-presses, so the car under it stays reachable. */
+private class PassiveMarker(map: MapView) : Marker(map) {
+    override fun onLongPress(event: android.view.MotionEvent, mapView: MapView): Boolean = false
+    override fun onSingleTapConfirmed(event: android.view.MotionEvent, mapView: MapView): Boolean = false
 }
 
 private const val MARKER_CAR = "car"

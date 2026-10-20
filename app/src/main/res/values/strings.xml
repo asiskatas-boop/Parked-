@@ -308,9 +308,9 @@
     <!-- 0.6 garage mode -->
     <string name="garage_add">Add level and space</string>
     <string name="garage_add_sub">For garages and big car parks</string>
-    <string name="garage_title">Where in the garage?</string>
-    <string name="garage_subtitle">Tap what you see. All of it is optional.</string>
-    <string name="garage_level_other">Level</string>
+    <string name="garage_title">Where in the car park?</string>
+    <string name="garage_subtitle">Tap a level, or type what the signs say. All of it is optional.</string>
+    <string name="garage_level_other">Level name (e.g. P2)</string>
     <string name="garage_zone">Zone</string>
     <string name="garage_space">Space</string>
     <string name="garage_photo">Take a photo of the sign</string>
@@ -322,15 +322,19 @@
     <string name="pin_moved">Spot moved.</string>
     <string name="banner_bluetooth_off">Bluetooth is off, so AutoPark can\'t tell when your car disconnects.</string>
     <string name="banner_bluetooth_off_action">Turn on</string>
-    <string name="banner_autopark_lost">AutoPark was switched off because Parked! lost a permission it needs.</string>
+    <string name="banner_autopark_lost">AutoPark was switched off, so new spots aren\'t saved automatically.</string>
     <string name="banner_autopark_lost_action">Turn on again</string>
     <!-- 0.6 one permission at a time -->
-    <string name="perm_location_title">First, your location</string>
-    <string name="perm_location_body">So Parked! can save the spot when you park. Your location stays on this phone.</string>
-    <string name="perm_bluetooth_title">Next, Bluetooth</string>
+    <string name="perm_location_title">Location</string>
+    <string name="perm_location_body">So Parked! can save the spot when you park. Your saved spots stay on this phone.</string>
+    <string name="perm_bluetooth_title">Bluetooth</string>
     <string name="perm_bluetooth_body">So Parked! can tell when your car\'s Bluetooth disconnects. It only watches the car you choose.</string>
-    <string name="perm_notif_title">Last, notifications</string>
+    <string name="perm_notif_title">Notifications (optional)</string>
     <string name="perm_notif_body">So Parked! can confirm each save and tell you when a parking timer you set runs out. You can skip this.</string>
     <string name="perm_continue">Continue</string>
     <string name="perm_skip">Skip</string>
+    <string name="garage_level_label">Level</string>
+    <string name="garage_edit_sub">Tap to change</string>
+    <string name="perm_blocked">Parked! can\'t ask for Location or Bluetooth again. Allow them in its settings to use AutoPark.</string>
+    <string name="perm_open_settings">Settings</string>
 </resources>

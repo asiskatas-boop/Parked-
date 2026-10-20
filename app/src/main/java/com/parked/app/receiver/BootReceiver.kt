@@ -34,7 +34,11 @@ class BootReceiver : BroadcastReceiver() {
                     if (endsAt > System.currentTimeMillis()) ParkingTimer.schedule(app, endsAt)
                 }
                 if (boot && state.monitoring && state.deviceAddress != null) {
-                    if (!ParkingMonitorService.start(app, fromBackground = true)) store.setMonitoring(false)
+                    if (!ParkingMonitorService.start(app, fromBackground = true)) {
+                        store.setMonitoring(false)
+                        // Tell Home, so the loss isn't discovered at the next park.
+                        com.parked.app.data.AutoParkHealth.markLost(app)
+                    }
                 }
             } catch (_: Exception) {
                 // Nothing to restore if storage can't be read; never crash at boot.

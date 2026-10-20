@@ -32,6 +32,8 @@ data class ParkingState(
     val level: String? = null,
     val zone: String? = null,
     val space: String? = null,
+    /** True after the user dragged the pin into place. */
+    val adjusted: Boolean = false,
 ) {
     val hasSpot: Boolean
         get() = parkedLat != null && parkedLng != null && !(parkedLat == 0.0 && parkedLng == 0.0)
@@ -97,6 +99,7 @@ class ParkingStore(context: Context) {
         val level = stringPreferencesKey("spot_level")
         val zone = stringPreferencesKey("spot_zone")
         val space = stringPreferencesKey("spot_space")
+        val adjusted = booleanPreferencesKey("spot_adjusted")
     }
 
     val state: Flow<ParkingState> = this.context.dataStore.data.map { p ->
@@ -117,6 +120,7 @@ class ParkingStore(context: Context) {
             level = p[Keys.level],
             zone = p[Keys.zone],
             space = p[Keys.space],
+            adjusted = p[Keys.adjusted] ?: false,
         )
     }
 
@@ -159,6 +163,7 @@ class ParkingStore(context: Context) {
             it.remove(Keys.level)
             it.remove(Keys.zone)
             it.remove(Keys.space)
+            it.remove(Keys.adjusted)
             it.remove(Keys.photoPath)
             it.remove(Keys.timerEndsAt)
             if (it[Keys.historyEnabled] == true) {
@@ -190,6 +195,7 @@ class ParkingStore(context: Context) {
             if (spot.level != null) it[Keys.level] = spot.level else it.remove(Keys.level)
             if (spot.zone != null) it[Keys.zone] = spot.zone else it.remove(Keys.zone)
             if (spot.space != null) it[Keys.space] = spot.space else it.remove(Keys.space)
+            it.remove(Keys.adjusted)
             // The undone save must not stay in history either.
             if (replacedAt != null) {
                 val history = parseHistory(it[Keys.history])
@@ -242,22 +248,31 @@ class ParkingStore(context: Context) {
         put(Keys.level, level); put(Keys.zone, zone); put(Keys.space, space)
     }
 
-    /** Moves the current spot (the user dragged the pin). Note, photo and timer stay. */
-    suspend fun moveSpot(lat: Double, lng: Double) = context.dataStore.edit {
-        if (it[Keys.parkedLat] == null) return@edit
+    /**
+     * Moves the spot saved at [expectedAt] (the user dragged the pin). Does
+     * nothing if a newer spot has been saved since, so a late Undo can't move
+     * it. Note, photo and timer stay. [accuracy] and [adjusted] let Undo put
+     * the previous state back exactly.
+     */
+    suspend fun moveSpot(
+        lat: Double,
+        lng: Double,
+        expectedAt: Long?,
+        accuracy: Float? = null,
+        adjusted: Boolean = true,
+    ) = context.dataStore.edit {
+        if (it[Keys.parkedLat] == null || it[Keys.parkedAt] != expectedAt) return@edit
         it[Keys.parkedLat] = lat
         it[Keys.parkedLng] = lng
-        // The user placed it by hand, so the GPS accuracy no longer applies.
-        it.remove(Keys.accuracy)
+        // Placed by hand: the GPS accuracy no longer applies.
+        if (accuracy != null) it[Keys.accuracy] = accuracy else it.remove(Keys.accuracy)
+        if (adjusted) it[Keys.adjusted] = true else it.remove(Keys.adjusted)
         val history = parseHistory(it[Keys.history])
         val at = it[Keys.parkedAt]
         if (at != null && history.firstOrNull()?.at == at) {
             it[Keys.history] = encodeHistory(listOf(history.first().copy(lat = lat, lng = lng)) + history.drop(1))
         }
     }
-
-    /** Puts back the accuracy a [moveSpot] removed; used by Undo. */
-    suspend fun restoreAccuracy(accuracy: Float) = context.dataStore.edit { it[Keys.accuracy] = accuracy }
 
     suspend fun setTimerEndsAt(endsAt: Long?) = context.dataStore.edit {
         if (endsAt == null) it.remove(Keys.timerEndsAt) else it[Keys.timerEndsAt] = endsAt

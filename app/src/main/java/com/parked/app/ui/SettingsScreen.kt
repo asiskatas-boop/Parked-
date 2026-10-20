@@ -128,6 +128,8 @@ private fun SettingsMain(
     val sBtPermission = stringResource(R.string.bluetooth_permission_needed)
     val sCarSaved = stringResource(R.string.car_bluetooth_saved)
     val sAutoReadyCar = stringResource(R.string.autopark_turned_on_car)
+    val sPermsBlocked = stringResource(R.string.perm_blocked)
+    val sOpenSettings = stringResource(R.string.perm_open_settings)
     val sCarFallback = stringResource(R.string.car_bluetooth)
 
     fun say(text: String) {
@@ -153,7 +155,7 @@ private fun SettingsMain(
             autoPickedCar = null
             if (ParkingMonitorService.start(context)) {
                 // Back on: the "AutoPark was switched off" banner no longer applies.
-                context.getSharedPreferences("parked_ui", android.content.Context.MODE_PRIVATE).edit().remove(AUTOPARK_LOST_KEY).apply()
+                com.parked.app.data.AutoParkHealth.clear(context)
                 say(if (picked != null) sAutoReadyCar.format(picked) else sAutoReady)
             } else {
                 store.setMonitoring(false)
@@ -225,6 +227,8 @@ private fun SettingsMain(
 
     val autoPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         if (!pendingAutoStart) return@rememberLauncherForActivityResult
+        // An empty result means the request was interrupted: treat it as cancel.
+        if (results.isEmpty()) { pendingAutoStart = false; return@rememberLauncherForActivityResult }
         if (Build.VERSION.SDK_INT >= 33 && results[Manifest.permission.POST_NOTIFICATIONS] == false) {
             // AutoPark still works without alerts. Remember the choice so turning
             // AutoPark on later does not ask again.
@@ -235,8 +239,25 @@ private fun SettingsMain(
         val askedBluetooth = Build.VERSION.SDK_INT >= 31 && Manifest.permission.BLUETOOTH_CONNECT in results
         when {
             // Location and Bluetooth are required; notifications are not.
-            (askedLocation && !hasLocationPermission(context)) || (askedBluetooth && !hasBluetoothPermission(context)) ->
-                { pendingAutoStart = false; say(sPermsNeeded) }
+            (askedLocation && !hasLocationPermission(context)) || (askedBluetooth && !hasBluetoothPermission(context)) -> {
+                pendingAutoStart = false
+                // After "don't ask again" Android shows nothing more, so offer
+                // the app's settings page instead of a dead end.
+                val activity = context.findActivity()
+                val blocked = activity != null && results.filterValues { !it }.keys.none {
+                    androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(activity, it)
+                }
+                if (blocked) scope.launch {
+                    snackbar.currentSnackbarData?.dismiss()
+                    val r = snackbar.showSnackbar(sPermsBlocked, actionLabel = sOpenSettings, duration = SnackbarDuration.Long)
+                    if (r == SnackbarResult.ActionPerformed) runCatching {
+                        context.startActivity(
+                            Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                } else say(sPermsNeeded)
+            }
             else -> resumeAutoPark()
         }
     }
@@ -282,7 +303,9 @@ private fun SettingsMain(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 systemNotificationsAllowed = Channels.canPost(context, Channels.ALERTS)
-                if (pendingAutoStart) {
+                // While a permission explainer is open the flow isn't finished:
+                // don't start AutoPark underneath it.
+                if (pendingAutoStart && permStep == null) {
                     if (latestState.deviceAddress != null && hasLocationPermission(context) && hasBluetoothPermission(context) &&
                         isBluetoothEnabled(context) && isLocationServicesEnabled(context)
                     ) {
@@ -354,6 +377,7 @@ private fun SettingsMain(
                     },
                     onToggle = { on ->
                         if (on) beginAutoPark() else {
+                            com.parked.app.data.AutoParkHealth.clear(context)
                             ParkingMonitorService.stop(context)
                             scope.launch { store.setMonitoring(false) }
                             say(sAutoOff)
@@ -517,12 +541,29 @@ private fun SettingsMain(
                     PermStep.Bluetooth -> arrayOf(Manifest.permission.BLUETOOTH_CONNECT)
                     PermStep.Notifications -> { askedNotifications = true; arrayOf(Manifest.permission.POST_NOTIFICATIONS) }
                 }
-                runCatching { autoPermissionLauncher.launch(perms) }.onFailure { pendingAutoStart = false }
+                runCatching { autoPermissionLauncher.launch(perms) }.onFailure { pendingAutoStart = false; say(sPermsNeeded) }
             },
             onSkip = if (step == PermStep.Notifications) {
-                { permStep = null; askedNotifications = true; resumeAutoPark() }
+                {
+                    // Skipping is remembered, so the next setup doesn't ask again.
+                    // Alerts can be turned on later in Preferences.
+                    permStep = null
+                    askedNotifications = true
+                    fuel.updateNotificationsEnabled(false)
+                    systemNotificationsAllowed = false
+                    resumeAutoPark()
+                }
             } else null,
-            onDismiss = { permStep = null; pendingAutoStart = false },
+            // Swiping away the optional notifications step counts as skipping it.
+            onDismiss = {
+                if (step == PermStep.Notifications) {
+                    permStep = null
+                    askedNotifications = true
+                    fuel.updateNotificationsEnabled(false)
+                    systemNotificationsAllowed = false
+                    resumeAutoPark()
+                } else { permStep = null; pendingAutoStart = false }
+            },
         )
     }
     ConfirmDialog(
@@ -814,4 +855,11 @@ private fun PermissionStepSheet(step: PermStep, onContinue: () -> Unit, onSkip: 
         if (onSkip != null) QuietButton(stringResource(R.string.perm_skip), onClick = onSkip)
         else QuietButton(stringResource(R.string.cancel), onClick = onDismiss)
     }
+}
+
+/** The Activity behind a Compose context, for permission rationale checks. */
+private tailrec fun android.content.Context.findActivity(): android.app.Activity? = when (this) {
+    is android.app.Activity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

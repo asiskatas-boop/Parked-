@@ -5,16 +5,22 @@
 The app is the green Parked! again (com.parked.app), no longer "Parked! Next".
 Phones with 0.3.1 or older need one uninstall first: those builds were signed
 with a throwaway key. From here on every update installs in place.
+If you used "Parked! Next" (0.4–0.5), export a backup there (Settings →
+Backup), import it into Parked!, then uninstall Parked! Next so two AutoPark
+services don't both save and notify.
 
 - Garage mode: right under the spot, "Add level and space" opens big level
   buttons (−3 to 3), zone and space fields, and a photo shortcut. All optional.
   Shown on Home, included when sharing the spot and in backups.
-- Drag the pin: long-press the P and drag it to correct the spot, with Undo.
-  Home suggests it when the GPS fix was weak.
-- AutoPark warnings on Home: when Bluetooth is off, and when Parked! had to
-  switch AutoPark off because a permission was removed, each with a one-tap fix.
+- Drag the pin: long-press the P and drag it to correct the spot, with Undo
+  (Undo only applies to that same spot). A long-press without moving does
+  nothing. Home suggests it when the GPS fix was weak, until you've moved it.
+- AutoPark warnings on Home, the moment they happen: Bluetooth is off, or
+  Parked! had to switch AutoPark off (a permission removed, the car missing, or
+  it couldn't restart after a reboot). Each has a one-tap fix and "Not now".
 - AutoPark setup asks for one permission at a time, each with one sentence of
-  why. Notifications can be skipped.
+  why. Notifications can be skipped, and the skip is remembered. If Android
+  won't ask again, Parked! offers its settings page instead of a dead end.
 
 ## 0.5.0
 
