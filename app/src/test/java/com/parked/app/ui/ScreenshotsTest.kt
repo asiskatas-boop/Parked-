@@ -138,7 +138,7 @@ class ScreenshotsTest {
     private fun demoFuel(): FuelStore {
         val context = LocalContext.current
         return remember {
-            FuelStore(context).apply {
+            FuelStore(PrefsContext(context)).apply {
                 if (refuels.isEmpty()) {
                     setOdometer(82_900.0)
                     updateTankCapacity(50.0)
