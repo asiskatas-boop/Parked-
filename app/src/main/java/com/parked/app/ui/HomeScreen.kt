@@ -563,6 +563,7 @@ private fun TimerChip(endsAt: Long, onClick: () -> Unit) {
         if (warn) ChipKind.Warn else ChipKind.Neutral,
         icon = Ph.timer,
         modifier = Modifier
+            .minimumInteractiveComponentSize()
             .clip(RadiusSmall)
             .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
             .clearAndSetSemantics { contentDescription = spoken; liveRegion = LiveRegionMode.Polite }
@@ -688,7 +689,8 @@ internal fun SavedSpotContent(
                 .togetherWith(androidx.compose.animation.fadeOut(Motion.effects()))
         },
         label = "distance",
-        modifier = Modifier.padding(horizontal = 4.dp).semantics { heading(); liveRegion = LiveRegionMode.Polite },
+        // No live region: the distance changes with every GPS fix and would talk over everything.
+        modifier = Modifier.padding(horizontal = 4.dp).semantics { heading() },
     ) { text ->
         when {
             // No live fix yet: the garage details are the most useful thing to show.
@@ -939,7 +941,7 @@ internal fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> U
 private fun MapButton(icon: ImageVector, description: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         modifier
-            .size(44.dp)
+            .size(48.dp)
             .clip(RadiusSmall)
             .background(Surface)
             .border(1.dp, BorderStrong, RadiusSmall)

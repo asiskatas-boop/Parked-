@@ -98,6 +98,8 @@ internal fun CarMain(fuel: FuelStore, deviceName: String?, onOpen: (CarPage) -> 
     var showAppearance by remember { mutableStateOf(false) }
     var showLevel by remember { mutableStateOf(false) }
     val msgRefuel = stringResource(R.string.refuel_saved)
+    val msgLevel = stringResource(R.string.fuel_level_saved)
+    val msgUndo = stringResource(R.string.undo)
     val swatch = carColours.firstOrNull { it.first == fuel.accentName }?.second ?: carColours[4].second
     val sorted = fuel.reminders.sortedByDescending { fuel.progress(it).status.ordinal }
     val cdCar = stringResource(R.string.cd_car_preview, colourLabel(fuel.accentName))
@@ -243,7 +245,21 @@ internal fun CarMain(fuel: FuelStore, deviceName: String?, onOpen: (CarPage) -> 
             }
         )
     }
-    if (showLevel) FuelLevelSheet(fuel = fuel, onDismiss = { showLevel = false })
+    if (showLevel) FuelLevelSheet(
+        fuel = fuel,
+        onDismiss = { showLevel = false },
+        onSaved = { before ->
+            showLevel = false
+            scope.launch {
+                snackbar.currentSnackbarData?.dismiss()
+                val result = snackbar.showSnackbar(msgLevel, actionLabel = msgUndo, withDismissAction = true)
+                if (result == SnackbarResult.ActionPerformed) {
+                    fuel.restoreLevel(before.pct, before.odo, before.at)
+                    fuel.restoreTankCapacity(before.tank)
+                }
+            }
+        },
+    )
     if (showOdo) OdometerSheet(fuel = fuel, onDismiss = { showOdo = false })
     if (showAppearance) AppearanceDialog(fuel = fuel, onDismiss = { showAppearance = false })
 }
@@ -316,16 +332,17 @@ internal fun FuelGaugeCard(fuel: FuelStore, onCorrect: () -> Unit) {
     }
 }
 
+/** What the fuel sheet changed, so Undo can put all of it back. */
+internal data class LevelBefore(val pct: Double, val odo: Double, val at: Long, val tank: Double)
+
 /** Match the car's gauge by dragging; the tank size makes the range possible. */
 @Composable
-internal fun FuelLevelSheet(fuel: FuelStore, onDismiss: () -> Unit) {
-    val snackbar = LocalSnackbar.current
-    val scope = rememberCoroutineScope()
+internal fun FuelLevelSheet(fuel: FuelStore, onDismiss: () -> Unit, onSaved: (LevelBefore) -> Unit = {}) {
     val view = androidx.compose.ui.platform.LocalView.current
     var level by remember { mutableFloatStateOf(fuel.estimateLevelPct().toFloat().coerceIn(0f, 100f).let { (it / 5f).roundToInt() * 5f }) }
     var tank by remember { mutableStateOf(fuel.tankCapacity.takeIf { it > 0 }?.roundToInt()?.toString() ?: "") }
-    val msgSaved = stringResource(R.string.fuel_level_saved)
-    val msgUndo = stringResource(R.string.undo)
+    var error by remember { mutableStateOf<String?>(null) }
+    val eTank = stringResource(R.string.fuel_tank_error)
     ParkedSheet(title = stringResource(R.string.fuel_level_title), subtitle = stringResource(R.string.fuel_sheet_subtitle), onDismiss = onDismiss) {
         BigNumber("${level.roundToInt()}%", size = 44.sp)
         Slider(
@@ -352,21 +369,23 @@ internal fun FuelLevelSheet(fuel: FuelStore, onDismiss: () -> Unit) {
         }
         Spacer(Modifier.height(16.dp))
         NumberField(
-            tank, { tank = it }, stringResource(R.string.fuel_tank_size), decimal = false,
+            tank, { tank = it; error = null }, stringResource(R.string.fuel_tank_size), decimal = false,
             supporting = stringResource(R.string.fuel_tank_hint)
         )
+        ErrorText(error)
         Spacer(Modifier.height(16.dp))
         PrimaryButton(stringResource(R.string.save)) {
-            val before = Triple(fuel.levelPct, fuel.odoForLevel, fuel.levelUpdatedAt)
-            parseNumber(tank)?.takeIf { it in 5.0..200.0 }?.let { fuel.updateTankCapacity(it) }
+            val tankValue = if (tank.isBlank()) null else parseNumber(tank)
+            if (tank.isNotBlank() && (tankValue == null || tankValue !in 5.0..200.0)) {
+                error = eTank
+                return@PrimaryButton
+            }
+            val before = LevelBefore(fuel.levelPct, fuel.odoForLevel, fuel.levelUpdatedAt, fuel.tankCapacity)
+            tankValue?.let { fuel.updateTankCapacity(it) }
             fuel.setLevel(level.toDouble())
             Haptics.confirm(view)
-            onDismiss()
-            scope.launch {
-                snackbar.currentSnackbarData?.dismiss()
-                val result = snackbar.showSnackbar(msgSaved, actionLabel = msgUndo, withDismissAction = true)
-                if (result == SnackbarResult.ActionPerformed) fuel.restoreLevel(before.first, before.second, before.third)
-            }
+            // The caller shows Undo: this sheet's own scope ends when it closes.
+            onSaved(before)
         }
         QuietButton(stringResource(R.string.cancel), onClick = onDismiss)
     }

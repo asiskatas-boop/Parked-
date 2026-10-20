@@ -363,4 +363,5 @@
     <string name="fuel_tank_hint">Needed for the range estimate</string>
     <string name="fuel_level_saved">Fuel level updated</string>
     <string name="see_all">All</string>
+    <string name="fuel_tank_error">Enter a tank size between 5 and 200 L, or leave it empty</string>
 </resources>

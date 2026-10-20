@@ -242,6 +242,12 @@ class FuelStore(context: Context) {
         editor.apply()
     }
 
+    /** Puts back a tank size exactly, including "not set" (0); used by Undo. */
+    fun restoreTankCapacity(v: Double) {
+        tankCapacity = if (v.isFinite() && v > 0) v else 0.0
+        prefs.edit().putFloat("tankCapacity", tankCapacity.toFloat()).apply()
+    }
+
     fun updateTankCapacity(v: Double) {
         if (!v.isFinite() || v <= 0) return
         tankCapacity = v

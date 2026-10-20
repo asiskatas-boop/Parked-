@@ -360,4 +360,5 @@
     <string name="fuel_tank_hint">Χρειάζεται για την εκτίμηση αυτονομίας</string>
     <string name="fuel_level_saved">Η στάθμη ενημερώθηκε</string>
     <string name="see_all">Όλα</string>
+    <string name="fuel_tank_error">Βάλε ρεζερβουάρ από 5 έως 200 L ή άφησέ το κενό</string>
 </resources>
