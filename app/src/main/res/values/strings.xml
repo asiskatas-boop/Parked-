@@ -349,4 +349,17 @@
     <string name="tile_timer">Timer</string>
     <string name="home_note_add">Add a note</string>
     <string name="home_note_hint">Row, colour, anything that helps</string>
+    <!-- 0.7 Car -->
+    <string name="refuel_history_short">History</string>
+    <string name="spend_litres">%1$s L of fuel</string>
+    <string name="fuel_level_title">Fuel level</string>
+    <string name="fuel_correct">Correct</string>
+    <string name="fuel_set">Set</string>
+    <string name="fuel_not_set">Not set yet</string>
+    <string name="fuel_range">~%1$s range</string>
+    <string name="fuel_range_unknown">Range needs your tank size and two full fill-ups</string>
+    <string name="fuel_sheet_subtitle">Drag to match your car\'s gauge. With a tank size and a fuel average, Parked! lowers it as you drive.</string>
+    <string name="fuel_tank_size">Tank size (L)</string>
+    <string name="fuel_tank_hint">Needed for the range estimate</string>
+    <string name="fuel_level_saved">Fuel level updated</string>
 </resources>

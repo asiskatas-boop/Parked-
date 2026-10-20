@@ -23,6 +23,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
@@ -83,6 +85,7 @@ fun FuelScreen(fuel: FuelStore, store: ParkingStore, openServiceRequest: Boolean
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> Unit) {
     val snackbar = LocalSnackbar.current
@@ -91,41 +94,67 @@ private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> U
     var showRefuel by remember { mutableStateOf(false) }
     var showOdo by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
+    var showLevel by remember { mutableStateOf(false) }
     val msgRefuel = stringResource(R.string.refuel_saved)
     val swatch = carColours.firstOrNull { it.first == fuel.accentName }?.second ?: carColours[4].second
+    val sorted = fuel.reminders.sortedByDescending { fuel.progress(it).status.ordinal }
+    val cdCar = stringResource(R.string.cd_car_preview, colourLabel(fuel.accentName))
 
-    Column(Modifier.fillMaxSize().background(Bg).verticalScroll(rememberScrollState())) {
-        // The car, in its colour. Tap to change the colour.
-        Box(
-            Modifier
-                .statusBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, top = 16.dp)
-                .fillMaxWidth()
-                .height(200.dp)
-                .background(Surface)
-                .clickable(role = Role.Button) { showAppearance = true },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Ph.carProfile,
-                contentDescription = stringResource(R.string.cd_car_preview, colourLabel(fuel.accentName)),
-                tint = visibleOnPanel(swatch),
-                modifier = Modifier.size(200.dp)
-            )
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Bg)
+            .verticalScroll(rememberScrollState())
+            .statusBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp)
+    ) {
+        // Name, then colour and odometer. The Bluetooth name (often a head
+        // unit like "SYNC") is the title only because the user has no other.
+        PageTitle(state?.deviceName ?: stringResource(R.string.home_car_title), modifier = Modifier.padding(horizontal = 4.dp))
+        Text(
+            listOfNotNull(colourLabel(fuel.accentName), fuel.currentOdo.takeIf { it > 0 }?.let { formatKm(it) }).joinToString(" · "),
+            fontSize = TypeScale.Label, lineHeight = 22.sp, color = TextMuted,
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 2.dp)
+        )
+        Spacer(Modifier.height(16.dp))
+
+        // The car, in its colour, on a studio floor. Tap to change the colour.
+        CarStudio(
+            visibleOnPanel(swatch),
+            modifier = Modifier
+                .clip(RadiusCard)
+                .clickable(role = Role.Button, onClickLabel = stringResource(R.string.car_appearance)) { showAppearance = true }
+                .semantics { contentDescription = cdCar },
+        )
+
+        // What needs attention, as chips: the two most urgent reminders.
+        if (sorted.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                sorted.take(2).forEach { r ->
+                    val st = fuel.progress(r).status
+                    StatusChip(
+                        "${r.name} · ${statusWord(st)}",
+                        if (st == ReminderStatus.Ok) ChipKind.Ok else ChipKind.Warn,
+                        icon = if (st == ReminderStatus.Ok) Ph.checkCircle else Ph.warning,
+                    )
+                }
+            }
         }
 
-        Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 24.dp)) {
-            PageTitle(stringResource(R.string.home_car_title))
-            // The Bluetooth name (often a head unit like "SYNC") goes underneath, not as the title.
-            state?.deviceName?.let {
-                Text(it, fontSize = TypeScale.Label, lineHeight = 22.sp, color = TextMuted, modifier = Modifier.padding(top = 4.dp))
-            }
-            Spacer(Modifier.height(24.dp))
+        // ---- Fuel level ----
+        Spacer(Modifier.height(16.dp))
+        FuelGaugeCard(fuel, onCorrect = { showLevel = true })
 
-            // ---- Service and ΚΤΕΟ first ----
-            SectionTitle(stringResource(R.string.car_section_service), modifier = Modifier.padding(bottom = 12.dp))
-            DividerRow()
-            val sorted = fuel.reminders.sortedByDescending { fuel.progress(it).status.ordinal }
+        // ---- Service and ΚΤΕΟ first ----
+        Spacer(Modifier.height(28.dp))
+        SectionTitle(
+            stringResource(R.string.car_section_service),
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+            action = if (sorted.isEmpty()) null else stringResource(if (sorted.size > 3) R.string.service_all else R.string.service_manage),
+            onAction = { onOpen(CarPage.Service) },
+        )
+        SettingsCard {
             if (sorted.isEmpty()) {
                 ActionRow(
                     icon = Ph.wrench,
@@ -134,84 +163,71 @@ private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> U
                     onClick = { onOpen(CarPage.Service) }
                 )
             } else {
-                sorted.take(3).forEach { r ->
-                    val (statusText, statusColor) = reminderStatus(fuel, r)
+                sorted.take(3).forEachIndexed { i, r ->
+                    if (i > 0) DividerRow()
+                    val (statusText, _) = reminderStatus(fuel, r)
+                    val st = fuel.progress(r).status
                     ActionRow(
-                        icon = when (fuel.progress(r).status) {
+                        icon = when (st) {
                             ReminderStatus.Due -> Ph.warning
                             ReminderStatus.Soon -> Ph.clockCounter
-                            ReminderStatus.Ok -> Ph.checkCircle
+                            ReminderStatus.Ok -> Ph.wrench
                         },
+                        iconTint = if (st == ReminderStatus.Ok) Green else Warn,
                         title = r.name,
-                        subtitle = statusText,
+                        subtitle = statusText.substringAfter(" · "),
                         onClick = { onOpen(CarPage.Service) },
-                        trailing = { RowChevron() },
-                        iconTint = statusColor,
+                        trailing = {
+                            StatusChip(statusWord(st), when (st) {
+                                ReminderStatus.Due -> ChipKind.Warn
+                                ReminderStatus.Soon -> ChipKind.Warn
+                                ReminderStatus.Ok -> ChipKind.Ok
+                            })
+                        },
                     )
                 }
-                LinkButton(
-                    stringResource(if (sorted.size > 3) R.string.service_all else R.string.service_manage),
-                    modifier = Modifier.padding(top = 4.dp),
-                    onClick = { onOpen(CarPage.Service) }
-                )
             }
+        }
 
-            // ---- Refuels ----
-            Spacer(Modifier.height(32.dp))
-            SectionTitle(stringResource(R.string.refuels), modifier = Modifier.padding(bottom = 12.dp))
-            PrimaryButton(text = stringResource(R.string.refuel), onClick = { showRefuel = true })
-            Spacer(Modifier.height(16.dp))
-            val average = fuel.averageL100km()
-            val thisMonth = remember(fuel.refuels) { fuel.monthlySpend(1).firstOrNull() }
+        // ---- Refuels: one big number, the bars, the action ----
+        Spacer(Modifier.height(28.dp))
+        SectionTitle(
+            stringResource(R.string.refuels),
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+            action = if (fuel.refuels.isEmpty()) null else stringResource(R.string.refuel_history_short),
+            onAction = { onOpen(CarPage.Refuels) },
+        )
+        ParkedCard {
+            Column(Modifier.padding(16.dp)) {
+                SpendingBlock(fuel)
+                Spacer(Modifier.height(16.dp))
+                PrimaryButton(text = stringResource(R.string.refuel), icon = Ph.gasPump, onClick = { showRefuel = true })
+            }
             if (fuel.refuels.isNotEmpty()) {
                 DividerRow()
-                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                    FuelStat(
-                        stringResource(R.string.car_this_month),
-                        formatMoney(fuel.currency, thisMonth?.cost ?: 0.0),
-                        Modifier.weight(1f).padding(vertical = 16.dp)
-                    )
-                    VerticalDivider(color = Border)
-                    FuelStat(
-                        stringResource(R.string.fuel_average),
-                        average?.let { "${formatDecimal(it, 1)} L/100 km" } ?: "–",
-                        Modifier.weight(1f).padding(start = 16.dp, top = 16.dp, bottom = 16.dp)
-                    )
-                }
+                val latest = fuel.refuels.first()
+                ActionRow(
+                    icon = Ph.clockCounter,
+                    title = stringResource(R.string.refuel_history),
+                    subtitle = stringResource(
+                        R.string.refuel_history_summary,
+                        shortDate(latest.date), formatDecimal(latest.litres, 1), fuel.refuels.size
+                    ),
+                    onClick = { onOpen(CarPage.Refuels) }
+                )
             }
-            if (average == null) {
-                // Information only, so plain text, not something that looks tappable.
-                Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.Top) {
-                    Icon(Ph.info, contentDescription = null, tint = TextMuted, modifier = Modifier.padding(top = 2.dp).size(20.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Text(stringResource(R.string.fuel_insights_body), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted)
-                }
-            }
+        }
+
+        // ---- The car itself ----
+        Spacer(Modifier.height(28.dp))
+        SettingsCard {
+            TextRow(
+                stringResource(R.string.odometer),
+                fuel.currentOdo.takeIf { it > 0 }?.let { formatKm(it) } ?: stringResource(R.string.not_set),
+                icon = Ph.road,
+            ) { showOdo = true }
             DividerRow()
-            val latest = fuel.refuels.firstOrNull()
-            ActionRow(
-                icon = Ph.clockCounter,
-                title = stringResource(R.string.refuel_history),
-                subtitle = if (latest == null) stringResource(R.string.refuel_history_empty)
-                else stringResource(
-                    R.string.refuel_history_summary,
-                    shortDate(latest.date), formatDecimal(latest.litres, 1), fuel.refuels.size
-                ),
-                onClick = { onOpen(CarPage.Refuels) }
-            )
-
-            SpendingCard(fuel)
-
-            // ---- The car itself ----
-            Spacer(Modifier.height(32.dp))
-            SettingsCard {
-                TextRow(
-                    stringResource(R.string.odometer),
-                    fuel.currentOdo.takeIf { it > 0 }?.let { formatKm(it) } ?: stringResource(R.string.not_set)
-                ) { showOdo = true }
-                DividerRow()
-                TextRow(stringResource(R.string.car_appearance), colourLabel(fuel.accentName)) { showAppearance = true }
-            }
+            TextRow(stringResource(R.string.car_appearance), colourLabel(fuel.accentName), icon = Ph.car) { showAppearance = true }
         }
     }
 
@@ -225,8 +241,133 @@ private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> U
             }
         )
     }
+    if (showLevel) FuelLevelSheet(fuel = fuel, onDismiss = { showLevel = false })
     if (showOdo) OdometerSheet(fuel = fuel, onDismiss = { showOdo = false })
     if (showAppearance) AppearanceDialog(fuel = fuel, onDismiss = { showAppearance = false })
+}
+
+@Composable
+private fun statusWord(st: ReminderStatus): String = stringResource(
+    when (st) {
+        ReminderStatus.Due -> R.string.service_status_due
+        ReminderStatus.Soon -> R.string.service_status_soon
+        ReminderStatus.Ok -> R.string.service_status_ok
+    }
+)
+
+/**
+ * The fuel gauge, back from 0.4: the estimated level as one big number, the
+ * range it gives, a bar with E-to-F marks, and "Correct" to match the car.
+ */
+@Composable
+private fun FuelGaugeCard(fuel: FuelStore, onCorrect: () -> Unit) {
+    val set = fuel.levelUpdatedAt > 0L
+    val pct = fuel.estimateLevelPct().coerceIn(0.0, 100.0)
+    val range = fuel.estimatedRangeKm()?.let { it * pct / 100.0 }
+    val low = set && pct <= 15.0
+    val shown by androidx.compose.animation.core.animateFloatAsState((if (set) pct else 0.0).toFloat() / 100f, Motion.spatial(), label = "gauge")
+    ParkedCard {
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Ph.gasPump, contentDescription = null, tint = if (low) Warn else Green, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Overline(stringResource(R.string.fuel_level_title), modifier = Modifier.weight(1f))
+                LinkButton(stringResource(if (set) R.string.fuel_correct else R.string.fuel_set), onClick = onCorrect)
+            }
+            Row(Modifier.padding(end = 8.dp), verticalAlignment = Alignment.Bottom) {
+                BigNumber(if (set) "${pct.roundToInt()}%" else "–", size = 44.sp, color = if (low) Warn else TextPrimary)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    when {
+                        !set -> stringResource(R.string.fuel_not_set)
+                        range != null -> stringResource(R.string.fuel_range, formatKm(range))
+                        else -> stringResource(R.string.fuel_range_unknown)
+                    },
+                    fontSize = TypeScale.Supporting, lineHeight = 20.sp, color = TextMuted,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            val levelText = if (set) "${pct.roundToInt()}%" else stringResource(R.string.fuel_not_set)
+            Canvas(
+                Modifier
+                    .padding(end = 8.dp)
+                    .fillMaxWidth()
+                    .height(10.dp)
+                    .semantics { contentDescription = levelText }
+            ) {
+                val r = CornerRadius(size.height / 2)
+                drawRoundRect(SurfaceSunk, cornerRadius = r)
+                if (shown > 0f) drawRoundRect(if (low) Warn else Green, size = Size(size.width * shown, size.height), cornerRadius = r)
+                for (q in 1..3) {
+                    val x = size.width * q / 4f
+                    drawLine(Surface, Offset(x, 0f), Offset(x, size.height), 2.dp.toPx())
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.padding(end = 8.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                listOf("E", "¼", "½", "¾", "F").forEach {
+                    Text(it, fontSize = TypeScale.Caption, lineHeight = 16.sp, color = TextFaint, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+/** Match the car's gauge by dragging; the tank size makes the range possible. */
+@Composable
+private fun FuelLevelSheet(fuel: FuelStore, onDismiss: () -> Unit) {
+    val snackbar = LocalSnackbar.current
+    val scope = rememberCoroutineScope()
+    val view = androidx.compose.ui.platform.LocalView.current
+    var level by remember { mutableFloatStateOf(fuel.estimateLevelPct().toFloat().coerceIn(0f, 100f).let { (it / 5f).roundToInt() * 5f }) }
+    var tank by remember { mutableStateOf(fuel.tankCapacity.takeIf { it > 0 }?.roundToInt()?.toString() ?: "") }
+    val msgSaved = stringResource(R.string.fuel_level_saved)
+    val msgUndo = stringResource(R.string.undo)
+    ParkedSheet(title = stringResource(R.string.fuel_level_title), subtitle = stringResource(R.string.fuel_sheet_subtitle), onDismiss = onDismiss) {
+        BigNumber("${level.roundToInt()}%", size = 44.sp)
+        Slider(
+            value = level,
+            onValueChange = {
+                val snapped = (it / 5f).roundToInt() * 5f
+                if (snapped != level) Haptics.tick(view)
+                level = snapped
+            },
+            valueRange = 0f..100f,
+            steps = 19,
+            colors = SliderDefaults.colors(
+                thumbColor = Green,
+                activeTrackColor = Green,
+                inactiveTrackColor = SurfaceSunk,
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent,
+            ),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            listOf("E", "¼", "½", "¾", "F").forEach {
+                Text(it, fontSize = TypeScale.Caption, color = TextMuted, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        NumberField(
+            tank, { tank = it }, stringResource(R.string.fuel_tank_size), decimal = false,
+            supporting = stringResource(R.string.fuel_tank_hint)
+        )
+        Spacer(Modifier.height(16.dp))
+        PrimaryButton(stringResource(R.string.save)) {
+            val before = Triple(fuel.levelPct, fuel.odoForLevel, fuel.levelUpdatedAt)
+            parseNumber(tank)?.takeIf { it in 5.0..200.0 }?.let { fuel.updateTankCapacity(it) }
+            fuel.setLevel(level.toDouble())
+            Haptics.confirm(view)
+            onDismiss()
+            scope.launch {
+                snackbar.currentSnackbarData?.dismiss()
+                val result = snackbar.showSnackbar(msgSaved, actionLabel = msgUndo, withDismissAction = true)
+                if (result == SnackbarResult.ActionPerformed) fuel.restoreLevel(before.first, before.second, before.third)
+            }
+        }
+        QuietButton(stringResource(R.string.cancel), onClick = onDismiss)
+    }
 }
 
 /** A reminder's status in words plus its colour; words first, never colour alone. */
@@ -266,29 +407,43 @@ private fun FuelStat(label: String, value: String, modifier: Modifier = Modifier
 // Monthly spending
 // ============================================================
 
+/** This month's spend as the big number, the average beside it, then six months of bars. */
 @Composable
-private fun SpendingCard(fuel: FuelStore) {
-    if (fuel.refuels.isEmpty()) return
+private fun SpendingBlock(fuel: FuelStore) {
     val months = remember(fuel.refuels) { fuel.monthlySpend(6).reversed() } // oldest → newest
-    if (months.all { it.cost <= 0.0 }) return
+    if (fuel.refuels.isEmpty() || months.isEmpty() || months.all { it.cost <= 0.0 }) {
+        // Information only, so plain text, not something that looks tappable.
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(Ph.info, contentDescription = null, tint = TextMuted, modifier = Modifier.padding(top = 2.dp).size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(stringResource(R.string.fuel_insights_body), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted)
+        }
+        return
+    }
     var selected by remember(months) { mutableIntStateOf(months.lastIndex) }
     val current = months[selected]
-
-    Column(Modifier.fillMaxWidth().padding(top = 32.dp)) {
-        SectionTitle(stringResource(R.string.spend_title))
-        Spacer(Modifier.height(4.dp))
-        Text(
-            stringResource(
-                R.string.spend_month_summary,
-                monthNameLong(current.year, current.month),
-                formatMoney(fuel.currency, current.cost),
-                formatDecimal(current.litres, 0)
-            ),
-            fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted
-        )
-        Spacer(Modifier.height(16.dp))
-        SpendBars(months = months, selected = selected, currency = fuel.currency, onSelect = { selected = it })
+    val average = fuel.averageL100km()
+    Overline(monthNameLong(current.year, current.month))
+    Row(verticalAlignment = Alignment.Bottom) {
+        androidx.compose.animation.AnimatedContent(
+            targetState = formatMoney(fuel.currency, current.cost),
+            transitionSpec = { androidx.compose.animation.fadeIn(Motion.effects()).togetherWith(androidx.compose.animation.fadeOut(Motion.effects())) },
+            label = "spend",
+            modifier = Modifier.weight(1f),
+        ) { BigNumber(it, size = 40.sp) }
+        if (average != null) {
+            Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(bottom = 6.dp)) {
+                Text("${formatDecimal(average, 1)} L/100 km", fontSize = TypeScale.Label, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                Text(stringResource(R.string.fuel_average), fontSize = TypeScale.Caption, color = TextMuted)
+            }
+        }
     }
+    Text(
+        stringResource(R.string.spend_litres, formatDecimal(current.litres, 0)),
+        fontSize = TypeScale.Caption, lineHeight = 18.sp, color = TextMuted
+    )
+    Spacer(Modifier.height(14.dp))
+    SpendBars(months = months, selected = selected, currency = fuel.currency, onSelect = { selected = it })
 }
 
 /**
@@ -302,7 +457,7 @@ private fun SpendBars(months: List<MonthlySpend>, selected: Int, currency: Strin
     Row(
         Modifier
             .fillMaxWidth()
-            .height(140.dp)
+            .height(120.dp)
             .semantics(mergeDescendants = false) { contentDescription = summary },
         verticalAlignment = Alignment.Bottom
     ) {
@@ -322,10 +477,14 @@ private fun SpendBars(months: List<MonthlySpend>, selected: Int, currency: Strin
                 )
                 Spacer(Modifier.height(4.dp))
                 val fraction = (m.cost / max).toFloat()
-                Canvas(Modifier.width(20.dp).weight(1f)) {
-                    val h = size.height * fraction
-                    if (h > 0f) drawRect(if (isSelected) Green else SurfaceSunk, Offset(0f, size.height - h), Size(size.width, h))
-                    drawLine(Border, Offset(-size.width, size.height), Offset(size.width * 2, size.height), 1.dp.toPx())
+                val grown by androidx.compose.animation.core.animateFloatAsState(fraction, Motion.spatial(), label = "bar")
+                Canvas(Modifier.width(22.dp).weight(1f)) {
+                    val h = (size.height * grown).coerceAtLeast(if (m.cost > 0) 4.dp.toPx() else 0f)
+                    if (h > 0f) drawRoundRect(
+                        if (isSelected) Green else SurfaceSunk,
+                        Offset(0f, size.height - h), Size(size.width, h),
+                        cornerRadius = CornerRadius(4.dp.toPx())
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(monthName(m.year, m.month), fontSize = TypeScale.Caption, color = if (isSelected) TextPrimary else TextMuted)

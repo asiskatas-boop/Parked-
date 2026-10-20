@@ -346,4 +346,17 @@
     <string name="tile_timer">Χρόνος</string>
     <string name="home_note_add">Πρόσθεσε σημείωση</string>
     <string name="home_note_hint">Σειρά, χρώμα, ό,τι βοηθά</string>
+    <!-- 0.7 Car -->
+    <string name="refuel_history_short">Ιστορικό</string>
+    <string name="spend_litres">%1$s L καυσίμου</string>
+    <string name="fuel_level_title">Στάθμη καυσίμου</string>
+    <string name="fuel_correct">Διόρθωση</string>
+    <string name="fuel_set">Ορισμός</string>
+    <string name="fuel_not_set">Δεν έχει οριστεί</string>
+    <string name="fuel_range">~%1$s αυτονομία</string>
+    <string name="fuel_range_unknown">Για αυτονομία χρειάζεται ρεζερβουάρ και δύο γεμίσματα</string>
+    <string name="fuel_sheet_subtitle">Σύρε για να ταιριάζει με τον δείκτη του αυτοκινήτου. Με ρεζερβουάρ και μέση κατανάλωση, το Parked! τη μειώνει όσο οδηγείς.</string>
+    <string name="fuel_tank_size">Ρεζερβουάρ (L)</string>
+    <string name="fuel_tank_hint">Χρειάζεται για την εκτίμηση αυτονομίας</string>
+    <string name="fuel_level_saved">Η στάθμη ενημερώθηκε</string>
 </resources>
