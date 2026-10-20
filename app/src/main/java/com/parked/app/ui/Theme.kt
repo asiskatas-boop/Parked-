@@ -4,7 +4,7 @@ package com.parked.app.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.ExperimentalTextApi
@@ -13,46 +13,80 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.parked.app.R
 
 /*
- * 0.4 design: dark only, one accent. Contrast on Ink (#000000):
- * Paper 21:1, Muted 7.4:1, Accent 7.0:1, Danger 7.6:1, Warn 12:1.
- * Black text on Accent (the active switch track) is 3:1; it carries no text.
+ * 0.7 design: warm, flat and light (based on the MarketNest design system,
+ * with its terracotta replaced by Parked green), with Rivian's status-first
+ * layout and Revolut's one-big-number screens.
+ *
+ * Contrast on Bg (#FFFBF5): Text 16.6:1, TextMuted 7.3:1, Green 5.3:1,
+ * white on Green 5.5:1, Danger 6.0:1, Warn 7.1:1.
  */
 
-/** Page background. */
-val Ink = Color(0xFF000000)
+/** Page background: warm cream. */
+val Bg = Color(0xFFFFFBF5)
 
-/** Raised panels: the car panel, sheets, dialogs, the tab bar. */
-val Panel = Color(0xFF1A1A1A)
+/** Cards, sheets, the tab bar. */
+val Surface = Color(0xFFFFFFFF)
 
-/** Input fields and pressed rows. */
-val Field = Color(0xFF262626)
+/** Unselected chips, empty bar tracks. */
+val SurfaceSunk = Color(0xFFF3EEE6)
 
-/** Hairline dividers and field outlines. */
-val Line = Color(0xFF333333)
+/** 1 px card and row borders. */
+val Border = Color(0xFFE7E5E4)
 
-/** Primary text and the primary button. */
-val Paper = Color(0xFFFFFFFF)
+/** Field outlines and chip borders. */
+val BorderStrong = Color(0xFFD6D3D1)
 
-/** Secondary text. 7.4:1 on Ink, 6.2:1 on Panel. */
-val Muted = Color(0xFF9A9A9A)
+/** Primary text. */
+val TextPrimary = Color(0xFF1C1917)
 
-/** The single accent: arrows, active tab, distance, progress, switches. */
-val Accent = Color(0xFFFF7500)
+/** Secondary text. */
+val TextMuted = Color(0xFF57534E)
+
+/** Placeholders, disabled text, chevrons. */
+val TextFaint = Color(0xFFA8A29E)
+
+/** Parked green: every action, the active tab, the car pin. */
+val Green = Color(0xFF3F7A22)
+
+/** Pressed state of green buttons. */
+val GreenDark = Color(0xFF2F5E19)
+
+/** Tinted background for "on" and "saved" states. */
+val GreenSoft = Color(0xFFEEF5E8)
+
+/** Text and icons on Green. */
+val OnGreen = Color(0xFFFFFFFF)
+
+/** Forest green for small tags. */
+val Forest = Color(0xFF365314)
+
+/** Warm accents: the studio floor under the car, decorative fills. */
+val Sand = Color(0xFFD4A373)
+val SandSoft = Color(0xFFF6EBDD)
 
 /** Errors and destructive actions. */
-val Danger = Color(0xFFFF6B5E)
+val Danger = Color(0xFFB91C1C)
 
-/** Warnings such as a due service. */
-val Warn = Color(0xFFFFC14D)
+/** Warnings such as a due service: text, and its chip background. */
+val Warn = Color(0xFF92400E)
+val WarnBg = Color(0xFFFEF3C7)
+
+/** "OK" status: text and chip background. */
+val Ok = Color(0xFF166534)
+val OkBg = Color(0xFFDCFCE7)
+
+/** Corner radii: 4 for buttons, chips and fields; 12 for cards and sheets. */
+val RadiusSmall = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+val RadiusCard = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
 
 /**
- * Type scale. Every text size comes from here. Body copy is 15-17 sp with a
- * line height of at least 1.5; headings are large and light, as in the
- * reference.
+ * Type scale. Headings use Literata (a warm serif with full Greek), body text
+ * uses Open Sans. Body copy is 15-17 sp with a line height of about 1.5.
  */
 object TypeScale {
     val Caption = 13.sp
@@ -60,79 +94,83 @@ object TypeScale {
     val Label = 15.sp
     val Body = 16.sp
     val Emphasis = 17.sp
-    val Section = 20.sp
-    val SheetTitle = 26.sp
-    val PageTitle = 34.sp
+    val Section = 21.sp
+    val SheetTitle = 24.sp
+    val PageTitle = 32.sp
     val Hero = 40.sp
-    val BigNumber = 56.sp
-    val Display = 60.sp
+    val BigNumber = 52.sp
+    val Display = 44.sp
 }
 
-/** Sofia Sans, one variable file with a 1-1000 weight axis and full Greek. */
-private fun sofia(weight: FontWeight) = Font(
-    R.font.sofia_sans,
-    weight,
+private fun literata(weight: FontWeight) = Font(
+    R.font.literata, weight,
     variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
 )
 
-val SofiaSans = FontFamily(
-    sofia(FontWeight.Light),
-    sofia(FontWeight.Normal),
-    sofia(FontWeight.Medium),
-    sofia(FontWeight.SemiBold),
-    sofia(FontWeight.Bold),
+private fun openSans(weight: FontWeight) = Font(
+    R.font.open_sans, weight,
+    variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
 )
 
-private fun sofiaTypography(): Typography {
+/** Headings and big numbers. */
+val HeadingFont = FontFamily(literata(FontWeight.Normal), literata(FontWeight.Medium), literata(FontWeight.SemiBold), literata(FontWeight.Bold))
+
+/** Everything else. */
+val BodyFont = FontFamily(openSans(FontWeight.Normal), openSans(FontWeight.Medium), openSans(FontWeight.SemiBold), openSans(FontWeight.Bold))
+
+private fun parkedTypography(): Typography {
     val base = Typography()
-    fun TextStyle.s() = copy(fontFamily = SofiaSans)
+    fun TextStyle.b() = copy(fontFamily = BodyFont)
+    fun TextStyle.h() = copy(fontFamily = HeadingFont)
     return base.copy(
-        displayLarge = base.displayLarge.s(),
-        displayMedium = base.displayMedium.s(),
-        displaySmall = base.displaySmall.s(),
-        headlineLarge = base.headlineLarge.s(),
-        headlineMedium = base.headlineMedium.s(),
-        headlineSmall = base.headlineSmall.s(),
-        titleLarge = base.titleLarge.s(),
-        titleMedium = base.titleMedium.s(),
-        titleSmall = base.titleSmall.s(),
-        bodyLarge = base.bodyLarge.s(),
-        bodyMedium = base.bodyMedium.s(),
-        bodySmall = base.bodySmall.s(),
-        labelLarge = base.labelLarge.s(),
-        labelMedium = base.labelMedium.s(),
-        labelSmall = base.labelSmall.s(),
+        displayLarge = base.displayLarge.h(),
+        displayMedium = base.displayMedium.h(),
+        displaySmall = base.displaySmall.h(),
+        headlineLarge = base.headlineLarge.h(),
+        headlineMedium = base.headlineMedium.h(),
+        headlineSmall = base.headlineSmall.h(),
+        titleLarge = base.titleLarge.b(),
+        titleMedium = base.titleMedium.b(),
+        titleSmall = base.titleSmall.b(),
+        bodyLarge = base.bodyLarge.b(),
+        bodyMedium = base.bodyMedium.b(),
+        bodySmall = base.bodySmall.b(),
+        labelLarge = base.labelLarge.b(),
+        labelMedium = base.labelMedium.b(),
+        labelSmall = base.labelSmall.b(),
     )
 }
 
 @Composable
 fun ParkedTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = Accent,
-            onPrimary = Ink,
-            secondary = Paper,
-            onSecondary = Ink,
-            background = Ink,
-            onBackground = Paper,
-            surface = Ink,
-            onSurface = Paper,
-            surfaceVariant = Field,
-            onSurfaceVariant = Muted,
-            surfaceContainerLowest = Ink,
-            surfaceContainerLow = Panel,
-            surfaceContainer = Panel,
-            surfaceContainerHigh = Panel,
-            surfaceContainerHighest = Field,
-            outline = Line,
-            outlineVariant = Line,
-            inverseSurface = Paper,
-            inverseOnSurface = Ink,
-            inversePrimary = Accent,
+        colorScheme = lightColorScheme(
+            primary = Green,
+            onPrimary = OnGreen,
+            primaryContainer = GreenSoft,
+            onPrimaryContainer = Forest,
+            secondary = Forest,
+            onSecondary = OnGreen,
+            background = Bg,
+            onBackground = TextPrimary,
+            surface = Surface,
+            onSurface = TextPrimary,
+            surfaceVariant = SurfaceSunk,
+            onSurfaceVariant = TextMuted,
+            surfaceContainerLowest = Surface,
+            surfaceContainerLow = Surface,
+            surfaceContainer = Surface,
+            surfaceContainerHigh = Surface,
+            surfaceContainerHighest = SurfaceSunk,
+            outline = BorderStrong,
+            outlineVariant = Border,
+            inverseSurface = TextPrimary,
+            inverseOnSurface = Bg,
+            inversePrimary = GreenSoft,
             error = Danger,
-            onError = Ink,
+            onError = OnGreen,
         ),
-        typography = sofiaTypography(),
+        typography = parkedTypography(),
         content = content
     )
 }

@@ -94,7 +94,7 @@ private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> U
     val msgRefuel = stringResource(R.string.refuel_saved)
     val swatch = carColours.firstOrNull { it.first == fuel.accentName }?.second ?: carColours[4].second
 
-    Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxSize().background(Bg).verticalScroll(rememberScrollState())) {
         // The car, in its colour. Tap to change the colour.
         Box(
             Modifier
@@ -102,7 +102,7 @@ private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> U
                 .padding(start = 16.dp, end = 16.dp, top = 16.dp)
                 .fillMaxWidth()
                 .height(200.dp)
-                .background(Panel)
+                .background(Surface)
                 .clickable(role = Role.Button) { showAppearance = true },
             contentAlignment = Alignment.Center
         ) {
@@ -118,7 +118,7 @@ private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> U
             PageTitle(stringResource(R.string.home_car_title))
             // The Bluetooth name (often a head unit like "SYNC") goes underneath, not as the title.
             state?.deviceName?.let {
-                Text(it, fontSize = TypeScale.Label, lineHeight = 22.sp, color = Muted, modifier = Modifier.padding(top = 4.dp))
+                Text(it, fontSize = TypeScale.Label, lineHeight = 22.sp, color = TextMuted, modifier = Modifier.padding(top = 4.dp))
             }
             Spacer(Modifier.height(24.dp))
 
@@ -145,7 +145,7 @@ private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> U
                         title = r.name,
                         subtitle = statusText,
                         onClick = { onOpen(CarPage.Service) },
-                        trailing = { AccentArrow() },
+                        trailing = { RowChevron() },
                         iconTint = statusColor,
                     )
                 }
@@ -171,7 +171,7 @@ private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> U
                         formatMoney(fuel.currency, thisMonth?.cost ?: 0.0),
                         Modifier.weight(1f).padding(vertical = 16.dp)
                     )
-                    VerticalDivider(color = Line)
+                    VerticalDivider(color = Border)
                     FuelStat(
                         stringResource(R.string.fuel_average),
                         average?.let { "${formatDecimal(it, 1)} L/100 km" } ?: "–",
@@ -182,9 +182,9 @@ private fun CarMain(fuel: FuelStore, store: ParkingStore, onOpen: (CarPage) -> U
             if (average == null) {
                 // Information only, so plain text, not something that looks tappable.
                 Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.Top) {
-                    Icon(Ph.info, contentDescription = null, tint = Muted, modifier = Modifier.padding(top = 2.dp).size(20.dp))
+                    Icon(Ph.info, contentDescription = null, tint = TextMuted, modifier = Modifier.padding(top = 2.dp).size(20.dp))
                     Spacer(Modifier.width(12.dp))
-                    Text(stringResource(R.string.fuel_insights_body), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
+                    Text(stringResource(R.string.fuel_insights_body), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted)
                 }
             }
             DividerRow()
@@ -248,7 +248,7 @@ private fun reminderStatus(fuel: FuelStore, reminder: ServiceReminder): Pair<Str
     val color = when (p.status) {
         ReminderStatus.Due -> Danger
         ReminderStatus.Soon -> Warn
-        ReminderStatus.Ok -> Muted
+        ReminderStatus.Ok -> TextMuted
     }
     return "$status · $detail" to color
 }
@@ -256,9 +256,9 @@ private fun reminderStatus(fuel: FuelStore, reminder: ServiceReminder): Pair<Str
 @Composable
 private fun FuelStat(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier) {
-        Text(label, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
+        Text(label, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted)
         Spacer(Modifier.height(4.dp))
-        Text(value, fontSize = TypeScale.Section, lineHeight = 26.sp, color = Paper)
+        Text(value, fontSize = TypeScale.Section, lineHeight = 26.sp, color = TextPrimary)
     }
 }
 
@@ -284,7 +284,7 @@ private fun SpendingCard(fuel: FuelStore) {
                 formatMoney(fuel.currency, current.cost),
                 formatDecimal(current.litres, 0)
             ),
-            fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted
+            fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted
         )
         Spacer(Modifier.height(16.dp))
         SpendBars(months = months, selected = selected, currency = fuel.currency, onSelect = { selected = it })
@@ -318,17 +318,17 @@ private fun SpendBars(months: List<MonthlySpend>, selected: Int, currency: Strin
             ) {
                 Text(
                     if (isSelected && m.cost > 0) formatMoney(currency, m.cost) else "",
-                    fontSize = TypeScale.Caption, color = Paper, maxLines = 1
+                    fontSize = TypeScale.Caption, color = TextPrimary, maxLines = 1
                 )
                 Spacer(Modifier.height(4.dp))
                 val fraction = (m.cost / max).toFloat()
                 Canvas(Modifier.width(20.dp).weight(1f)) {
                     val h = size.height * fraction
-                    if (h > 0f) drawRect(if (isSelected) Accent else Field, Offset(0f, size.height - h), Size(size.width, h))
-                    drawLine(Line, Offset(-size.width, size.height), Offset(size.width * 2, size.height), 1.dp.toPx())
+                    if (h > 0f) drawRect(if (isSelected) Green else SurfaceSunk, Offset(0f, size.height - h), Size(size.width, h))
+                    drawLine(Border, Offset(-size.width, size.height), Offset(size.width * 2, size.height), 1.dp.toPx())
                 }
                 Spacer(Modifier.height(8.dp))
-                Text(monthName(m.year, m.month), fontSize = TypeScale.Caption, color = if (isSelected) Paper else Muted)
+                Text(monthName(m.year, m.month), fontSize = TypeScale.Caption, color = if (isSelected) TextPrimary else TextMuted)
             }
         }
     }
@@ -349,7 +349,7 @@ private fun RefuelHistoryPage(fuel: FuelStore, onBack: () -> Unit) {
         actions = {
             if (fuel.refuels.isNotEmpty()) {
                 IconButton(onClick = { exportCsv(context, fuel) }) {
-                    Icon(Ph.export, contentDescription = stringResource(R.string.export_csv), tint = Paper, modifier = Modifier.size(24.dp))
+                    Icon(Ph.export, contentDescription = stringResource(R.string.export_csv), tint = TextPrimary, modifier = Modifier.size(24.dp))
                 }
             }
         }
@@ -381,19 +381,19 @@ private fun RefuelRow(entry: Refuel, currency: String, index: Int, onDelete: () 
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(shortDateYear(entry.date), fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper)
+            Text(shortDateYear(entry.date), fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = TextPrimary)
             val details = listOfNotNull(
                 entry.odometer.takeIf { it > 0 }?.let { formatKm(it) },
                 stringResource(if (entry.tankFull) R.string.refuel_full else R.string.refuel_partial)
             ).joinToString(" · ")
-            Text(details, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
+            Text(details, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted)
         }
         Column(horizontalAlignment = Alignment.End) {
-            Text("${formatDecimal(entry.litres, 1)} L", fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper)
-            Text(formatMoney(currency, entry.cost), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
+            Text("${formatDecimal(entry.litres, 1)} L", fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = TextPrimary)
+            Text(formatMoney(currency, entry.cost), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted)
         }
         IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
-            Icon(Ph.trash, contentDescription = stringResource(R.string.delete_refuel_title), tint = Muted, modifier = Modifier.size(24.dp))
+            Icon(Ph.trash, contentDescription = stringResource(R.string.delete_refuel_title), tint = TextMuted, modifier = Modifier.size(24.dp))
         }
     }
     DividerRow(Modifier.padding(horizontal = 24.dp))
@@ -479,8 +479,8 @@ private fun RefuelSheet(fuel: FuelStore, onDismiss: () -> Unit, onSaved: () -> U
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                Text(stringResource(R.string.refuel_full_tank), fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper)
-                Text(stringResource(R.string.refuel_full_tank_hint), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
+                Text(stringResource(R.string.refuel_full_tank), fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = TextPrimary)
+                Text(stringResource(R.string.refuel_full_tank_hint), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted)
             }
             ParkedSwitch(checked = fullTank, onCheckedChange = null)
         }
@@ -527,7 +527,7 @@ private fun ServiceRemindersPage(fuel: FuelStore, onBack: () -> Unit) {
                 item {
                     Text(
                         stringResource(R.string.service_needs_odometer),
-                        fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted,
+                        fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted,
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
                     )
                 }
@@ -592,7 +592,7 @@ private fun ReminderRow(fuel: FuelStore, reminder: ServiceReminder, onEdit: () -
     val statusColor = when (p.status) {
         ReminderStatus.Due -> Danger
         ReminderStatus.Soon -> Warn
-        ReminderStatus.Ok -> Muted
+        ReminderStatus.Ok -> TextMuted
     }
     Box(Modifier.clickable(role = Role.Button, onClick = onEdit)) {
         Row(
@@ -600,7 +600,7 @@ private fun ReminderRow(fuel: FuelStore, reminder: ServiceReminder, onEdit: () -
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text(reminder.name, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper)
+                Text(reminder.name, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = TextPrimary)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // Status is spelled out, never colour alone.
                     Icon(
@@ -614,10 +614,10 @@ private fun ReminderRow(fuel: FuelStore, reminder: ServiceReminder, onEdit: () -
                     Spacer(Modifier.width(6.dp))
                     Text(statusText, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = statusColor)
                 }
-                Text(detail, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
+                Text(detail, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted)
                 Text(
                     stringResource(R.string.service_last_done, shortDateYear(reminder.lastDoneAt)),
-                    fontSize = TypeScale.Caption, lineHeight = 20.sp, color = Muted
+                    fontSize = TypeScale.Caption, lineHeight = 20.sp, color = TextMuted
                 )
             }
             if (p.status != ReminderStatus.Ok) {
@@ -670,17 +670,17 @@ private fun ReminderSheet(
                             error = null
                         },
                         label = { Text(label, fontSize = TypeScale.Label) },
-                        shape = androidx.compose.ui.graphics.RectangleShape,
+                        shape = RadiusSmall,
                         modifier = Modifier.heightIn(min = 48.dp),
                         colors = FilterChipDefaults.filterChipColors(
                             containerColor = Color.Transparent,
-                            labelColor = Paper,
-                            selectedContainerColor = Accent,
-                            selectedLabelColor = Ink,
+                            labelColor = TextPrimary,
+                            selectedContainerColor = Green,
+                            selectedLabelColor = OnGreen,
                         ),
                         border = FilterChipDefaults.filterChipBorder(
                             enabled = true, selected = name == label,
-                            borderColor = Line, selectedBorderColor = Accent,
+                            borderColor = Border, selectedBorderColor = Green,
                         ),
                     )
                 }
@@ -692,9 +692,9 @@ private fun ReminderSheet(
             onValueChange = { name = it.take(40); error = null },
             label = { Text(stringResource(R.string.service_name)) },
             singleLine = true,
-            shape = androidx.compose.ui.graphics.RectangleShape,
+            shape = RadiusSmall,
             colors = parkedFieldColors(),
-            textStyle = androidx.compose.ui.text.TextStyle(fontFamily = SofiaSans, fontSize = TypeScale.Emphasis),
+            textStyle = androidx.compose.ui.text.TextStyle(fontFamily = BodyFont, fontSize = TypeScale.Emphasis),
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(12.dp))

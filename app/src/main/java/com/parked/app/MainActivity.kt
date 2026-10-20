@@ -26,11 +26,11 @@ class MainActivity : ComponentActivity() {
         // Transparent system bars: the black tab bar shows through instead of the
         // grey scrim Android adds by default under the navigation buttons.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
         )
         if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
-        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
         Configuration.getInstance().apply {
             load(applicationContext, getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
             userAgentValue = "Parked/${BuildConfig.VERSION_NAME} (${BuildConfig.APPLICATION_ID})"

@@ -11,8 +11,9 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/app_name"
-        android:fontFamily="sans-serif-light"
-        android:textColor="#FFFFFF"
+        android:fontFamily="serif"
+        android:textStyle="bold"
+        android:textColor="#1C1917"
         android:textSize="20sp" />
 
     <TextView
@@ -23,7 +24,7 @@
         android:maxLines="1"
         android:ellipsize="end"
         android:text="@string/widget_no_spot"
-        android:textColor="#FF7500"
+        android:textColor="#3F7A22"
         android:textSize="14sp" />
 
     <TextView
@@ -32,7 +33,7 @@
         android:layout_height="wrap_content"
         android:maxLines="1"
         android:ellipsize="end"
-        android:textColor="#9A9A9A"
+        android:textColor="#57534E"
         android:textSize="13sp"
         android:visibility="gone" />
 
@@ -55,7 +56,8 @@
             android:background="@drawable/widget_button_primary"
             android:gravity="center"
             android:text="@string/widget_save"
-            android:textColor="#000000"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
             android:textSize="15sp" />
 
         <Space
@@ -70,7 +72,8 @@
             android:background="@drawable/widget_button_secondary"
             android:gravity="center"
             android:text="@string/widget_find"
-            android:textColor="#FFFFFF"
+            android:textColor="#3F7A22"
+            android:textStyle="bold"
             android:textSize="15sp" />
     </LinearLayout>
 </LinearLayout>

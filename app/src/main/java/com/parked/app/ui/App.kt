@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -172,64 +174,64 @@ private enum class Stage { Onboarding, Main }
 // ============================================================
 
 /**
- * One black intro screen: the name, what the app does, and the choice to set
- * up AutoPark now or later. The language row opens Android's per-app language
- * setting, which exists from Android 13.
+ * One intro screen: the car in Parked green on a studio floor, what the app
+ * does, and the choice to set up AutoPark now or later. The language row opens
+ * Android's per-app language setting, which exists from Android 13.
  */
 @Composable
 private fun OnboardingPage(onNext: (setUpAutoPark: Boolean) -> Unit) {
     val context = LocalContext.current
-    // Scrolls when large text or a short screen doesn't fit; otherwise the
-    // title sits at the top and the actions at the bottom.
-    BoxWithConstraints(Modifier.fillMaxSize().background(Ink).systemBarsPadding()) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .heightIn(min = maxHeight)
-            .padding(start = 24.dp, end = 24.dp, top = 48.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column(Modifier.padding(top = 24.dp, bottom = 48.dp)) {
-            Text(
-                stringResource(R.string.intro_title),
-                fontSize = TypeScale.Display,
-                lineHeight = TypeScale.Display * 1.05f,
-                color = Paper,
-                letterSpacing = (-1).sp,
-                modifier = Modifier.semantics { heading() }
-            )
-            Text(
-                stringResource(R.string.intro_tagline),
-                fontSize = TypeScale.Display,
-                lineHeight = TypeScale.Display * 1.05f,
-                color = Accent,
-                letterSpacing = (-1).sp,
-            )
+    // Scrolls when large text or a short screen doesn't fit.
+    BoxWithConstraints(Modifier.fillMaxSize().background(Bg).systemBarsPadding()) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
+                .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CarStudio(Green, height = 200.dp, carWidth = 320.dp)
+                Spacer(Modifier.height(32.dp))
+                Text(
+                    stringResource(R.string.intro_tagline),
+                    fontFamily = HeadingFont,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = TypeScale.Hero,
+                    lineHeight = TypeScale.Hero * 1.12f,
+                    color = TextPrimary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    letterSpacing = (-0.5).sp,
+                    modifier = Modifier.semantics { heading() }
+                )
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    stringResource(R.string.intro_body),
+                    fontSize = TypeScale.Emphasis,
+                    lineHeight = 26.sp,
+                    color = TextMuted,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.widthIn(max = 340.dp)
+                )
+            }
+            Column(Modifier.padding(top = 32.dp)) {
+                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    SettingsCard {
+                        TextRow(
+                            label = stringResource(R.string.intro_language),
+                            value = currentLanguageName(context),
+                            icon = Ph.globe,
+                            onClick = { openAppLanguageSettings(context) }
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
+                }
+                PrimaryButton(stringResource(R.string.onboarding_setup_autopark), icon = Ph.bluetooth) { onNext(true) }
+                Spacer(Modifier.height(4.dp))
+                QuietButton(stringResource(R.string.onboarding_later)) { onNext(false) }
+            }
         }
-        Column {
-        Text(
-            stringResource(R.string.intro_body),
-            fontSize = TypeScale.Emphasis,
-            lineHeight = 26.sp,
-            color = Paper,
-            modifier = Modifier.widthIn(max = 320.dp).padding(bottom = 24.dp)
-        )
-        if (android.os.Build.VERSION.SDK_INT >= 33) {
-            DividerRow()
-            TextRow(
-                label = stringResource(R.string.intro_language),
-                value = currentLanguageName(context),
-                onClick = { openAppLanguageSettings(context) }
-            )
-            DividerRow()
-            Spacer(Modifier.height(16.dp))
-        }
-        PrimaryButton(stringResource(R.string.onboarding_setup_autopark)) { onNext(true) }
-        Spacer(Modifier.height(8.dp))
-        LinkButton(stringResource(R.string.onboarding_later)) { onNext(false) }
-        }
-    }
     }
 }
 
@@ -252,10 +254,10 @@ internal fun openAppLanguageSettings(context: Context) {
 // Tabs
 // ============================================================
 
-enum class AppTab(val labelRes: Int, val icon: Int) {
-    Home(R.string.tab_home, R.drawable.ph_squares_four),
-    Fuel(R.string.tab_car, R.drawable.ph_car),
-    Settings(R.string.tab_settings, R.drawable.ph_sliders),
+enum class AppTab(val labelRes: Int, val icon: Int, val iconSelected: Int) {
+    Home(R.string.tab_home, R.drawable.ph_house, R.drawable.ph_house_fill),
+    Fuel(R.string.tab_car, R.drawable.ph_car, R.drawable.ph_car_fill),
+    Settings(R.string.tab_settings, R.drawable.ph_gear_six, R.drawable.ph_gear_six_fill),
 }
 
 /** Accuracy of the latest location fix (metres) and when it arrived. */
@@ -371,17 +373,17 @@ private fun MainContent(
     }
 
     Scaffold(
-        containerColor = Ink,
+        containerColor = Bg,
         contentWindowInsets = WindowInsets(0),
         snackbarHost = {
             SnackbarHost(snackbar) { data ->
                 Snackbar(
                     snackbarData = data,
-                    containerColor = Panel,
-                    contentColor = Paper,
-                    actionColor = Accent,
-                    dismissActionContentColor = Paper,
-                    shape = RectangleShape,
+                    containerColor = Surface,
+                    contentColor = TextPrimary,
+                    actionColor = Green,
+                    dismissActionContentColor = TextPrimary,
+                    shape = RadiusSmall,
                 )
             }
         },
@@ -440,40 +442,69 @@ private fun MainContent(
 }
 
 /**
- * Icon-only tab bar, as in the reference: no labels, no border, the active
- * tab in orange. Each tab still announces its name to screen readers.
+ * Tab bar: white, a hairline on top, icon and label on every tab. The active
+ * tab is green, with a filled icon on a soft green pill that springs in.
  */
 @Composable
 private fun BottomNav(tab: AppTab, onChange: (AppTab) -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(Ink)
-            .navigationBarsPadding()
-            .height(72.dp)
-            .selectableGroup(),
-        horizontalArrangement = Arrangement.SpaceAround,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        AppTab.entries.forEach { t ->
-            val selected = tab == t
-            val tint by androidx.compose.animation.animateColorAsState(
-                if (selected) Accent else Paper, tween(200), label = "tabTint"
-            )
-            val label = stringResource(t.labelRes)
-            Box(
-                Modifier
-                    .size(width = 72.dp, height = 56.dp)
-                    .selectable(selected = selected, role = Role.Tab) { onChange(t) }
-                    .semantics { contentDescription = label },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    ImageVector.vectorResource(t.icon),
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier.size(28.dp)
+    val view = androidx.compose.ui.platform.LocalView.current
+    Column(Modifier.fillMaxWidth().background(Surface)) {
+        DividerRow()
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .height(72.dp)
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AppTab.entries.forEach { t ->
+                val selected = tab == t
+                val tint by androidx.compose.animation.animateColorAsState(
+                    if (selected) Green else TextMuted, Motion.effects(), label = "tabTint"
                 )
+                val pill by androidx.compose.animation.core.animateFloatAsState(
+                    if (selected) 1f else 0f, Motion.spatialFast(), label = "tabPill"
+                )
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .selectable(
+                            selected = selected,
+                            role = Role.Tab,
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                        ) { if (!selected) { Haptics.tick(view); onChange(t) } },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Box(Modifier.size(width = 60.dp, height = 32.dp), contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { scaleX = 0.6f + 0.4f * pill; alpha = pill }
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(GreenSoft)
+                        )
+                        Icon(
+                            ImageVector.vectorResource(if (selected) t.iconSelected else t.icon),
+                            contentDescription = null,
+                            tint = tint,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(t.labelRes),
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                        color = tint,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }

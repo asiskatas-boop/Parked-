@@ -1,6 +1,14 @@
 package com.parked.app.ui
 
 import androidx.compose.animation.ContentTransform
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.composed
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
@@ -42,8 +50,17 @@ import com.parked.app.R
 /** One snackbar host for the whole app, so every confirmation looks the same. */
 val LocalSnackbar = compositionLocalOf<SnackbarHostState> { error("No snackbar host") }
 
+/** True in screenshot tests: sheets draw inline instead of in a window. */
+val LocalInlineSheets = compositionLocalOf { false }
+
+/** Small green arrow for the end of a row. */
+@Composable
+fun AccentArrow() {
+    Icon(Ph.arrowRight, contentDescription = null, tint = Green, modifier = Modifier.size(18.dp))
+}
+
 /**
- * Phosphor icons (light weight, one stroke everywhere), bundled as vector
+ * Phosphor icons (regular weight, one stroke everywhere), bundled as vector
  * drawables under res/drawable/ph_*.xml. Tint them in Compose.
  */
 object Ph {
@@ -79,33 +96,89 @@ object Ph {
     val warning @Composable get() = ImageVector.vectorResource(R.drawable.ph_warning)
     val wrench @Composable get() = ImageVector.vectorResource(R.drawable.ph_wrench)
     val x @Composable get() = ImageVector.vectorResource(R.drawable.ph_x)
+    val caretRight @Composable get() = ImageVector.vectorResource(R.drawable.ph_caret_right)
+    val house @Composable get() = ImageVector.vectorResource(R.drawable.ph_house)
+    val houseFill @Composable get() = ImageVector.vectorResource(R.drawable.ph_house_fill)
+    val carFill @Composable get() = ImageVector.vectorResource(R.drawable.ph_car_fill)
+    val gearSix @Composable get() = ImageVector.vectorResource(R.drawable.ph_gear_six)
+    val gearSixFill @Composable get() = ImageVector.vectorResource(R.drawable.ph_gear_six_fill)
+    val crosshair @Composable get() = ImageVector.vectorResource(R.drawable.ph_crosshair)
+    val stack @Composable get() = ImageVector.vectorResource(R.drawable.ph_stack)
+    val shareNetwork @Composable get() = ImageVector.vectorResource(R.drawable.ph_share_network)
+    val notePencil @Composable get() = ImageVector.vectorResource(R.drawable.ph_note_pencil)
+    val cloudUp @Composable get() = ImageVector.vectorResource(R.drawable.ph_cloud_arrow_up)
+    val download @Composable get() = ImageVector.vectorResource(R.drawable.ph_download_simple)
+    val globe @Composable get() = ImageVector.vectorResource(R.drawable.ph_globe)
+    val clock @Composable get() = ImageVector.vectorResource(R.drawable.ph_clock)
+    val checkCircleFill @Composable get() = ImageVector.vectorResource(R.drawable.ph_check_circle_fill)
+    val navigationFill @Composable get() = ImageVector.vectorResource(R.drawable.ph_navigation_arrow_fill)
 }
 
-/** Large, light page title, as in the reference. */
+/**
+ * Motion: springs instead of fixed durations, so movement can be interrupted
+ * and always settles naturally (Material's standard spring values). Spatial
+ * springs move things; effect springs fade and recolour, without bounce.
+ */
+object Motion {
+    fun <T> spatial() = androidx.compose.animation.core.spring<T>(dampingRatio = 0.9f, stiffness = 700f)
+    fun <T> spatialFast() = androidx.compose.animation.core.spring<T>(dampingRatio = 0.9f, stiffness = 1400f)
+    fun <T> effects() = androidx.compose.animation.core.spring<T>(dampingRatio = 1f, stiffness = 1600f)
+}
+
+/** Haptics, used sparingly: a firm tick for confirmations, a light one for toggles. */
+object Haptics {
+    fun confirm(view: android.view.View) {
+        view.performHapticFeedback(
+            if (android.os.Build.VERSION.SDK_INT >= 30) android.view.HapticFeedbackConstants.CONFIRM
+            else android.view.HapticFeedbackConstants.VIRTUAL_KEY
+        )
+    }
+    fun tick(view: android.view.View) {
+        view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+    }
+}
+
+/** Shrinks slightly while pressed, like Revolut's buttons and cards. */
+fun Modifier.pressScale(interaction: androidx.compose.foundation.interaction.InteractionSource): Modifier = composed {
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, Motion.spatialFast(), label = "press")
+    graphicsLayer { scaleX = scale; scaleY = scale }
+}
+
+/** Large serif page title. */
 @Composable
-fun PageTitle(text: String, color: Color = Paper, modifier: Modifier = Modifier) {
+fun PageTitle(text: String, color: Color = TextPrimary, modifier: Modifier = Modifier) {
     Text(
         text,
+        fontFamily = HeadingFont,
         fontSize = TypeScale.PageTitle,
-        lineHeight = TypeScale.PageTitle * 1.1f,
-        fontWeight = FontWeight.Normal,
+        lineHeight = TypeScale.PageTitle * 1.15f,
+        fontWeight = FontWeight.SemiBold,
         color = color,
-        letterSpacing = (-0.4).sp,
         modifier = modifier.semantics { heading() }
     )
 }
 
-/** The orange arrow that ends every call to action and every navigating row. */
+/** Small uppercase label above a big number ("THE CAR", "OCTOBER"). */
 @Composable
-fun AccentArrow(modifier: Modifier = Modifier, icon: ImageVector = Ph.arrowRight) {
-    Icon(icon, contentDescription = null, tint = Accent, modifier = modifier.size(20.dp))
+fun Overline(text: String, modifier: Modifier = Modifier, color: Color = TextMuted) {
+    Text(
+        text.uppercase(), modifier = modifier, color = color,
+        fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
+    )
 }
 
-/**
- * Main call to action: a white rectangle with the label on the left and an
- * orange arrow after it. Minimum height rather than fixed, so large font
- * sizes never clip the label.
- */
+/** The one big number on a screen (distance, spend, fuel), Revolut-style. */
+@Composable
+fun BigNumber(text: String, modifier: Modifier = Modifier, size: androidx.compose.ui.unit.TextUnit = TypeScale.BigNumber, color: Color = TextPrimary) {
+    Text(
+        text, modifier = modifier, color = color,
+        fontFamily = HeadingFont, fontWeight = FontWeight.SemiBold,
+        fontSize = size, lineHeight = size * 1.1f, letterSpacing = (-0.5).sp,
+    )
+}
+
+/** Main call to action: green, full width, label centred. */
 @Composable
 fun PrimaryButton(
     text: String,
@@ -114,36 +187,30 @@ fun PrimaryButton(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.fillMaxWidth().heightIn(min = 56.dp),
-        shape = RectangleShape,
+        interactionSource = interaction,
+        modifier = modifier.fillMaxWidth().heightIn(min = 50.dp).pressScale(interaction),
+        shape = RadiusSmall,
         colors = ButtonDefaults.buttonColors(
-            containerColor = Paper,
-            contentColor = Ink,
-            disabledContainerColor = Field,
-            disabledContentColor = Muted,
+            containerColor = Green,
+            contentColor = OnGreen,
+            disabledContainerColor = SurfaceSunk,
+            disabledContentColor = TextFaint,
         ),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            if (icon != null) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(12.dp))
-            }
-            // weight(fill = false) keeps the arrow visible when a long label wraps.
-            Text(text, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
+        if (icon != null) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
-            AccentArrow()
         }
+        Text(text, fontSize = TypeScale.Label, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
     }
 }
 
-/**
- * Second-level action: an outlined rectangle. Used where two actions sit side
- * by side and neither is the main one.
- */
+/** Second-level action: green outline. */
 @Composable
 fun SecondaryButton(
     text: String,
@@ -151,54 +218,100 @@ fun SecondaryButton(
     icon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 48.dp),
-        shape = RectangleShape,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Line),
-        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.Transparent, contentColor = Paper),
+        interactionSource = interaction,
+        modifier = modifier.heightIn(min = 48.dp).pressScale(interaction),
+        shape = RadiusSmall,
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, Green),
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.Transparent, contentColor = Green),
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = Accent, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
         }
-        Text(text, fontSize = TypeScale.Label, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+        Text(text, fontSize = TypeScale.Label, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
     }
 }
 
-/** Text link with an orange arrow, as in the reference ("Αργότερα →"). */
+/** Text link ("All", "History", "Later"). */
 @Composable
 fun LinkButton(
     text: String,
     modifier: Modifier = Modifier,
-    color: Color = Paper,
+    color: Color = Green,
     icon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
     Row(
         modifier
             .heightIn(min = 48.dp)
+            .clip(RadiusSmall)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(horizontal = 4.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = color, modifier = Modifier.weight(1f, fill = false))
-        Spacer(Modifier.width(10.dp))
-        AccentArrow(icon = icon ?: Ph.arrowRight)
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(text, fontSize = TypeScale.Label, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = color)
     }
 }
 
 @Composable
-fun QuietButton(text: String, modifier: Modifier = Modifier, color: Color = Muted, onClick: () -> Unit) {
-    TextButton(onClick = onClick, modifier = modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RectangleShape) {
-        Text(text, fontSize = TypeScale.Body, color = color)
+fun QuietButton(text: String, modifier: Modifier = Modifier, color: Color = TextMuted, onClick: () -> Unit) {
+    TextButton(onClick = onClick, modifier = modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RadiusSmall) {
+        Text(text, fontSize = TypeScale.Body, color = color, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** White card with a warm 1 dp border and no shadow. */
+@Composable
+fun ParkedCard(modifier: Modifier = Modifier, color: Color = Surface, border: Color = Border, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RadiusCard)
+            .background(color)
+            .border(1.dp, border, RadiusCard),
+        content = content
+    )
+}
+
+/** Status chip: neutral, on (green), warn (amber), ok. */
+enum class ChipKind { Neutral, On, Warn, Ok }
+
+@Composable
+fun StatusChip(text: String, kind: ChipKind = ChipKind.Neutral, icon: ImageVector? = null, modifier: Modifier = Modifier) {
+    val (bg, fg, line) = when (kind) {
+        ChipKind.Neutral -> Triple(Surface, TextPrimary, BorderStrong)
+        ChipKind.On -> Triple(GreenSoft, Green, Green)
+        ChipKind.Warn -> Triple(WarnBg, Warn, Color(0xFFFCD34D))
+        ChipKind.Ok -> Triple(OkBg, Ok, OkBg)
+    }
+    Row(
+        modifier
+            .heightIn(min = 32.dp)
+            .clip(RadiusSmall)
+            .background(bg)
+            .border(1.dp, line, RadiusSmall)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        when {
+            icon != null -> { Icon(icon, contentDescription = null, tint = if (kind == ChipKind.Neutral) Green else fg, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)) }
+            kind == ChipKind.On -> { Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Green)); Spacer(Modifier.width(6.dp)) }
+        }
+        Text(text, fontSize = TypeScale.Caption, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1)
     }
 }
 
 /**
- * Bottom sheet used by every form. It is a real modal: it covers the tab bar,
- * closes on back and outside tap, and moves above the keyboard.
+ * Bottom sheet used by every form: white, rounded top, a real modal that
+ * covers the tab bar, closes on back and outside tap, moves above the keyboard.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -208,43 +321,55 @@ fun ParkedSheet(
     subtitle: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Panel,
-        contentColor = Paper,
-        scrimColor = Color.Black.copy(alpha = 0.6f),
-        shape = RectangleShape,
-        dragHandle = {
-            Box(Modifier.padding(top = 12.dp, bottom = 8.dp).size(width = 32.dp, height = 3.dp).background(Line))
-        },
-    ) {
+    @Composable
+    fun Body(scrollable: Boolean) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp)
+                .then(if (scrollable) Modifier.imePadding().verticalScroll(rememberScrollState()) else Modifier)
+                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
         ) {
             Text(
                 title,
+                fontFamily = HeadingFont,
                 fontSize = TypeScale.SheetTitle,
-                lineHeight = TypeScale.SheetTitle * 1.15f,
-                fontWeight = FontWeight.Normal,
-                color = Paper,
+                lineHeight = TypeScale.SheetTitle * 1.25f,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
                 modifier = Modifier.semantics { heading() }
             )
             if (subtitle != null) {
-                Spacer(Modifier.height(6.dp))
-                Text(subtitle, fontSize = TypeScale.Body, lineHeight = 24.sp, color = Muted)
+                Spacer(Modifier.height(4.dp))
+                Text(subtitle, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted)
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
             content()
         }
     }
+    val handle = @Composable {
+        Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 14.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(width = 36.dp, height = 4.dp).clip(androidx.compose.foundation.shape.CircleShape).background(BorderStrong))
+        }
+    }
+    if (LocalInlineSheets.current) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(Surface)) {
+            handle()
+            Body(scrollable = false)
+        }
+        return
+    }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Surface,
+        contentColor = TextPrimary,
+        scrimColor = TextPrimary.copy(alpha = 0.38f),
+        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+        dragHandle = handle,
+    ) { Body(scrollable = true) }
 }
 
-/** Full-screen sub-page: back arrow, large title, then a list. */
+/** Full-screen sub-page: back arrow, serif title, then a list on cream. */
 @Composable
 fun SubPage(
     title: String,
@@ -253,7 +378,7 @@ fun SubPage(
     actions: @Composable RowScope.() -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().background(Ink)) {
+    Column(Modifier.fillMaxSize().background(Bg)) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -262,12 +387,12 @@ fun SubPage(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                Icon(Ph.arrowLeft, contentDescription = stringResource(R.string.cd_back), tint = Paper, modifier = Modifier.size(24.dp))
+                Icon(Ph.arrowLeft, contentDescription = stringResource(R.string.cd_back), tint = TextPrimary, modifier = Modifier.size(24.dp))
             }
             Spacer(Modifier.weight(1f))
             actions()
         }
-        PageTitle(title, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 20.dp))
+        PageTitle(title, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 16.dp))
         LazyColumn(Modifier.fillMaxSize()) {
             // The empty message goes above the content, not instead of it, so
             // actions such as "Add reminder" stay reachable on an empty page.
@@ -277,8 +402,8 @@ fun SubPage(
                         emptyText,
                         fontSize = TypeScale.Body,
                         lineHeight = 24.sp,
-                        color = Muted,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp)
+                        color = TextMuted,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)
                     )
                 }
             }
@@ -288,9 +413,15 @@ fun SubPage(
     }
 }
 
+/** Chevron at the end of a tappable row. */
+@Composable
+fun RowChevron() {
+    Icon(Ph.caretRight, contentDescription = null, tint = TextFaint, modifier = Modifier.size(18.dp))
+}
+
 /**
- * Tappable list row: icon, title, supporting line, orange arrow, hairline
- * underneath. Rows stack into a list with no cards.
+ * Tappable row inside a card: green icon, title, supporting line, chevron.
+ * Rows in one card are separated with [DividerRow].
  */
 @Composable
 fun ActionRow(
@@ -300,106 +431,109 @@ fun ActionRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     trailing: @Composable (() -> Unit)? = null,
-    iconTint: Color = Paper,
+    iconTint: Color = Green,
 ) {
-    Column(modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick)) {
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (icon != null) {
-                Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(16.dp))
-            }
-            Column(Modifier.weight(1f)) {
-                Text(title, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper)
-                if (subtitle != null) Text(subtitle, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
-            }
-            Spacer(Modifier.width(12.dp))
-            if (trailing != null) trailing() else AccentArrow()
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 60.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(14.dp))
         }
-        DividerRow()
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = TypeScale.Label, lineHeight = 21.sp, color = TextPrimary)
+            if (subtitle != null) Text(subtitle, fontSize = TypeScale.Caption, lineHeight = 19.sp, color = TextMuted)
+        }
+        Spacer(Modifier.width(12.dp))
+        if (trailing != null) trailing() else RowChevron()
     }
 }
 
-/** A group of rows between hairlines. Rows inside separate with [DividerRow]. */
+/** A white card of rows. Rows inside separate with [DividerRow]. */
 @Composable
 fun SettingsCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-        DividerRow()
-        content()
-        DividerRow()
-    }
+    ParkedCard(modifier, content = content)
 }
 
-/**
- * Square switch, as in the reference: orange track and black knob when on,
- * dark track and grey knob when off. 48 dp tall touch area when interactive.
- */
+/** Green pill switch with a white knob; springs between states. */
 @Composable
 fun ParkedSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier) {
-    val track by animateColorAsState(if (checked) Accent else Field, tween(180), label = "track")
-    val knob by animateColorAsState(if (checked) Ink else Muted, tween(180), label = "knob")
-    val offset by animateDpAsState(if (checked) 20.dp else 0.dp, tween(180, easing = FastOutSlowInEasing), label = "knob")
+    val view = LocalView.current
+    val track by animateColorAsState(if (checked) Green else BorderStrong, Motion.effects(), label = "track")
+    val offset by animateDpAsState(if (checked) 18.dp else 0.dp, Motion.spatialFast(), label = "knob")
     val base = if (onCheckedChange != null) {
         modifier
             .heightIn(min = 48.dp)
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .toggleable(value = checked, role = Role.Switch) { Haptics.tick(view); onCheckedChange(it) }
     } else modifier
     Box(base, contentAlignment = Alignment.Center) {
         Box(
             Modifier
-                .size(width = 48.dp, height = 28.dp)
+                .size(width = 44.dp, height = 26.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
                 .background(track)
-                .then(if (checked) Modifier else Modifier.border(1.dp, Line))
                 .padding(3.dp)
         ) {
-            Box(Modifier.offset(x = offset).size(22.dp).background(knob))
+            Box(Modifier.offset(x = offset).size(20.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Surface))
         }
     }
 }
 
 /** The whole row toggles, not only the switch, for a larger touch target. */
 @Composable
-fun ToggleRow(label: String, checked: Boolean, supporting: String? = null, onToggle: (Boolean) -> Unit) {
+fun ToggleRow(label: String, checked: Boolean, supporting: String? = null, icon: ImageVector? = null, onToggle: (Boolean) -> Unit) {
+    val view = LocalView.current
     Row(
         Modifier
             .fillMaxWidth()
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onToggle)
-            .heightIn(min = 56.dp)
-            .padding(vertical = 12.dp),
+            .toggleable(value = checked, role = Role.Switch) { Haptics.tick(view); onToggle(it) }
+            .heightIn(min = 60.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = Green, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(14.dp))
+        }
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(label, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper)
-            if (supporting != null) Text(supporting, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
+            Text(label, fontSize = TypeScale.Label, lineHeight = 21.sp, color = TextPrimary)
+            if (supporting != null) Text(supporting, fontSize = TypeScale.Caption, lineHeight = 19.sp, color = TextMuted)
         }
         ParkedSwitch(checked = checked, onCheckedChange = null)
     }
 }
 
-/** Label on the left, current value and an orange arrow on the right. */
+/** Label on the left, current value and a chevron on the right. */
 @Composable
-fun TextRow(label: String, value: String, onClick: () -> Unit) {
+fun TextRow(label: String, value: String, icon: ImageVector? = null, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
             .clickable(role = Role.Button, onClick = onClick)
             .heightIn(min = 56.dp)
-            .padding(vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper, modifier = Modifier.weight(1f))
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = Green, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(14.dp))
+        }
+        Text(label, fontSize = TypeScale.Label, lineHeight = 21.sp, color = TextPrimary, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(12.dp))
-        Text(value, fontSize = TypeScale.Body, color = Muted, textAlign = TextAlign.End)
-        Spacer(Modifier.width(12.dp))
-        AccentArrow()
+        Text(value, fontSize = TypeScale.Supporting, color = TextMuted, textAlign = TextAlign.End)
+        Spacer(Modifier.width(8.dp))
+        RowChevron()
     }
 }
 
 @Composable
 fun DividerRow(modifier: Modifier = Modifier) {
-    HorizontalDivider(modifier, color = Line, thickness = 1.dp)
+    HorizontalDivider(modifier, color = Border, thickness = 1.dp)
 }
 
 @Composable
@@ -415,33 +549,38 @@ fun ConfirmDialog(
     if (!visible) return
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Panel,
-        shape = RectangleShape,
-        title = { Text(title, fontSize = 24.sp, fontWeight = FontWeight.Normal, color = Paper) },
-        text = { Text(message, fontSize = TypeScale.Body, lineHeight = 24.sp, color = Muted) },
+        containerColor = Surface,
+        shape = RadiusCard,
+        title = { Text(title, fontFamily = HeadingFont, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary) },
+        text = { Text(message, fontSize = TypeScale.Body, lineHeight = 24.sp, color = TextMuted) },
         confirmButton = {
-            TextButton(onClick = onConfirm, shape = RectangleShape, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(confirmLabel, fontSize = TypeScale.Body, color = if (destructive) Danger else Accent, fontWeight = FontWeight.Medium)
+            TextButton(onClick = onConfirm, shape = RadiusSmall, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(confirmLabel, fontSize = TypeScale.Body, color = if (destructive) Danger else Green, fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, shape = RectangleShape, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(stringResource(R.string.cancel), fontSize = TypeScale.Body, color = Paper)
+            TextButton(onClick = onDismiss, shape = RadiusSmall, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.cancel), fontSize = TypeScale.Body, color = TextMuted, fontWeight = FontWeight.SemiBold)
             }
         }
     )
 }
 
+/** Serif section heading, optionally with a link on the right ("All"). */
 @Composable
-fun SectionTitle(text: String, color: Color = Paper, modifier: Modifier = Modifier) {
-    Text(
-        text,
-        fontSize = TypeScale.Section,
-        lineHeight = 26.sp,
-        fontWeight = FontWeight.Normal,
-        color = color,
-        modifier = modifier.semantics { heading() }
-    )
+fun SectionTitle(text: String, color: Color = TextPrimary, modifier: Modifier = Modifier, action: String? = null, onAction: () -> Unit = {}) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text,
+            fontFamily = HeadingFont,
+            fontSize = TypeScale.Section,
+            lineHeight = 28.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = color,
+            modifier = Modifier.weight(1f).semantics { heading() }
+        )
+        if (action != null) LinkButton(action, onClick = onAction)
+    }
 }
 
 @Composable
@@ -451,30 +590,30 @@ fun ErrorText(text: String?) {
     Text(text, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Danger)
 }
 
-/** Square dark fields with an orange focus outline. Shared by every form. */
+/** White fields with a warm outline and a green focus outline. Shared by every form. */
 @Composable
 fun parkedFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedContainerColor = Field,
-    unfocusedContainerColor = Field,
-    disabledContainerColor = Field,
-    errorContainerColor = Field,
-    focusedBorderColor = Accent,
-    unfocusedBorderColor = Line,
+    focusedContainerColor = Surface,
+    unfocusedContainerColor = Surface,
+    disabledContainerColor = SurfaceSunk,
+    errorContainerColor = Surface,
+    focusedBorderColor = Green,
+    unfocusedBorderColor = BorderStrong,
     errorBorderColor = Danger,
-    focusedLabelColor = Accent,
-    unfocusedLabelColor = Muted,
-    focusedTextColor = Paper,
-    unfocusedTextColor = Paper,
-    cursorColor = Accent,
-    focusedPlaceholderColor = Muted,
-    unfocusedPlaceholderColor = Muted,
-    focusedSupportingTextColor = Muted,
-    unfocusedSupportingTextColor = Muted,
-    focusedTrailingIconColor = Paper,
-    unfocusedTrailingIconColor = Muted,
+    focusedLabelColor = Green,
+    unfocusedLabelColor = TextMuted,
+    focusedTextColor = TextPrimary,
+    unfocusedTextColor = TextPrimary,
+    cursorColor = Green,
+    focusedPlaceholderColor = TextFaint,
+    unfocusedPlaceholderColor = TextFaint,
+    focusedSupportingTextColor = TextMuted,
+    unfocusedSupportingTextColor = TextMuted,
+    focusedTrailingIconColor = Green,
+    unfocusedTrailingIconColor = TextMuted,
     selectionColors = androidx.compose.foundation.text.selection.TextSelectionColors(
-        handleColor = Accent,
-        backgroundColor = Accent.copy(alpha = 0.35f),
+        handleColor = Green,
+        backgroundColor = Green.copy(alpha = 0.25f),
     ),
 )
 
@@ -495,9 +634,9 @@ fun NumberField(
         placeholder = placeholder?.let { { Text(it) } },
         supportingText = supporting?.let { { Text(it) } },
         singleLine = true,
-        shape = RectangleShape,
+        shape = RadiusSmall,
         colors = parkedFieldColors(),
-        textStyle = androidx.compose.ui.text.TextStyle(fontFamily = SofiaSans, fontSize = TypeScale.Emphasis),
+        textStyle = androidx.compose.ui.text.TextStyle(fontFamily = BodyFont, fontSize = TypeScale.Body),
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
             keyboardType = if (decimal) androidx.compose.ui.text.input.KeyboardType.Decimal
             else androidx.compose.ui.text.input.KeyboardType.Number
@@ -507,16 +646,16 @@ fun NumberField(
 }
 
 /**
- * Moving into a sub-page slides it in from the end edge; going back reverses it.
- * Short and eased so it reads as navigation, not decoration.
+ * Moving into a sub-page slides it in from the end edge on a spring; going
+ * back reverses it.
  */
 fun pageTransition(forward: Boolean): ContentTransform {
-    val spec = tween<androidx.compose.ui.unit.IntOffset>(300, easing = FastOutSlowInEasing)
+    val slide = Motion.spatial<androidx.compose.ui.unit.IntOffset>()
     return if (forward) {
-        (slideInHorizontally(spec) { it / 4 } + fadeIn(tween(240, delayMillis = 40)))
-            .togetherWith(slideOutHorizontally(spec) { -it / 10 } + fadeOut(tween(150)))
+        (slideInHorizontally(slide) { it / 4 } + fadeIn(Motion.effects()))
+            .togetherWith(slideOutHorizontally(slide) { -it / 10 } + fadeOut(Motion.effects()))
     } else {
-        (slideInHorizontally(spec) { -it / 10 } + fadeIn(tween(240, delayMillis = 40)))
-            .togetherWith(slideOutHorizontally(spec) { it / 4 } + fadeOut(tween(150)))
+        (slideInHorizontally(slide) { -it / 10 } + fadeIn(Motion.effects()))
+            .togetherWith(slideOutHorizontally(slide) { it / 4 } + fadeOut(Motion.effects()))
     }
 }

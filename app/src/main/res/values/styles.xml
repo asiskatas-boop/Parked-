@@ -1,10 +1,10 @@
 <resources>
-    <style name="Theme.Parked" parent="android:style/Theme.Material.NoActionBar">
+    <style name="Theme.Parked" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#FF7500</item>
-        <item name="android:windowBackground">#000000</item>
-        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:colorAccent">#3F7A22</item>
+        <item name="android:windowBackground">#FFFBF5</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

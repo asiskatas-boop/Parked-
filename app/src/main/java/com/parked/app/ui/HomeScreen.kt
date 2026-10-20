@@ -288,7 +288,7 @@ fun HomeScreen(
     // "centre" are never hidden under it.
     val sheetHeight = with(density) { sheetHeightPx.toDp() }
 
-    Box(Modifier.fillMaxSize().background(Ink)) {
+    Box(Modifier.fillMaxSize().background(Bg)) {
         Box(Modifier.fillMaxSize().padding(bottom = sheetHeight)) {
             ParkedMap(
                 parkedLat = if (hasSpot) s?.parkedLat else null,
@@ -388,14 +388,14 @@ fun HomeScreen(
             if (!online && issue == null) {
                 Text(
                     stringResource(R.string.map_offline),
-                    fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Paper,
+                    fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextPrimary,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .statusBarsPadding()
                         .padding(top = 12.dp, start = 16.dp, end = 16.dp)
                         .fillMaxWidth()
-                        .background(Panel)
-                        .border(1.dp, Line)
+                        .background(Surface)
+                        .border(1.dp, Border)
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 )
             }
@@ -419,7 +419,7 @@ fun HomeScreen(
             Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                .background(Ink)
+                .background(Bg)
                 .onSizeChanged { sheetHeightPx = it.height }
                 // Never more than about 60% of the screen, so the map stays usable.
                 .heightIn(max = minOf(520.dp, (LocalConfiguration.current.screenHeightDp * 0.6f).dp))
@@ -541,9 +541,9 @@ private fun HeroText(text: String, color: Color, heading: Boolean = false) {
 
 @Composable
 private fun EmptySpotContent(saving: Boolean, onSave: () -> Unit) {
-    HeroText(stringResource(R.string.home_empty_title), Paper, heading = true)
+    HeroText(stringResource(R.string.home_empty_title), TextPrimary, heading = true)
     Spacer(Modifier.height(12.dp))
-    Text(stringResource(R.string.home_empty_body), fontSize = TypeScale.Body, lineHeight = 24.sp, color = Muted)
+    Text(stringResource(R.string.home_empty_body), fontSize = TypeScale.Body, lineHeight = 24.sp, color = TextMuted)
     Spacer(Modifier.height(24.dp))
     PrimaryButton(
         text = stringResource(if (saving) R.string.saving else R.string.save_parking_spot),
@@ -579,33 +579,33 @@ private fun SavedSpotContent(
         else -> null
     }
     val howLine = how?.let { h -> state.accuracy?.let { stringResource(R.string.gps_accuracy, h, it.roundToInt()) } ?: h }
-    Text(parked, fontSize = TypeScale.Label, lineHeight = 22.sp, color = Muted)
+    Text(parked, fontSize = TypeScale.Label, lineHeight = 22.sp, color = TextMuted)
     if (howLine != null) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
             if (auto) {
-                Icon(Ph.checkCircle, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
+                Icon(Ph.checkCircle, contentDescription = null, tint = Green, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
             }
-            Text(howLine, fontSize = TypeScale.Label, lineHeight = 22.sp, color = if (auto) Paper else Muted)
+            Text(howLine, fontSize = TypeScale.Label, lineHeight = 22.sp, color = if (auto) TextPrimary else TextMuted)
         }
     }
     // "AutoPark is off" is the map banner's job (and it can be dismissed there).
     if (state.monitoring && autoParkMode == AutoParkMode.Limited) {
         Text(
             stringResource(R.string.autopark_on_limited),
-            fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted
+            fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted
         )
     }
     Spacer(Modifier.height(8.dp))
     Row(verticalAlignment = Alignment.Top) {
         Column(Modifier.weight(1f)) {
-            HeroText(stringResource(if (isAtCar) R.string.home_at_car else R.string.home_car_title), Paper, heading = true)
+            HeroText(stringResource(if (isAtCar) R.string.home_at_car else R.string.home_car_title), TextPrimary, heading = true)
             if (distance != null && !isAtCar) {
-                HeroText(stringResource(R.string.home_distance, formatDistance(distance), walkingMinutes(distance)), Accent)
+                HeroText(stringResource(R.string.home_distance, formatDistance(distance), walkingMinutes(distance)), Green)
             }
         }
         IconButton(onClick = onShare, modifier = Modifier.size(48.dp)) {
-            Icon(Ph.share, contentDescription = stringResource(R.string.share_spot), tint = Paper, modifier = Modifier.size(24.dp))
+            Icon(Ph.share, contentDescription = stringResource(R.string.share_spot), tint = TextPrimary, modifier = Modifier.size(24.dp))
         }
     }
 
@@ -625,7 +625,7 @@ private fun SavedSpotContent(
             modifier = Modifier.weight(1f),
             onClick = onNote
         )
-        VerticalDivider(color = Line)
+        VerticalDivider(color = Border)
         SpotCell(
             icon = Ph.camera,
             label = stringResource(R.string.chip_add_photo),
@@ -633,7 +633,7 @@ private fun SavedSpotContent(
             modifier = Modifier.weight(1f),
             onClick = onPhoto
         )
-        VerticalDivider(color = Line)
+        VerticalDivider(color = Border)
         TimerCell(endsAt = timerEnds, modifier = Modifier.weight(1f), onClick = onTimer)
     }
     // Garage mode: GPS alone isn't enough underground, so level, zone and
@@ -641,7 +641,7 @@ private fun SavedSpotContent(
     val garage = garageSummary(state)
     ActionRow(
         icon = Ph.squaresFour,
-        iconTint = if (garage != null) Accent else Paper,
+        iconTint = if (garage != null) Green else TextPrimary,
         title = garage ?: stringResource(R.string.garage_add),
         subtitle = stringResource(if (garage == null) R.string.garage_add_sub else R.string.garage_edit_sub),
         onClick = onGarage,
@@ -655,7 +655,7 @@ private fun SavedSpotContent(
     if (!state.adjusted && !touchExploration && (state.accuracy == null || state.accuracy > WEAK_GPS_M)) {
         Text(
             stringResource(R.string.pin_drag_hint),
-            fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted,
+            fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted,
             modifier = Modifier.padding(top = 8.dp)
         )
     }
@@ -663,7 +663,7 @@ private fun SavedSpotContent(
     // quietest one on the screen.
     LinkButton(
         stringResource(if (saving) R.string.saving else R.string.save_current_spot),
-        color = Muted,
+        color = TextMuted,
         modifier = Modifier.padding(top = 4.dp),
         onClick = onSave
     )
@@ -676,7 +676,7 @@ private fun SpotCell(
     label: String,
     active: Boolean,
     modifier: Modifier,
-    labelColor: Color = Paper,
+    labelColor: Color = TextPrimary,
     detail: String? = null,
     onClick: () -> Unit,
 ) {
@@ -690,10 +690,10 @@ private fun SpotCell(
             .padding(horizontal = 12.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Icon(icon, contentDescription = null, tint = if (active) Accent else Paper, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = null, tint = if (active) Green else TextPrimary, modifier = Modifier.size(24.dp))
         Column {
             Text(label, fontSize = TypeScale.Label, lineHeight = 20.sp, color = labelColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (detail != null) Text(detail, fontSize = TypeScale.Caption, lineHeight = 18.sp, color = labelColor.takeIf { it != Paper } ?: Muted)
+            if (detail != null) Text(detail, fontSize = TypeScale.Caption, lineHeight = 18.sp, color = labelColor.takeIf { it != TextPrimary } ?: TextMuted)
         }
     }
 }
@@ -730,7 +730,7 @@ private fun TimerCell(endsAt: Long?, modifier: Modifier, onClick: () -> Unit) {
         label = label,
         detail = detail,
         active = endsAt != null,
-        labelColor = if (warn) Warn else Paper,
+        labelColor = if (warn) Warn else TextPrimary,
         modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
         onClick = onClick
     )
@@ -767,7 +767,7 @@ private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
         acc <= WEAK_GPS_M -> 2
         else -> 1
     }
-    val color = when (bars) { 3 -> Accent; 2 -> Warn; 1 -> Danger; else -> Muted }
+    val color = when (bars) { 3 -> Green; 2 -> Warn; 1 -> Danger; else -> TextMuted }
     // The spoken label is the level only, so TalkBack isn't re-reading a
     // changing number every few seconds; the screen shows the metres.
     val level = when {
@@ -781,8 +781,8 @@ private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
     val shown = if (precise && fresh && acc != null) stringResource(R.string.gps_accuracy, level, acc.roundToInt()) else level
     Row(
         modifier
-            .background(Ink.copy(alpha = 0.8f))
-            .border(1.dp, Line)
+            .background(Bg.copy(alpha = 0.8f))
+            .border(1.dp, Border)
             .padding(horizontal = 8.dp, vertical = 5.dp)
             .clearAndSetSemantics { contentDescription = level },
         verticalAlignment = Alignment.CenterVertically
@@ -794,7 +794,7 @@ private fun GpsSignal(gps: GpsReading?, modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.width(8.dp))
         // Status is in words too, never colour alone.
-        Text(shown, fontSize = TypeScale.Caption, color = Paper)
+        Text(shown, fontSize = TypeScale.Caption, color = TextPrimary)
     }
 }
 
@@ -809,7 +809,7 @@ private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Un
         MapIssue.BluetoothOff -> R.string.banner_bluetooth_off to R.string.banner_bluetooth_off_action
         MapIssue.AutoParkLost -> R.string.banner_autopark_lost to R.string.banner_autopark_lost_action
     }
-    Column(Modifier.fillMaxWidth().background(Panel).padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 4.dp)) {
+    Column(Modifier.fillMaxWidth().background(Surface).padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 4.dp)) {
         Row(Modifier.padding(end = 8.dp), verticalAlignment = Alignment.Top) {
             Icon(
                 when (issue) {
@@ -818,17 +818,17 @@ private fun MapBanner(issue: MapIssue, onDismiss: () -> Unit, onAction: () -> Un
                     else -> Ph.mapPin
                 },
                 contentDescription = null,
-                tint = if (issue == MapIssue.AutoParkLost || issue == MapIssue.BluetoothOff) Warn else Accent,
+                tint = if (issue == MapIssue.AutoParkLost || issue == MapIssue.BluetoothOff) Warn else Green,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(Modifier.width(12.dp))
-            Text(stringResource(text), fontSize = TypeScale.Label, lineHeight = 22.sp, color = Paper, modifier = Modifier.weight(1f))
+            Text(stringResource(text), fontSize = TypeScale.Label, lineHeight = 22.sp, color = TextPrimary, modifier = Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth().padding(start = 32.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             LinkButton(stringResource(action), onClick = onAction)
             if (issue == MapIssue.AutoParkOff || issue == MapIssue.AutoParkLost || issue == MapIssue.BluetoothOff) {
-                TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp), shape = androidx.compose.ui.graphics.RectangleShape) {
-                    Text(stringResource(R.string.banner_not_now), fontSize = TypeScale.Emphasis, color = Muted)
+                TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp), shape = RadiusSmall) {
+                    Text(stringResource(R.string.banner_not_now), fontSize = TypeScale.Emphasis, color = TextMuted)
                 }
             }
         }
@@ -840,13 +840,13 @@ private fun MapButton(icon: ImageVector, description: String, modifier: Modifier
     Box(
         modifier
             .size(48.dp)
-            .background(Ink)
-            .border(1.dp, Line)
+            .background(Bg)
+            .border(1.dp, Border)
             .clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = description, onClick = onClick)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = null, tint = Paper, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(24.dp))
     }
 }
 
@@ -857,9 +857,9 @@ private fun OsmAttribution(modifier: Modifier) {
     Text(
         stringResource(R.string.osm_attribution),
         fontSize = 11.sp,
-        color = Muted,
+        color = TextMuted,
         modifier = modifier
-            .background(Ink.copy(alpha = 0.7f))
+            .background(Bg.copy(alpha = 0.7f))
             .padding(horizontal = 6.dp, vertical = 2.dp)
     )
 }
@@ -901,7 +901,7 @@ private fun GarageSheet(
         subtitle = stringResource(R.string.garage_subtitle),
         onDismiss = onDismiss
     ) {
-        Text(stringResource(R.string.garage_level_label), fontSize = TypeScale.Label, color = Muted)
+        Text(stringResource(R.string.garage_level_label), fontSize = TypeScale.Label, color = TextMuted)
         Spacer(Modifier.height(8.dp))
         // Two rows so every level is visible without scrolling; 56 dp squares.
         Column(
@@ -915,15 +915,15 @@ private fun GarageSheet(
                         Box(
                             Modifier
                                 .size(56.dp)
-                                .background(if (selected) Accent else Field)
-                                .border(1.dp, if (selected) Accent else Line)
+                                .background(if (selected) Green else SurfaceSunk)
+                                .border(1.dp, if (selected) Green else Border)
                                 .selectable(selected = selected, role = androidx.compose.ui.semantics.Role.RadioButton) {
                                     lvl = if (selected) "" else v
                                     view.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(v.replace("-", "−"), fontSize = TypeScale.Section, color = if (selected) Ink else Paper)
+                            Text(v.replace("-", "−"), fontSize = TypeScale.Section, color = if (selected) OnGreen else TextPrimary)
                         }
                     }
                 }
@@ -967,9 +967,9 @@ private fun GarageField(
         onValueChange = { onChange(it.take(12)) },
         label = { Text(label, maxLines = 1) },
         singleLine = true,
-        shape = androidx.compose.ui.graphics.RectangleShape,
+        shape = RadiusSmall,
         colors = parkedFieldColors(),
-        textStyle = androidx.compose.ui.text.TextStyle(fontFamily = SofiaSans, fontSize = TypeScale.Emphasis),
+        textStyle = androidx.compose.ui.text.TextStyle(fontFamily = BodyFont, fontSize = TypeScale.Emphasis),
         keyboardOptions = KeyboardOptions(
             capitalization = KeyboardCapitalization.Characters,
             imeAction = if (last) androidx.compose.ui.text.input.ImeAction.Done else androidx.compose.ui.text.input.ImeAction.Next,
@@ -993,9 +993,9 @@ private fun NoteSheet(initial: String, onDismiss: () -> Unit, onSave: (String?) 
             label = { Text(stringResource(R.string.note_label)) },
             placeholder = { Text(stringResource(R.string.note_placeholder)) },
             singleLine = true,
-            shape = androidx.compose.ui.graphics.RectangleShape,
+            shape = RadiusSmall,
             colors = parkedFieldColors(),
-            textStyle = androidx.compose.ui.text.TextStyle(fontFamily = SofiaSans, fontSize = TypeScale.Emphasis),
+            textStyle = androidx.compose.ui.text.TextStyle(fontFamily = BodyFont, fontSize = TypeScale.Emphasis),
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.Sentences,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Done
@@ -1005,7 +1005,7 @@ private fun NoteSheet(initial: String, onDismiss: () -> Unit, onSave: (String?) 
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onSave(text) }),
             trailingIcon = {
                 IconButton(onClick = { onSave(text) }) {
-                    Icon(Ph.check, contentDescription = stringResource(R.string.save_note), tint = Accent, modifier = Modifier.size(24.dp))
+                    Icon(Ph.check, contentDescription = stringResource(R.string.save_note), tint = Green, modifier = Modifier.size(24.dp))
                 }
             },
             supportingText = { Text("${text.length}/140") },
@@ -1070,7 +1070,7 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
         if (endsAt != null) {
             Text(
                 stringResource(R.string.timer_current, clockTime(context, endsAt)),
-                fontSize = TypeScale.Body, lineHeight = 24.sp, color = Paper
+                fontSize = TypeScale.Body, lineHeight = 24.sp, color = TextPrimary
             )
             Spacer(Modifier.height(16.dp))
         }
@@ -1081,13 +1081,13 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
                     onClick = { start(minutes) },
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     contentPadding = PaddingValues(horizontal = 4.dp),
-                    shape = androidx.compose.ui.graphics.RectangleShape,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Line),
+                    shape = RadiusSmall,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Border),
                 ) {
                     Text(
                         if (minutes < 60) stringResource(R.string.duration_m, minutes)
                         else stringResource(R.string.duration_h, minutes / 60),
-                        color = Paper, fontSize = TypeScale.Body
+                        color = TextPrimary, fontSize = TypeScale.Body
                     )
                 }
             }
@@ -1107,8 +1107,8 @@ private fun TimerSheet(endsAt: Long?, onDismiss: () -> Unit, onSet: (Long?) -> U
         })
         if (!exactAllowed && Build.VERSION.SDK_INT >= 31) {
             Spacer(Modifier.height(12.dp))
-            Text(stringResource(R.string.timer_inexact), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
-            QuietButton(text = stringResource(R.string.timer_allow_exact), color = Accent) {
+            Text(stringResource(R.string.timer_inexact), fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted)
+            QuietButton(text = stringResource(R.string.timer_allow_exact), color = Green) {
                 runCatching {
                     context.startActivity(
                         Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
@@ -1138,7 +1138,7 @@ private fun PhotoDialog(
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
-            Modifier.fillMaxSize().background(Ink).systemBarsPadding().padding(16.dp),
+            Modifier.fillMaxSize().background(Bg).systemBarsPadding().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -1152,9 +1152,9 @@ private fun PhotoDialog(
                     )
                 } else if (failed) {
                     // The file is gone or unreadable: say so instead of spinning forever.
-                    Text(stringResource(R.string.photo_load_failed), color = Paper, fontSize = TypeScale.Body)
+                    Text(stringResource(R.string.photo_load_failed), color = TextPrimary, fontSize = TypeScale.Body)
                 } else {
-                    CircularProgressIndicator(color = Accent)
+                    CircularProgressIndicator(color = Green)
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -1162,7 +1162,7 @@ private fun PhotoDialog(
                 SecondaryButton(stringResource(R.string.photo_retake), icon = Ph.camera, modifier = Modifier.weight(1f), onClick = onRetake)
                 SecondaryButton(stringResource(R.string.photo_remove), icon = Ph.trash, modifier = Modifier.weight(1f), onClick = onRemove)
             }
-            QuietButton(stringResource(R.string.close), color = Paper, onClick = onDismiss)
+            QuietButton(stringResource(R.string.close), color = TextPrimary, onClick = onDismiss)
         }
     }
 }

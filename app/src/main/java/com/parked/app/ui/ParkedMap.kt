@@ -284,7 +284,7 @@ fun makeParkedMarker(ctx: Context): BitmapDrawable {
     paint.color = android.graphics.Color.BLACK
     paint.textSize = 17 * density
     paint.textAlign = Paint.Align.CENTER
-    paint.typeface = runCatching { androidx.core.content.res.ResourcesCompat.getFont(ctx, com.parked.app.R.font.sofia_sans) }
+    paint.typeface = runCatching { androidx.core.content.res.ResourcesCompat.getFont(ctx, com.parked.app.R.font.open_sans) }
         .getOrNull()?.let { Typeface.create(it, Typeface.BOLD) } ?: Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
     val yOffset = (paint.descent() + paint.ascent()) / 2f
     c.drawText("P", cx, cy - yOffset, paint)

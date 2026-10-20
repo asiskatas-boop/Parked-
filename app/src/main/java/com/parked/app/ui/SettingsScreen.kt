@@ -363,7 +363,7 @@ private fun SettingsMain(
     val notificationsChecked = fuel.notificationsEnabled && systemNotificationsAllowed
     var hasCrashReport by remember { mutableStateOf(ParkedApplication.crashFile(context).exists()) }
 
-    Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxSize().background(Bg).verticalScroll(rememberScrollState())) {
         Column(Modifier.statusBarsPadding().padding(start = 24.dp, end = 24.dp, top = 24.dp)) {
             PageTitle(stringResource(R.string.tab_settings))
             Spacer(Modifier.height(24.dp))
@@ -480,8 +480,8 @@ private fun SettingsMain(
             SectionTitle(stringResource(R.string.about_section), modifier = Modifier.padding(top = 32.dp, bottom = 12.dp))
             SettingsCard {
                 Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.about_version), fontSize = TypeScale.Emphasis, color = Paper, modifier = Modifier.weight(1f))
-                    Text(com.parked.app.BuildConfig.VERSION_NAME, fontSize = TypeScale.Body, color = Muted)
+                    Text(stringResource(R.string.about_version), fontSize = TypeScale.Emphasis, color = TextPrimary, modifier = Modifier.weight(1f))
+                    Text(com.parked.app.BuildConfig.VERSION_NAME, fontSize = TypeScale.Body, color = TextMuted)
                 }
                 if (hasCrashReport) {
                     DividerRow()
@@ -612,10 +612,10 @@ private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, Strin
     val fallbackName = stringResource(R.string.car_bluetooth)
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Panel,
-        shape = androidx.compose.ui.graphics.RectangleShape,
-        titleContentColor = Paper,
-        textContentColor = Muted,
+        containerColor = Surface,
+        shape = RadiusSmall,
+        titleContentColor = TextPrimary,
+        textContentColor = TextMuted,
         title = { Text(stringResource(R.string.choose_your_car), fontSize = 24.sp) },
         text = {
             Column {
@@ -630,7 +630,7 @@ private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, Strin
                             val repeated = devices.count { it.name == device.name } > 1
                             ActionRow(
                                 icon = if (device.isCar) Ph.car else Ph.bluetooth,
-                                iconTint = if (device.isCar) Accent else Muted,
+                                iconTint = if (device.isCar) Green else TextMuted,
                                 title = device.name ?: stringResource(R.string.unnamed_device),
                                 subtitle = if (repeated) "$kind · ${device.address}" else kind,
                                 onClick = { onSelected(device.name ?: fallbackName, device.address) }
@@ -640,7 +640,7 @@ private fun DevicePickerDialog(onDismiss: () -> Unit, onSelected: (String, Strin
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss, shape = androidx.compose.ui.graphics.RectangleShape) { Text(stringResource(R.string.close), fontSize = TypeScale.Body, color = Paper) } }
+        confirmButton = { TextButton(onClick = onDismiss, shape = RadiusSmall) { Text(stringResource(R.string.close), fontSize = TypeScale.Body, color = TextPrimary) } }
     )
 }
 
@@ -702,12 +702,12 @@ internal fun colourLabel(name: String): String = stringResource(
 internal fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Panel,
-        shape = androidx.compose.ui.graphics.RectangleShape,
-        title = { Text(stringResource(R.string.car_appearance), fontSize = 24.sp, color = Paper) },
+        containerColor = Surface,
+        shape = RadiusSmall,
+        title = { Text(stringResource(R.string.car_appearance), fontSize = 24.sp, color = TextPrimary) },
         text = {
             Column {
-                Text(stringResource(R.string.appearance_hint), fontSize = TypeScale.Body, lineHeight = 24.sp, color = Muted)
+                Text(stringResource(R.string.appearance_hint), fontSize = TypeScale.Body, lineHeight = 24.sp, color = TextMuted)
                 Spacer(Modifier.height(12.dp))
                 LazyColumn(Modifier.heightIn(max = 430.dp)) {
                     items(carColours, key = { it.first }) { (name, swatch) ->
@@ -715,7 +715,7 @@ internal fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .background(if (selected) Field else Color.Transparent)
+                                .background(if (selected) SurfaceSunk else Color.Transparent)
                                 .selectable(selected = selected, role = androidx.compose.ui.semantics.Role.RadioButton) {
                                     fuel.setAccent(name); onDismiss()
                                 }
@@ -723,16 +723,16 @@ internal fun AppearanceDialog(fuel: FuelStore, onDismiss: () -> Unit) {
                                 .padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(Modifier.size(20.dp).border(1.dp, Line).background(swatch))
+                            Box(Modifier.size(20.dp).border(1.dp, Border).background(swatch))
                             Spacer(Modifier.width(16.dp))
-                            Text(colourLabel(name), modifier = Modifier.weight(1f), fontSize = TypeScale.Emphasis, color = Paper)
-                            if (selected) Icon(Ph.check, contentDescription = null, tint = Accent, modifier = Modifier.size(20.dp))
+                            Text(colourLabel(name), modifier = Modifier.weight(1f), fontSize = TypeScale.Emphasis, color = TextPrimary)
+                            if (selected) Icon(Ph.check, contentDescription = null, tint = Green, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss, shape = androidx.compose.ui.graphics.RectangleShape) { Text(stringResource(R.string.close), fontSize = TypeScale.Body, color = Paper) } }
+        confirmButton = { TextButton(onClick = onDismiss, shape = RadiusSmall) { Text(stringResource(R.string.close), fontSize = TypeScale.Body, color = TextPrimary) } }
     )
 }
 
@@ -771,7 +771,7 @@ private fun ParkingHistoryPage(store: ParkingStore, onBack: () -> Unit) {
         actions = {
             if (state.history.isNotEmpty()) {
                 IconButton(onClick = { confirmClear = true }) {
-                    Icon(Ph.trash, contentDescription = stringResource(R.string.history_clear), tint = Paper, modifier = Modifier.size(24.dp))
+                    Icon(Ph.trash, contentDescription = stringResource(R.string.history_clear), tint = TextPrimary, modifier = Modifier.size(24.dp))
                 }
             }
         }
@@ -814,11 +814,11 @@ private fun HistoryRow(entry: ParkingHistoryEntry, label: String, onOpen: () -> 
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(label, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = Paper)
-            if (!entry.note.isNullOrBlank()) Text(entry.note, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = Muted)
+            Text(label, fontSize = TypeScale.Emphasis, lineHeight = 24.sp, color = TextPrimary)
+            if (!entry.note.isNullOrBlank()) Text(entry.note, fontSize = TypeScale.Supporting, lineHeight = 21.sp, color = TextMuted)
         }
         IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
-            Icon(Ph.trash, contentDescription = stringResource(R.string.delete), tint = Muted, modifier = Modifier.size(24.dp))
+            Icon(Ph.trash, contentDescription = stringResource(R.string.delete), tint = TextMuted, modifier = Modifier.size(24.dp))
         }
     }
 }
