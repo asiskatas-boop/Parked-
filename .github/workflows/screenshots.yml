@@ -7,6 +7,9 @@ on:
     branches: [ 'preview/**' ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   render:
     runs-on: ubuntu-latest
@@ -33,3 +36,15 @@ jobs:
         with:
           name: screenshots
           path: app/src/test/snapshots/images/
+      # Also publish the images to the screenshots-output branch, so they can be
+      # fetched with git where artifact downloads aren't reachable.
+      - name: Publish to screenshots-output branch
+        run: |
+          mkdir /tmp/out && cp app/src/test/snapshots/images/*.png /tmp/out/
+          cd /tmp/out
+          git init -q -b screenshots-output
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Screenshots for ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" screenshots-output
