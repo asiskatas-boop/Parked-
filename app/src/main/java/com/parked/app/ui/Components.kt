@@ -163,10 +163,19 @@ fun PageTitle(text: String, color: Color = TextPrimary, modifier: Modifier = Mod
 @Composable
 fun Overline(text: String, modifier: Modifier = Modifier, color: Color = TextMuted) {
     Text(
-        text.uppercase(), modifier = modifier, color = color,
+        upperNoAccents(text), modifier = modifier, color = color,
         fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
     )
 }
+
+/**
+ * Uppercase without accents: Greek capitals drop their tonos ("ΤΟ ΑΥΤΟΚΙΝΗΤΟ
+ * ΣΟΥ", not "ΑΥΤΟΚΊΝΗΤΌ"). Only the Greek tonos is removed; the dialytika stays.
+ */
+fun upperNoAccents(text: String): String =
+    java.text.Normalizer.normalize(text.uppercase(), java.text.Normalizer.Form.NFD)
+        .replace(Regex("(?<=[\\u0370-\\u03FF])\\u0301+"), "")
+        .let { java.text.Normalizer.normalize(it, java.text.Normalizer.Form.NFC) }
 
 /** The one big number on a screen (distance, spend, fuel), Revolut-style. */
 @Composable

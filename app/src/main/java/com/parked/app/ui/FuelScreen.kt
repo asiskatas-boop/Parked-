@@ -153,7 +153,7 @@ internal fun CarMain(fuel: FuelStore, deviceName: String?, onOpen: (CarPage) -> 
         SectionTitle(
             stringResource(R.string.car_section_service),
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
-            action = if (sorted.isEmpty()) null else stringResource(if (sorted.size > 3) R.string.service_all else R.string.service_manage),
+            action = if (sorted.isEmpty()) null else stringResource(R.string.see_all),
             onAction = { onOpen(CarPage.Service) },
         )
         SettingsCard {
