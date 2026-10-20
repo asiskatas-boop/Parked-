@@ -77,6 +77,7 @@ data class SavedSpot(
     val level: String? = null,
     val zone: String? = null,
     val space: String? = null,
+    val adjusted: Boolean = false,
 )
 
 class ParkingStore(context: Context) {
@@ -153,6 +154,7 @@ class ParkingStore(context: Context) {
                 note = it[Keys.note], photoPath = it[Keys.photoPath], timerEndsAt = it[Keys.timerEndsAt],
                 source = it[Keys.source], accuracy = it[Keys.accuracy],
                 level = it[Keys.level], zone = it[Keys.zone], space = it[Keys.space],
+                adjusted = it[Keys.adjusted] ?: false,
             )
             it[Keys.parkedLat] = lat
             it[Keys.parkedLng] = lng
@@ -195,7 +197,7 @@ class ParkingStore(context: Context) {
             if (spot.level != null) it[Keys.level] = spot.level else it.remove(Keys.level)
             if (spot.zone != null) it[Keys.zone] = spot.zone else it.remove(Keys.zone)
             if (spot.space != null) it[Keys.space] = spot.space else it.remove(Keys.space)
-            it.remove(Keys.adjusted)
+            if (spot.adjusted) it[Keys.adjusted] = true else it.remove(Keys.adjusted)
             // The undone save must not stay in history either.
             if (replacedAt != null) {
                 val history = parseHistory(it[Keys.history])

@@ -85,8 +85,8 @@ fun ParkedMap(
                 Lifecycle.Event.ON_PAUSE -> {
                     // A drag cut short by leaving the app must not freeze the pin.
                     if (dragging.getAndSet(false)) {
-                        (mapView?.overlays?.firstOrNull { (it as? Marker)?.id == MARKER_CAR } as? Marker)
-                            ?.let { m -> latestParked?.let { m.position = it } }
+                        (mapView?.overlays?.firstOrNull { (it as? Marker)?.id == MARKER_CAR } as? CarMarker)
+                            ?.let { m -> m.cancelDrag(); latestParked?.let { m.position = it } }
                     }
                     mapView?.onPause()
                 }
@@ -136,7 +136,8 @@ fun ParkedMap(
                             val car = marker as CarMarker
                             // A long-press without moving is not a move: osmdroid has
                             // already snapped the pin to the finger, so put it back.
-                            val slop = 24f * resources.displayMetrics.density
+                            // Touch slop, so even a few metres' correction counts.
+                            val slop = android.view.ViewConfiguration.get(context).scaledTouchSlop.toFloat()
                             if (car.fingerTravel() < slop) {
                                 latestParked?.let { marker.position = it }
                                 invalidate()
@@ -234,11 +235,20 @@ private class CarMarker(map: MapView, private val onCancel: (Marker) -> Unit) : 
 
     fun fingerTravel(): Float = kotlin.math.hypot(upX - downX, upY - downY)
 
+    /** Ends osmdroid's own drag state, which it otherwise clears only on ACTION_UP. */
+    fun cancelDrag() { mIsDragged = false }
+
     override fun onTouchEvent(event: android.view.MotionEvent, mapView: MapView): Boolean {
         when (event.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> { downX = event.x; downY = event.y; upX = downX; upY = downY }
             android.view.MotionEvent.ACTION_MOVE, android.view.MotionEvent.ACTION_UP -> { upX = event.x; upY = event.y }
-            android.view.MotionEvent.ACTION_CANCEL -> onCancel(this)
+            android.view.MotionEvent.ACTION_CANCEL -> {
+                // Without this, the next ordinary pan would carry the pin along.
+                val wasDragging = mIsDragged
+                cancelDrag()
+                onCancel(this)
+                if (wasDragging) return true
+            }
         }
         return super.onTouchEvent(event, mapView)
     }

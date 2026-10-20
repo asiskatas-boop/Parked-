@@ -490,7 +490,8 @@ fun HomeScreen(
             onPhoto = { level, zone, space ->
                 // Keep what was typed, then open the camera.
                 showGarage = false
-                scope.launch { store.setGarage(level, zone, space) }
+                // App scope: the Activity may be recreated while the camera is open.
+                appScope.launch { store.setGarage(level, zone, space) }
                 if (s.photoPath == null) takePhoto() else showPhoto = true
             },
             onDismiss = { showGarage = false },
@@ -903,9 +904,8 @@ private fun GarageSheet(
         Text(stringResource(R.string.garage_level_label), fontSize = TypeScale.Label, color = Muted)
         Spacer(Modifier.height(8.dp))
         // Two rows so every level is visible without scrolling; 56 dp squares.
-        val levelsLabel = stringResource(R.string.garage_level_label)
         Column(
-            Modifier.selectableGroup().semantics { contentDescription = levelsLabel },
+            Modifier.selectableGroup(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             listOf(listOf("-3", "-2", "-1", "0"), listOf("1", "2", "3")).forEach { row ->

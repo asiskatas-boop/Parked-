@@ -227,8 +227,9 @@ private fun SettingsMain(
 
     val autoPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         if (!pendingAutoStart) return@rememberLauncherForActivityResult
-        // An empty result means the request was interrupted: treat it as cancel.
-        if (results.isEmpty()) { pendingAutoStart = false; return@rememberLauncherForActivityResult }
+        // An empty result comes from a duplicate or interrupted request; the real
+        // answer arrives separately, so ignore this one rather than cancelling.
+        if (results.isEmpty()) return@rememberLauncherForActivityResult
         if (Build.VERSION.SDK_INT >= 33 && results[Manifest.permission.POST_NOTIFICATIONS] == false) {
             // AutoPark still works without alerts. Remember the choice so turning
             // AutoPark on later does not ask again.
