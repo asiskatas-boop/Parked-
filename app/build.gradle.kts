@@ -2,6 +2,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    // Renders screens to images on a computer, for previews without a phone.
+    id("app.cash.paparazzi")
 }
 
 android {
@@ -67,4 +69,5 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.2")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("org.osmdroid:osmdroid-android:6.1.20")
+    testImplementation("junit:junit:4.13.2")
 }

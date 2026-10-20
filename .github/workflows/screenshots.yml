@@ -1,0 +1,50 @@
+name: Screenshots
+
+# Renders the app's screens to PNG images (Paparazzi), for previewing changes
+# without installing. Download them from the run's "screenshots" artifact.
+on:
+  push:
+    branches: [ 'preview/**' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Render screens
+        run: |
+          status=0
+          gradle :app:recordPaparazziDebug --console=plain > render.log 2>&1 || status=$?
+          if [ $status -ne 0 ]; then
+            msg=$(grep -E "^e: |error:|Exception|FAILED|What went wrong" -A3 render.log | head -60 | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=Render failed::$msg"
+            tail -80 render.log
+            exit $status
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: app/src/test/snapshots/images/
+      # Also publish the images to the screenshots-output branch, so they can be
+      # fetched with git where artifact downloads aren't reachable.
+      - name: Publish to screenshots-output branch
+        run: |
+          mkdir /tmp/out && cp app/src/test/snapshots/images/*.png /tmp/out/
+          cd /tmp/out
+          git init -q -b screenshots-output
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Screenshots for ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" screenshots-output
