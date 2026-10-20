@@ -315,7 +315,7 @@
     <string name="garage_level_value">Επίπεδο %1$s</string>
     <string name="garage_zone_value">Ζώνη %1$s</string>
     <string name="garage_space_value">Θέση %1$s</string>
-    <string name="pin_drag_hint">Δεν είναι σωστό το σημείο; Πάτησε παρατεταμένα το P και σύρ' το.</string>
+    <string name="pin_drag_hint">Δεν είναι σωστό το σημείο; Πάτησε παρατεταμένα το P και σύρ\' το.</string>
     <string name="pin_moved">Το σημείο μετακινήθηκε.</string>
     <string name="banner_bluetooth_off">Το Bluetooth είναι κλειστό, οπότε το AutoPark δεν καταλαβαίνει πότε αποσυνδέεται το αυτοκίνητο.</string>
     <string name="banner_bluetooth_off_action">Ενεργοποίηση</string>
