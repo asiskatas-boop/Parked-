@@ -32,7 +32,21 @@ class V8ScreenshotsTest {
         listOf("en" to null, "el" to "el").forEach { (tag, locale) ->
             paparazzi.unsafeUpdateConfig(deviceConfig = frame(height).copy(locale = locale))
             paparazzi.snapshot("v8_${name}_$tag") {
-                CompositionLocalProvider(LocalSnackbar provides remember { SnackbarHostState() }) {
+                // Paparazzi has no Activity: give the screens a result registry and a back dispatcher.
+                val owner = remember {
+                    object : androidx.activity.result.ActivityResultRegistryOwner, androidx.activity.OnBackPressedDispatcherOwner {
+                        override val activityResultRegistry = object : androidx.activity.result.ActivityResultRegistry() {
+                            override fun <I, O> onLaunch(requestCode: Int, contract: androidx.activity.result.contract.ActivityResultContract<I, O>, input: I, options: androidx.core.app.ActivityOptionsCompat?) {}
+                        }
+                        override val onBackPressedDispatcher = androidx.activity.OnBackPressedDispatcher()
+                        override val lifecycle: androidx.lifecycle.Lifecycle get() = androidx.lifecycle.LifecycleRegistry.createUnsafe(this).apply { currentState = androidx.lifecycle.Lifecycle.State.RESUMED }
+                    }
+                }
+                CompositionLocalProvider(
+                    LocalSnackbar provides remember { SnackbarHostState() },
+                    androidx.activity.compose.LocalActivityResultRegistryOwner provides owner,
+                    androidx.activity.compose.LocalOnBackPressedDispatcherOwner provides owner,
+                ) {
                     DesignScale {
                         Column(Modifier.fillMaxSize().background(White)) {
                             Box(Modifier.weight(1f)) { content() }
