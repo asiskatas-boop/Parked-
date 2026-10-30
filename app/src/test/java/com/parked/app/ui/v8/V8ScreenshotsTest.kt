@@ -2,35 +2,42 @@ package com.parked.app.ui.v8
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.Density
+import com.parked.app.data.FuelStore
+import com.parked.app.ui.LocalSnackbar
 import org.junit.Rule
 import org.junit.Test
 
 /**
- * 0.8 screens rendered at exactly the Figma frame size (393 dp wide at 3x =
- * 1179 px), so they can be compared pixel by pixel with the Figma exports.
+ * 0.8 screens rendered 1:1 at the Figma frame size (393 px wide at 1x), so
+ * they can be compared pixel by pixel with the Figma exports.
  * Run with: gradle :app:recordPaparazziDebug
  */
 class V8ScreenshotsTest {
-    private val figma = DeviceConfig.PIXEL_6.copy(screenWidth = 1179, screenHeight = 2913, xdpi = 480, ydpi = 480, density = Density.XXHIGH)
+    private fun frame(h: Int) = DeviceConfig.PIXEL_6.copy(screenWidth = 393, screenHeight = h, xdpi = 160, ydpi = 160, density = Density.MEDIUM)
 
     @get:Rule
-    val paparazzi = Paparazzi(deviceConfig = figma, theme = "android:Theme.Material.Light.NoActionBar", showSystemUi = false)
+    val paparazzi = Paparazzi(deviceConfig = frame(971), theme = "android:Theme.Material.Light.NoActionBar", showSystemUi = false)
 
-    private fun both(name: String, content: @Composable () -> Unit) {
+    private fun both(name: String, height: Int, tab: Int, content: @Composable () -> Unit) {
         listOf("en" to null, "el" to "el").forEach { (tag, locale) ->
-            paparazzi.unsafeUpdateConfig(deviceConfig = figma.copy(locale = locale))
+            paparazzi.unsafeUpdateConfig(deviceConfig = frame(height).copy(locale = locale))
             paparazzi.snapshot("v8_${name}_$tag") {
-                DesignScale {
-                    Box(Modifier.fillMaxSize().background(White)) {
-                        content()
-                        Box(Modifier.align(Alignment.BottomStart)) { TabBarV8(0, listOf("Home", "Car", "Settings")) {} }
+                CompositionLocalProvider(LocalSnackbar provides remember { SnackbarHostState() }) {
+                    DesignScale {
+                        Column(Modifier.fillMaxSize().background(White)) {
+                            Box(Modifier.weight(1f)) { content() }
+                            TabBarV8(tab, listOf("Home", "Car", "Settings")) {}
+                        }
                     }
                 }
             }
@@ -47,8 +54,38 @@ class V8ScreenshotsTest {
         onShare = {}, onLevel = {}, onPhoto = {}, onTime = {}, onNote = {},
     )
 
-    @Test fun home_saved() = both("home_saved") { home(true, HomeBanner.Permission) }
-    @Test fun home_nobanner() = both("home_nobanner") { home(true, null) }
-    @Test fun home_empty() = both("home_empty") { home(false, HomeBanner.Permission) }
-    @Test fun home_waiting() = both("home_waiting") { home(true, HomeBanner.Permission, waiting = true) }
+    @Composable
+    private fun demoFuel(reminders: Boolean): FuelStore {
+        val context = LocalContext.current
+        return remember {
+            FuelStore(PrefsContext(context)).apply {
+                setOdometer(258_852.0)
+                setCarColour(0xFFFF3700)
+                if (reminders) {
+                    addReminder("Oil change", 1_500, null, 258_592.0, System.currentTimeMillis())
+                    addReminder("KTEO", null, 17, 0.0, System.currentTimeMillis())
+                }
+                setLevel(100.0)
+            }
+        }
+    }
+
+    @Test fun home_saved() = both("home_saved", 971, 0) { home(true, HomeBanner.Permission) }
+    @Test fun home_empty() = both("home_empty", 971, 0) { home(false, HomeBanner.Permission) }
+    @Test fun home_waiting() = both("home_waiting", 971, 0) { home(true, null, waiting = true) }
+
+    @Test fun car() = both("car", 817, 1) { CarV8(demoFuel(false), "CE235BT", false) {} }
+    @Test fun car_reminders() = both("car_reminders", 949, 1) { CarV8(demoFuel(true), "CE235BT", false) {} }
+    @Test fun car_sheet_reminders() = both("car_sheet_reminders", 817, 1) {
+        val f = demoFuel(false)
+        Box { CarV8(f, "CE235BT", false) {}; SheetV8(true, {}) { RemindersSheet(f, emptyList(), {}, {}) } }
+    }
+    @Test fun car_sheet_fuel() = both("car_sheet_fuel", 817, 1) {
+        val f = demoFuel(false)
+        Box { CarV8(f, "CE235BT", false) {}; SheetV8(true, {}) { RefuelForm(f) {} } }
+    }
+    @Test fun car_sheet_level() = both("car_sheet_level", 817, 1) {
+        val f = demoFuel(false)
+        Box { CarV8(f, "CE235BT", false) {}; SheetV8(true, {}) { LevelForm(f) {} } }
+    }
 }
