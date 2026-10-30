@@ -301,18 +301,9 @@ fun HomeScreen(
         else -> null
     }
 
-    val map: @Composable (Modifier, Boolean) -> Unit = { mod, inCard ->
-        MapCard(
-            modifier = mod,
-            inCard = inCard,
-            online = online,
-            showCenter = hasSpot,
-            showBoth = hasSpot && live != null && distance != null && distance >= 40,
-            onCenter = { both ->
-                val next = (mapCommand?.id ?: 0) + 1
-                mapCommand = if (both) MapCommand.ShowBoth(next) else MapCommand.CenterOnCar(next)
-            },
-        ) {
+    val showBoth = hasSpot && live != null && distance != null && distance >= 40
+    val map: @Composable (Modifier) -> Unit = { mod ->
+        Box(mod) {
             ParkedMap(
                 parkedLat = if (hasSpot) s?.parkedLat else null,
                 parkedLng = if (hasSpot) s?.parkedLng else null,
@@ -348,105 +339,58 @@ fun HomeScreen(
         }
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Bg)
-            .verticalScroll(rememberScrollState())
-            .statusBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp)
-            .animateContentSize(Motion.spatial())
-    ) {
-        androidx.compose.animation.AnimatedVisibility(
-            visible = issue != null,
-            enter = androidx.compose.animation.fadeIn(Motion.effects()) + androidx.compose.animation.expandVertically(Motion.spatial()),
-            exit = androidx.compose.animation.fadeOut(Motion.effects()) + androidx.compose.animation.shrinkVertically(Motion.spatial()),
-        ) {
-            Column {
-                MapBanner(
-                    issue = issue ?: MapIssue.Permission,
-                    onDismiss = {
-                        if (issue == MapIssue.AutoParkLost) {
-                            com.parked.app.data.AutoParkHealth.clear(context)
-                        } else if (issue == MapIssue.BluetoothOff) {
-                            bluetoothBannerDismissed = true
-                        } else {
-                            val key = s?.parkedAt ?: 0L
-                            uiPrefs.edit().putLong("autopark_tip_dismissed_for", key).apply()
-                            autoParkTipDismissedFor = key
-                        }
-                    },
-                    onAction = {
-                        when (issue) {
-                            MapIssue.Permission -> requestPerm()
-                            MapIssue.LocationOff -> openLocationSettings(context)
-                            MapIssue.AutoParkOff -> onSetUpAutoPark()
-                            MapIssue.AutoParkLost -> onSetUpAutoPark()
-                            MapIssue.BluetoothOff -> runCatching {
-                                bluetoothLauncher.launch(Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_ENABLE))
-                            }
-                            null -> Unit
-                        }
-                    }
-                )
-                Spacer(Modifier.height(12.dp))
+    // 0.8 design (see ui/v8/HomeV8.kt).
+    val bannerAction: () -> Unit = {
+        when (issue) {
+            MapIssue.Permission -> requestPerm()
+            MapIssue.LocationOff -> openLocationSettings(context)
+            MapIssue.AutoParkOff, MapIssue.AutoParkLost -> onSetUpAutoPark()
+            MapIssue.BluetoothOff -> runCatching {
+                bluetoothLauncher.launch(Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_ENABLE))
             }
-        }
-
-        // Status first, as in Rivian's app: is AutoPark on, how good is GPS,
-        // how long is left on the meter.
-        if (s != null) {
-            StatusChips(
-                state = s,
-                autoParkMode = autoParkMode,
-                gps = gps,
-                showGps = hasPerm && locationOn,
-                timerEnds = if (hasSpot) timerEnds else null,
-                onTimer = { showTimer = true },
-            )
-        }
-
-        androidx.compose.animation.Crossfade(
-            targetState = when {
-                s == null -> 0
-                !hasSpot -> 1
-                else -> 2
-            },
-            animationSpec = Motion.effects(),
-            label = "home"
-        ) { mode ->
-            Column {
-                when {
-                    mode == 0 || s == null -> Spacer(Modifier.height(240.dp))
-                    mode == 1 -> EmptySpotContent(
-                        autoPark = s.monitoring,
-                        saving = saving,
-                        map = map,
-                        onSave = onSaveSpot,
-                    )
-                    else -> SavedSpotContent(
-                        state = s,
-                        autoParkMode = autoParkMode,
-                        isAtCar = isAtCar,
-                        distance = distance,
-                        saving = saving,
-                        timerEnds = timerEnds,
-                        map = map,
-                        onDirections = { openDirections(context, s) },
-                        onSave = {
-                            // Far from the saved car, saving here is probably a mistake: ask first.
-                            if (distance != null && distance > 50) confirmReplace = true else onSaveSpot()
-                        },
-                        onShare = { shareSpot(context, s) },
-                        onNote = { showNote = true },
-                        onPhoto = { if (s.photoPath == null) takePhoto() else showPhoto = true },
-                        onTimer = { showTimer = true },
-                        onGarage = { showGarage = true },
-                    )
-                }
-            }
+            null -> Unit
         }
     }
+    com.parked.app.ui.v8.HomeV8(
+        loaded = s != null,
+        hasSpot = hasSpot,
+        banner = when (issue) {
+            MapIssue.Permission -> com.parked.app.ui.v8.HomeBanner.Permission
+            MapIssue.LocationOff -> com.parked.app.ui.v8.HomeBanner.LocationOff
+            MapIssue.BluetoothOff -> com.parked.app.ui.v8.HomeBanner.BluetoothOff
+            MapIssue.AutoParkLost -> com.parked.app.ui.v8.HomeBanner.AutoParkLost
+            // AutoPark being off is shown by the "AutoPark is off" row instead.
+            MapIssue.AutoParkOff, null -> null
+        },
+        autoParkOn = s?.monitoring == true,
+        parkedLabel = s?.parkedAt?.let { parkedAtLabel(context, it) },
+        distanceLabel = when {
+            isAtCar -> stringResource(R.string.v8_at_car)
+            distance != null -> formatDistance(distance)
+            else -> null
+        },
+        waitingForGps = hasSpot && hasPerm && locationOn && live == null,
+        saving = saving,
+        note = s?.note,
+        showRecenter = hasSpot,
+        map = map,
+        onBannerAction = bannerAction,
+        onAutoPark = onSetUpAutoPark,
+        onRecenter = {
+            val next = (mapCommand?.id ?: 0) + 1
+            mapCommand = if (showBoth) MapCommand.ShowBoth(next) else MapCommand.CenterOnCar(next)
+        },
+        onDirections = { s?.let { openDirections(context, it) } },
+        onSaveSpot = {
+            // Far from the saved car, saving here is probably a mistake: ask first.
+            if (hasSpot && distance != null && distance > 50) confirmReplace = true else onSaveSpot()
+        },
+        onShare = { s?.let { shareSpot(context, it) } },
+        onLevel = { showGarage = true },
+        onPhoto = { if (s?.photoPath == null) takePhoto() else showPhoto = true },
+        onTime = { showTimer = true },
+        onNote = { note -> scope.launch { store.setNote(note); ParkedWidget.refresh(context) } },
+    )
 
     ConfirmDialog(
         visible = confirmReplace,

@@ -231,7 +231,7 @@
     <string name="refuel_price">Τιμή ανά λίτρο (%1$s/L)</string>
     <string name="refuel_litres_calc">Περίπου %1$s L</string>
     <string name="error_price">Δώσε την τιμή ανά λίτρο που δείχνει η αντλία</string>
-    <string name="banner_permission">Επίτρεψε την τοποθεσία για να βλέπεις πού είσαι στον χάρτη.</string>
+    <string name="banner_permission">Άνοιξε την τοποθεσία για να δεις πού είσαι.</string>
     <string name="banner_permission_action">Άδεια</string>
     <string name="banner_location_off">Η Τοποθεσία είναι κλειστή, οπότε ο χάρτης δεν σε δείχνει.</string>
     <string name="banner_location_off_action">Άνοιγμα</string>
@@ -361,4 +361,29 @@
     <string name="fuel_level_saved">Η στάθμη ενημερώθηκε</string>
     <string name="see_all">Όλα</string>
     <string name="fuel_tank_error">Βάλε ρεζερβουάρ από 5 έως 200 L ή άφησέ το κενό</string>
+
+    <!-- 0.8 design -->
+    <string name="v8_autopark_on">Το AutoPark είναι ενεργό</string>
+    <string name="v8_autopark_off">Το AutoPark είναι ανενεργό</string>
+    <string name="v8_car_here">Εδώ είναι το αμάξι!</string>
+    <string name="v8_no_spot">Καμία θέση ακόμα</string>
+    <string name="v8_banner_gps_1">Άνοιξε την τοποθεσία</string>
+    <string name="v8_banner_gps_2">για να δεις πού είσαι</string>
+    <string name="v8_banner_loc_1">Η τοποθεσία είναι κλειστή</string>
+    <string name="v8_banner_loc_2">Άνοιξέ τη από τις ρυθμίσεις</string>
+    <string name="v8_banner_bt_1">Το Bluetooth είναι κλειστό</string>
+    <string name="v8_banner_bt_2">και το AutoPark δεν δουλεύει</string>
+    <string name="v8_banner_lost_1">Το AutoPark σταμάτησε:</string>
+    <string name="v8_banner_lost_2">λείπει μια άδεια</string>
+    <string name="v8_turn_on">Άνοιγμα</string>
+    <string name="v8_fix">Διόρθωση</string>
+    <string name="v8_waiting_gps">Αναμονή για GPS…</string>
+    <string name="v8_go_to_car">Πάμε στο αυτοκίνητο</string>
+    <string name="v8_save_spot">Αποθήκευση θέσης</string>
+    <string name="v8_share_spot">Κοινοποίηση</string>
+    <string name="v8_time">Χρόνος</string>
+    <string name="v8_empty_help">Το AutoPark κρατάει τη θέση σου όταν αποσυνδέεται το Bluetooth του αυτοκινήτου.</string>
+    <string name="v8_note_hint">Σημειώσεις (σειρά, χρώμα ή οτιδήποτε)</string>
+    <string name="v8_at_car">Είσαι εδώ</string>
+    <string name="v8_photo">Φωτό</string>
 </resources>

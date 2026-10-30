@@ -387,7 +387,13 @@ private fun MainContent(
                 )
             }
         },
-        bottomBar = { BottomNav(tab = tab, onChange = { tab = it }) }
+        // 0.8 tab bar, drawn at the Figma size.
+        bottomBar = {
+            val labels = AppTab.entries.map { stringResource(it.labelRes) }
+            com.parked.app.ui.v8.DesignScale {
+                com.parked.app.ui.v8.TabBarV8(AppTab.entries.indexOf(tab), labels) { tab = AppTab.entries[it] }
+            }
+        }
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             AnimatedContent(
@@ -403,7 +409,7 @@ private fun MainContent(
                 label = "tabContent"
             ) { t ->
                 when (t) {
-                    AppTab.Home -> HomeScreen(
+                    AppTab.Home -> com.parked.app.ui.v8.DesignScale { HomeScreen(
                         store = store,
                         fuel = fuel,
                         live = live,
@@ -421,7 +427,7 @@ private fun MainContent(
                                 android.Manifest.permission.ACCESS_COARSE_LOCATION
                             ))
                         }
-                    )
+                    ) }
                     AppTab.Fuel -> FuelScreen(
                         fuel = fuel,
                         store = store,

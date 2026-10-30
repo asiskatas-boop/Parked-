@@ -364,4 +364,29 @@
     <string name="fuel_level_saved">Fuel level updated</string>
     <string name="see_all">All</string>
     <string name="fuel_tank_error">Enter a tank size between 5 and 200 L, or leave it empty</string>
+
+    <!-- 0.8 design -->
+    <string name="v8_autopark_on">AutoPark is on</string>
+    <string name="v8_autopark_off">AutoPark is off</string>
+    <string name="v8_car_here">Your car is here!</string>
+    <string name="v8_no_spot">No spot saved yet</string>
+    <string name="v8_banner_gps_1">Allow GPS location to see</string>
+    <string name="v8_banner_gps_2">where you are on the map</string>
+    <string name="v8_banner_loc_1">Location is off. Turn it on</string>
+    <string name="v8_banner_loc_2">to see where you are</string>
+    <string name="v8_banner_bt_1">Bluetooth is off. AutoPark</string>
+    <string name="v8_banner_bt_2">can\'t see the car disconnect</string>
+    <string name="v8_banner_lost_1">AutoPark stopped because</string>
+    <string name="v8_banner_lost_2">a permission was removed</string>
+    <string name="v8_turn_on">Turn on</string>
+    <string name="v8_fix">Fix</string>
+    <string name="v8_waiting_gps">Waiting for GPS…</string>
+    <string name="v8_go_to_car">Go to my car</string>
+    <string name="v8_save_spot">Save this spot</string>
+    <string name="v8_share_spot">Share spot</string>
+    <string name="v8_time">Time</string>
+    <string name="v8_empty_help">AutoPark saves your spot when your car\'s Bluetooth disconnects.</string>
+    <string name="v8_note_hint">Notes (row, color or anything else)</string>
+    <string name="v8_at_car">You\'re here</string>
+    <string name="v8_photo">Photo</string>
 </resources>
