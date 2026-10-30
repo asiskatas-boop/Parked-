@@ -70,6 +70,8 @@ class FuelStore(context: Context) {
             "accentName" -> accentName = canonicalAccentName(prefs.getString("accentName", "Blue") ?: "Blue")
             "notificationsEnabled" -> notificationsEnabled = prefs.getBoolean("notificationsEnabled", true)
             "serviceReminders" -> reminders = loadReminders()
+            "carColour" -> carColour = prefs.getLong("carColour", 0L).takeIf { it != 0L }
+            "carPhotoPath" -> carPhotoPath = prefs.getString("carPhotoPath", null)
         }
     }
 
@@ -106,6 +108,26 @@ class FuelStore(context: Context) {
     var reminders: List<ServiceReminder> by mutableStateOf(loadReminders())
         private set
 
+    /** 0.8: the car's colour from the colour picker (ARGB), or null before one is picked. */
+    var carColour: Long? by mutableStateOf(prefs.getLong("carColour", 0L).takeIf { it != 0L })
+        private set
+
+    /** 0.8: a photo of the car (a file in the app's storage), or null. Not part of the backup. */
+    var carPhotoPath: String? by mutableStateOf(prefs.getString("carPhotoPath", null))
+        private set
+
+    fun setCarColour(argb: Long) {
+        carColour = argb
+        prefs.edit().putLong("carColour", argb).apply()
+    }
+
+    fun setCarPhoto(path: String?) {
+        val old = carPhotoPath
+        carPhotoPath = path
+        prefs.edit().putString("carPhotoPath", path).apply()
+        if (old != null && old != path) runCatching { java.io.File(old).delete() }
+    }
+
     init {
         migrateLegacyFuelMeterEntriesIfNeeded()
         backfillLevelUpdatedAtIfNeeded()
@@ -124,6 +146,7 @@ class FuelStore(context: Context) {
             "levelPct" to 'f', "odoForLevel" to 'f', "levelUpdatedAt" to 'l',
             "fuelLevelLogs" to 's', "refuels" to 's', "accentName" to 's',
             "notificationsEnabled" to 'b', "serviceReminders" to 's',
+            "carColour" to 'l',
         )
         /** Values that hold JSON arrays; import checks they parse. */
         val BACKUP_JSON_ARRAYS = setOf("fuelLevelLogs", "refuels", "serviceReminders")

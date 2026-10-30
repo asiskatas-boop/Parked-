@@ -377,20 +377,24 @@ private fun MainContent(
         contentWindowInsets = WindowInsets(0),
         snackbarHost = {
             SnackbarHost(snackbar) { data ->
+                // 0.8: the small navy message above the tab bar.
                 Snackbar(
                     snackbarData = data,
-                    containerColor = Surface,
-                    contentColor = TextPrimary,
-                    actionColor = Green,
-                    dismissActionContentColor = TextPrimary,
-                    shape = RadiusSmall,
+                    containerColor = com.parked.app.ui.v8.Navy,
+                    contentColor = Color.White,
+                    actionColor = Color.White,
+                    dismissActionContentColor = Color.White,
+                    shape = com.parked.app.ui.v8.R15,
                 )
             }
         },
         // 0.8 tab bar, drawn at the Figma size.
         bottomBar = {
             val labels = AppTab.entries.map { stringResource(it.labelRes) }
-            com.parked.app.ui.v8.DesignScale {
+            // Out of the way while the keyboard is open, so it never covers the field being typed in.
+            @OptIn(ExperimentalLayoutApi::class)
+            val typing = WindowInsets.isImeVisible
+            if (!typing) com.parked.app.ui.v8.DesignScale {
                 com.parked.app.ui.v8.TabBarV8(AppTab.entries.indexOf(tab), labels) { tab = AppTab.entries[it] }
             }
         }
@@ -428,12 +432,15 @@ private fun MainContent(
                             ))
                         }
                     ) }
-                    AppTab.Fuel -> FuelScreen(
-                        fuel = fuel,
-                        store = store,
-                        openServiceRequest = openServiceRequest,
-                        onServiceRequestHandled = { openServiceRequest = false }
-                    )
+                    AppTab.Fuel -> com.parked.app.ui.v8.DesignScale {
+                        val carState by store.state.collectAsState(initial = null)
+                        com.parked.app.ui.v8.CarV8(
+                            fuel = fuel,
+                            deviceName = carState?.deviceName,
+                            openServiceRequest = openServiceRequest,
+                            onServiceRequestHandled = { openServiceRequest = false }
+                        )
+                    }
                     AppTab.Settings -> SettingsScreen(
                         fuel = fuel,
                         store = store,
