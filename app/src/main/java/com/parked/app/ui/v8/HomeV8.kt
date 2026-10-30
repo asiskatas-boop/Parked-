@@ -3,6 +3,7 @@ package com.parked.app.ui.v8
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -405,8 +406,8 @@ private fun NoteField(note: String?, onNote: (String?) -> Unit) {
 private fun PulsingDot() {
     val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "dot")
     val a by t.animateFloat(
-        1f, 0.35f,
-        androidx.compose.animation.core.infiniteRepeatable(tween(800), androidx.compose.animation.core.RepeatMode.Reverse),
+        initialValue = 1f, targetValue = 0.35f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable<Float>(tween(800), androidx.compose.animation.core.RepeatMode.Reverse),
         label = "dotAlpha",
     )
     Box(Modifier.size(8.dp).graphicsLayer { alpha = a; scaleX = 0.7f + 0.3f * a; scaleY = 0.7f + 0.3f * a }.background(Accent, CircleShape))
