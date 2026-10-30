@@ -352,8 +352,12 @@ private fun FuelCard(fuel: FuelStore, modifier: Modifier) {
     val pct = fuel.estimateLevelPct().coerceIn(0.0, 100.0)
     val range = fuel.estimatedRangeKm()?.let { it * pct / 100.0 }
     // Fills and counts up each time the tab opens.
-    val anim = remember { Animatable(0f) }
-    LaunchedEffect(pct, set) { anim.snapTo(0f); anim.animateTo(1f, tween(900, easing = androidx.compose.animation.core.CubicBezierEasing(0.22f, 1f, 0.36f, 1f))) }
+    val still = androidx.compose.ui.platform.LocalInspectionMode.current
+    val anim = remember { Animatable(if (still) 1f else 0f) }
+    LaunchedEffect(pct, set) {
+        if (still) return@LaunchedEffect
+        anim.snapTo(0f); anim.animateTo(1f, tween(900, easing = androidx.compose.animation.core.CubicBezierEasing(0.22f, 1f, 0.36f, 1f)))
+    }
     val shownPct = if (set) pct * anim.value else 0.0
     Box(modifier.background(CardGrey, R15)) {
         FigmaText(if (set) "${shownPct.roundToInt()}%" else "–", x = 21f, baseline = 43f, size = 28f, weight = FontWeight.Bold, color = Black)
