@@ -78,7 +78,7 @@
 
     <!-- AutoPark service -->
     <string name="autopark">AutoPark</string>
-    <string name="autopark_supporting">Saves the spot when your car\'s Bluetooth disconnects</string>
+    <string name="autopark_supporting">Saves the spot when your car’s Bluetooth disconnects</string>
     <string name="autopark_ready">AutoPark is ready</string>
     <string name="autopark_limited">Open Parked! once to make saving automatic again. Until then you\'ll get a tap-to-save alert.</string>
     <string name="autopark_saved">Parking spot saved</string>
@@ -87,7 +87,7 @@
     <string name="notif_parked_title">Parking saved</string>
     <string name="notif_parked_body">AutoPark saved where you left the car. Tap to see it.</string>
     <string name="notif_tap_to_save_title">Just parked?</string>
-    <string name="notif_tap_to_save_body">Parked! couldn\'t get your location. Tap to save this spot now.</string>
+    <string name="notif_tap_to_save_body">Parked! couldn’t get your location. Tap to save this spot now.</string>
     <string name="notif_autopark_stopped_title">AutoPark stopped</string>
     <string name="notif_autopark_stopped_body">Android stopped it. Tap to open Parked! and turn it on again.</string>
     <string name="notif_service_due_title">%1$s is due</string>
@@ -192,7 +192,7 @@
     <string name="car_bluetooth_saved">Car Bluetooth saved</string>
     <string name="bluetooth_needed">Bluetooth is needed for AutoPark</string>
     <string name="turn_on_bluetooth">Turn on Bluetooth</string>
-    <string name="choose_car_bluetooth">Choose your car\'s Bluetooth</string>
+    <string name="choose_car_bluetooth">Choose your car’s Bluetooth</string>
     <string name="location_needed">Turn on Location for AutoPark</string>
     <string name="permissions_needed">AutoPark needs Location and Bluetooth access</string>
     <string name="bluetooth_permission_needed">Bluetooth permission is needed</string>
@@ -237,7 +237,7 @@
     <string name="banner_permission_action">Allow</string>
     <string name="banner_location_off">Location is off, so the map can\'t show you.</string>
     <string name="banner_location_off_action">Turn on</string>
-    <string name="banner_autopark_off">AutoPark is off. Connect your car\'s Bluetooth to save spots automatically.</string>
+    <string name="banner_autopark_off">AutoPark is off. Connect your car’s Bluetooth to save spots automatically.</string>
     <string name="banner_autopark_off_action">Set up</string>
     <!-- 0.3.2 -->
     <string name="onboarding_setup_autopark">Set up AutoPark</string>
@@ -254,7 +254,7 @@
     <!-- 0.4 intro -->
     <string name="intro_title" translatable="false">Parked.</string>
     <string name="intro_tagline">Know where you parked.</string>
-    <string name="intro_body">When your car\'s Bluetooth disconnects, Parked! keeps the spot for you.</string>
+    <string name="intro_body">When your car’s Bluetooth disconnects, Parked! keeps the spot for you.</string>
     <string name="intro_language">Language</string>
     <string name="home_car_title">Your car</string>
     <string name="home_distance">%1$s · %2$d min</string>
@@ -328,7 +328,7 @@
     <string name="perm_location_title">Location</string>
     <string name="perm_location_body">So Parked! can save the spot when you park. Your saved spots stay on this phone.</string>
     <string name="perm_bluetooth_title">Bluetooth</string>
-    <string name="perm_bluetooth_body">So Parked! can tell when your car\'s Bluetooth disconnects. It only watches the car you choose.</string>
+    <string name="perm_bluetooth_body">So Parked! can tell when your car’s Bluetooth disconnects. It only watches the car you choose.</string>
     <string name="perm_notif_title">Notifications (optional)</string>
     <string name="perm_notif_body">So Parked! can confirm each save and tell you when a parking timer you set runs out. You can skip this.</string>
     <string name="perm_continue">Continue</string>
@@ -340,7 +340,7 @@
     <!-- 0.7 Home -->
     <string name="chip_autopark">AutoPark on</string>
     <string name="home_empty_auto_title">You drive. We\'ll remember.</string>
-    <string name="home_empty_auto_body">When you switch off and your car\'s Bluetooth disconnects, the spot saves itself.</string>
+    <string name="home_empty_auto_body">When you switch off and your car’s Bluetooth disconnects, the spot saves itself.</string>
     <string name="home_walk_minutes">%1$d min walk</string>
     <string name="home_saved_auto_named">Saved automatically when %1$s disconnected</string>
     <string name="home_car_here">Your car is on the map</string>
@@ -385,7 +385,7 @@
     <string name="v8_save_spot">Save this spot</string>
     <string name="v8_share_spot">Share spot</string>
     <string name="v8_time">Time</string>
-    <string name="v8_empty_help">AutoPark saves your spot when your car\'s Bluetooth disconnects.</string>
+    <string name="v8_empty_help">AutoPark saves your spot when your car’s Bluetooth disconnects.</string>
     <string name="v8_note_hint">Notes (row, color or anything else)</string>
     <string name="v8_at_car">You\'re here</string>
     <string name="v8_photo">Photo</string>
@@ -464,8 +464,8 @@
     <string name="v8_ap_off">Off</string>
     <string name="v8_ap_need_car">BT connection needed</string>
     <string name="v8_ap_limited">Limited</string>
-    <string name="v8_autopark_on_body">AutoPark is on. Your spot is saved when your car\'s Bluetooth disconnects.</string>
-    <string name="v8_autopark_off_body">Turn it on and Parked! saves your spot by itself when your car\'s Bluetooth disconnects.</string>
+    <string name="v8_autopark_on_body">AutoPark is on. Your spot is saved when your car’s Bluetooth disconnects.</string>
+    <string name="v8_autopark_off_body">Turn it on and Parked! saves your spot by itself when your car’s Bluetooth disconnects.</string>
     <string name="v8_autopark_turn_on">Turn on AutoPark</string>
     <string name="v8_autopark_turn_off">Turn off AutoPark</string>
     <string name="v8_level_q">Where in the parking is your car?</string>
@@ -494,7 +494,7 @@
     <string name="v8_ob_get_started">Get started!</string>
     <string name="v8_ob_how">How it works</string>
     <string name="v8_ob_three_steps">Three steps:</string>
-    <string name="v8_ob_a_title">a. Pick your car\'s Bluetooth.</string>
+    <string name="v8_ob_a_title">a. Pick your car’s Bluetooth.</string>
     <string name="v8_ob_a_body">You only do that once</string>
     <string name="v8_ob_b_title">b. Drive and park as usual.</string>
     <string name="v8_ob_b_body">When you turn off the car and\nBluetooth disconnects, Parked!\nsaves your spot.</string>
@@ -507,7 +507,7 @@
     <string name="v8_ob_also">Also:</string>
     <string name="v8_ob_also_body">Parking timer, floor and spot notes, fuel log\nand reminders for KTEO, oil and tyres.</string>
     <string name="v8_ob_oops">Oops!</string>
-    <string name="v8_ob_oops_1">We couldn\'t get the permissions</string>
+    <string name="v8_ob_oops_1">We couldn’t get the permissions</string>
     <string name="v8_ob_oops_2">needed for the app to properly work.</string>
     <string name="v8_ob_resend">Resend request.</string>
     <string name="v8_ob_all_set">All set!</string>
