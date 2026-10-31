@@ -48,7 +48,7 @@ class V8ScreenshotsTest {
                     androidx.activity.compose.LocalOnBackPressedDispatcherOwner provides owner,
                     androidx.compose.ui.platform.LocalInspectionMode provides true,
                 ) {
-                    DesignScale {
+                    if (tab < 0) content() else DesignScale {
                         Column(Modifier.fillMaxSize().background(White)) {
                             Box(Modifier.weight(1f)) { content() }
                             TabBarV8(tab, listOf("Home", "Car", "Settings")) {}
@@ -84,6 +84,11 @@ class V8ScreenshotsTest {
             }
         }
     }
+
+    @Test fun onb_start() = both("onb_start", 971, -1) { OnboardingV8(0) {} }
+    @Test fun onb_how() = both("onb_how", 971, -1) { OnboardingV8(1) {} }
+    @Test fun onb_oops() = both("onb_oops", 971, -1) { OnboardingV8(2) {} }
+    @Test fun onb_allset() = both("onb_allset", 971, -1) { OnboardingV8(3) {} }
 
     @Test fun home_saved() = both("home_saved", 971, 0) { home(true, HomeBanner.Permission) }
     @Test fun home_empty() = both("home_empty", 971, 0) { home(false, HomeBanner.Permission) }
