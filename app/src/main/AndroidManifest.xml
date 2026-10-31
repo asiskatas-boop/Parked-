@@ -53,17 +53,11 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- An NFC tag holding the link parked://save saves the spot when tapped. -->
+            <!-- An NFC tag holding the link parked://save saves the spot when tapped.
+                 Deliberately not BROWSABLE: a web page must not be able to move the car. -->
             <intent-filter>
                 <action android:name="android.nfc.action.NDEF_DISCOVERED" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="parked" android:host="save" />
-            </intent-filter>
-            <!-- The same link from anywhere else (a shortcut, a QR code, Tasker). -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="parked" android:host="save" />
             </intent-filter>
         </activity>

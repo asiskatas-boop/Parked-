@@ -34,6 +34,16 @@ android {
         }
     }
 
+    // The APK people install is the release build: same fixed key (so it updates
+    // 0.7 and earlier builds in place) but not debuggable, so app data can't be
+    // copied off the phone over USB debugging.
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

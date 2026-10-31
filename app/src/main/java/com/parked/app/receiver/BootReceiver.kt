@@ -22,6 +22,9 @@ class BootReceiver : BroadcastReceiver() {
             action == Intent.ACTION_MY_PACKAGE_REPLACED ||
             action == "android.intent.action.QUICKBOOT_POWERON"
         val exactAllowed = action == AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED
+        // Only the system can send BOOT_COMPLETED and MY_PACKAGE_REPLACED. Any app can
+        // send QUICKBOOT_POWERON, so that one may restart AutoPark but never turn it off.
+        val fromSystem = action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED
         if (!boot && !exactAllowed) return
 
         val pending = goAsync()
@@ -34,7 +37,7 @@ class BootReceiver : BroadcastReceiver() {
                     if (endsAt > System.currentTimeMillis()) ParkingTimer.schedule(app, endsAt)
                 }
                 if (boot && state.monitoring && state.deviceAddress != null) {
-                    if (!ParkingMonitorService.start(app, fromBackground = true)) {
+                    if (!ParkingMonitorService.start(app, fromBackground = true) && fromSystem) {
                         store.setMonitoring(false)
                         // Tell Home, so the loss isn't discovered at the next park.
                         com.parked.app.data.AutoParkHealth.markLost(app)

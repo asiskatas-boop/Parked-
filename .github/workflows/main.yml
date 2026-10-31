@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# The build only reads the repo; its token can't write anything.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -59,7 +63,7 @@ jobs:
           CARTO_API_KEY: ${{ secrets.CARTO_API_KEY }}
         run: |
           status=0
-          gradle :app:assembleDebug --console=plain > build.log 2>&1 || status=$?
+          gradle :app:assembleRelease --console=plain > build.log 2>&1 || status=$?
           cat build.log
           if [ "$status" -ne 0 ]; then
             # Surface compiler/resource errors as a single annotation so they are
@@ -77,15 +81,26 @@ jobs:
 
       # Shows the signing key's fingerprint on every run. It must stay the same
       # from build to build, or Android refuses to install an update.
-      - name: Show signing fingerprint
+      # Also refuses to publish an APK that is debuggable or signed with another key.
+      - name: Check signing key and debuggable flag
         run: |
-          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          fp=$("$apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -m1 'SHA-256' | awk '{print $NF}')
+          apk=app/build/outputs/apk/release/app-release.apk
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          fp=$("$tools/apksigner" verify --print-certs "$apk" | grep -m1 'SHA-256' | awk '{print $NF}')
           echo "Signing certificate SHA-256: $fp"
           echo "::notice title=Signing key::SHA-256 ${fp}"
+          if [ "$fp" != "a779dc23c4314246079ad6259b621dc6aacdc633b3a07d11e278dda1b6a87a43" ]; then
+            echo "::error title=Signing key::This APK is not signed with the fixed key, so it would not install over the app."
+            exit 1
+          fi
+          if "$tools/aapt2" dump xmltree --file AndroidManifest.xml "$apk" | grep -q 'debuggable.*=true'; then
+            echo "::error title=Debuggable::The APK is debuggable."
+            exit 1
+          fi
+          echo "::notice title=Debuggable::No (release build)."
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Parked-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Parked-apk
+          path: app/build/outputs/apk/release/app-release.apk
