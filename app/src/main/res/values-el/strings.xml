@@ -443,4 +443,26 @@
     <string name="v8_this_month">Αυτόν τον μήνα: %1$d ανεφοδιασμοί · %2$s</string>
     <string name="v8_filled_up_short">Γέμισμα</string>
     <string name="v8_back">Πίσω</string>
+    <string name="v8_settings">Ρυθμίσεις</string>
+    <string name="v8_autopark">AutoPark</string>
+    <string name="v8_my_car_label">Το αυτοκίνητό μου</string>
+    <string name="v8_car_bt">Bluetooth</string>
+    <string name="v8_notifications">Ειδοποιήσεις Parked!</string>
+    <string name="v8_history">Ιστορικό</string>
+    <string name="v8_language">Γλώσσα</string>
+    <string name="v8_backup">Αντίγραφο ασφαλείας</string>
+    <string name="v8_export">Εξαγωγή</string>
+    <string name="v8_import">Εισαγωγή</string>
+    <string name="v8_version">Έκδοση %1$s</string>
+    <string name="v8_history_sub">Πάτα μια θέση για να την ανοίξεις στους χάρτες.</string>
+    <string name="v8_car_bluetooth_title">Bluetooth αυτοκινήτου</string>
+    <string name="v8_car_bluetooth_sub">Διάλεξε το αυτοκίνητο. Το AutoPark κρατάει τη θέση όταν αποσυνδέεται.</string>
+    <string name="v8_ap_on">Ενεργό</string>
+    <string name="v8_ap_off">Ανενεργό</string>
+    <string name="v8_ap_need_car">Χρειάζεται σύνδεση BT</string>
+    <string name="v8_ap_limited">Περιορισμένο</string>
+    <string name="v8_autopark_on_body">Το AutoPark είναι ενεργό. Η θέση σου αποθηκεύεται όταν αποσυνδέεται το Bluetooth του αυτοκινήτου.</string>
+    <string name="v8_autopark_off_body">Άνοιξέ το και το Parked! θα κρατάει τη θέση σου μόνο του όταν αποσυνδέεται το Bluetooth του αυτοκινήτου.</string>
+    <string name="v8_autopark_turn_on">Ενεργοποίηση AutoPark</string>
+    <string name="v8_autopark_turn_off">Απενεργοποίηση AutoPark</string>
 </resources>

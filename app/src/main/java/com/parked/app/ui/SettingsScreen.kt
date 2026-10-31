@@ -65,30 +65,19 @@ fun SettingsScreen(
     onAutoParkRequestHandled: () -> Unit = {},
     appScope: kotlinx.coroutines.CoroutineScope,
 ) {
-    var showHistory by rememberSaveable { mutableStateOf(false) }
-    if (showHistory) BackHandler { showHistory = false }
-    androidx.compose.animation.AnimatedContent(
-        targetState = showHistory,
-        transitionSpec = { pageTransition(forward = targetState) },
-        label = "settingsPages"
-    ) { history ->
-        if (history) ParkingHistoryPage(store = store, onBack = { showHistory = false })
-        else SettingsMain(
-            fuel = fuel,
-            store = store,
-            onOpenHistory = { showHistory = true },
-            autoParkRequest = autoParkRequest,
-            onAutoParkRequestHandled = onAutoParkRequestHandled,
-            appScope = appScope,
-        )
-    }
+    SettingsMain(
+        fuel = fuel,
+        store = store,
+        autoParkRequest = autoParkRequest,
+        onAutoParkRequestHandled = onAutoParkRequestHandled,
+        appScope = appScope,
+    )
 }
 
 @Composable
 private fun SettingsMain(
     fuel: FuelStore,
     store: ParkingStore,
-    onOpenHistory: () -> Unit,
     autoParkRequest: Int,
     onAutoParkRequestHandled: () -> Unit,
     appScope: kotlinx.coroutines.CoroutineScope,
@@ -364,252 +353,274 @@ private fun SettingsMain(
     val notificationsChecked = fuel.notificationsEnabled && systemNotificationsAllowed
     var hasCrashReport by remember { mutableStateOf(ParkedApplication.crashFile(context).exists()) }
 
-    Column(Modifier.fillMaxSize().background(Bg).verticalScroll(rememberScrollState())) {
-        Column(Modifier.statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
-            PageTitle(stringResource(R.string.tab_settings), modifier = Modifier.padding(horizontal = 4.dp))
-            Spacer(Modifier.height(20.dp))
-            SettingsCard {
-                ToggleRow(
-                    icon = Ph.bluetooth,
-                    label = stringResource(R.string.autopark),
-                    checked = state.monitoring,
-                    supporting = when {
-                        !state.monitoring -> stringResource(R.string.autopark_supporting)
-                        autoParkMode == AutoParkMode.Limited -> stringResource(R.string.autopark_limited)
-                        else -> null
-                    },
-                    onToggle = { on ->
-                        if (on) beginAutoPark() else {
+    // ---------------- 0.8 layout and sheets (ui/v8/SettingsV8.kt) ----------------
+    var showAutoPark by remember { mutableStateOf(false) }
+    var showOdometer by remember { mutableStateOf(false) }
+    var showHistory by rememberSaveable { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
+    val sOdoSaved = stringResource(R.string.v8_odometer_saved)
+    val locale = context.resources.configuration.locales[0]
+
+    fun openCarPicker() {
+        pendingDevicePickerOnly = true
+        when {
+            Build.VERSION.SDK_INT >= 31 && !hasBluetoothPermission(context) ->
+                bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+            !isBluetoothEnabled(context) ->
+                bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+            else -> { pendingDevicePickerOnly = false; showDevicePicker = true }
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        com.parked.app.ui.v8.SettingsV8(
+            autoParkStatus = stringResource(
+                when {
+                    state.monitoring && autoParkMode == AutoParkMode.Limited -> R.string.v8_ap_limited
+                    state.monitoring -> R.string.v8_ap_on
+                    state.deviceAddress == null -> R.string.v8_ap_need_car
+                    else -> R.string.v8_ap_off
+                }
+            ),
+            deviceName = state.deviceName ?: stringResource(R.string.not_set),
+            odometer = fuel.currentOdo.takeIf { it > 0 }?.let { formatKm(it) } ?: stringResource(R.string.not_set),
+            notificationsOn = notificationsChecked,
+            historyOn = state.historyEnabled,
+            historyCount = pluralStringResource(R.plurals.history_count, state.history.size, state.history.size),
+            language = if (Build.VERSION.SDK_INT >= 33) locale.getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) } else null,
+            version = com.parked.app.BuildConfig.VERSION_NAME,
+            onAutoPark = { showAutoPark = true },
+            onCarBt = { openCarPicker() },
+            onOdometer = { showOdometer = true },
+            onNotifications = { enabled ->
+                when {
+                    !enabled -> fuel.updateNotificationsEnabled(false)
+                    Build.VERSION.SDK_INT >= 33 &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED ->
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    !Channels.canPost(context, Channels.ALERTS) -> {
+                        // Remember the wish before opening Android's settings, so
+                        // alerts are on as soon as the channel is enabled there.
+                        fuel.updateNotificationsEnabled(true)
+                        say(sAlertsInSettings)
+                        runCatching {
+                            context.startActivity(
+                                Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                                    .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
+                                    .putExtra(AndroidSettings.EXTRA_CHANNEL_ID, Channels.ALERTS)
+                            )
+                        }
+                    }
+                    else -> { fuel.updateNotificationsEnabled(true); say(sAlertsOn) }
+                }
+            },
+            onHistory = { on ->
+                if (on) scope.launch { store.setHistoryEnabled(true) }
+                else if (state.history.isEmpty()) scope.launch { store.setHistoryEnabled(false) }
+                else confirmHistoryOff = true
+            },
+            onSeeAll = { showHistory = true },
+            onLanguage = { openAppLanguageSettings(context) },
+            onExport = {
+                val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+                runCatching { exportLauncher.launch("Parked backup $day.json") }
+            },
+            onImport = {
+                // Many file managers label .json files as plain text or binary.
+                runCatching { importLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }
+            },
+            crashReport = if (hasCrashReport) ({ shareCrashReport(context); hasCrashReport = false }) else null,
+        )
+
+        com.parked.app.ui.v8.ParkingHistoryV8(
+            visible = showHistory,
+            items = state.history.map { com.parked.app.ui.v8.HistoryItemV8(it.at, parkedAtLabel(context, it.at), it.note) },
+            onBack = { showHistory = false },
+            onOpen = { at ->
+                state.history.firstOrNull { it.at == at }?.let { entry ->
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("geo:${entry.lat},${entry.lng}?q=${entry.lat},${entry.lng}"))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                }
+            },
+            onDelete = { at -> scope.launch { store.deleteHistoryEntry(at) } },
+            onClear = { confirmClear = true },
+        )
+
+        // AutoPark: what it does, and one button to switch it.
+        com.parked.app.ui.v8.SheetV8(showAutoPark, onDismiss = { showAutoPark = false }) {
+            with(com.parked.app.ui.v8.Sheets) {
+                ConfirmBody(
+                    title = stringResource(R.string.v8_autopark),
+                    body = stringResource(
+                        when {
+                            state.monitoring && autoParkMode == AutoParkMode.Limited -> R.string.autopark_limited
+                            state.monitoring -> R.string.v8_autopark_on_body
+                            else -> R.string.v8_autopark_off_body
+                        }
+                    ),
+                    confirm = stringResource(if (state.monitoring) R.string.v8_autopark_turn_off else R.string.v8_autopark_turn_on),
+                    onConfirm = {
+                        showAutoPark = false
+                        if (!state.monitoring) beginAutoPark() else {
                             com.parked.app.data.AutoParkHealth.clear(context)
                             ParkingMonitorService.stop(context)
                             scope.launch { store.setMonitoring(false) }
                             say(sAutoOff)
                         }
-                    }
+                    },
                 )
-                DividerRow()
-                TextRow(stringResource(R.string.car_bluetooth), state.deviceName ?: stringResource(R.string.not_set), icon = Ph.car) {
-                    pendingDevicePickerOnly = true
-                    when {
-                        Build.VERSION.SDK_INT >= 31 && !hasBluetoothPermission(context) ->
-                            bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                        !isBluetoothEnabled(context) ->
-                            bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
-                        else -> { pendingDevicePickerOnly = false; showDevicePicker = true }
+            }
+        }
+        com.parked.app.ui.v8.SheetV8(showOdometer, onDismiss = { showOdometer = false }) {
+            with(com.parked.app.ui.v8.Sheets) { Odometer(fuel) { showOdometer = false; say(sOdoSaved) } }
+        }
+        com.parked.app.ui.v8.SheetV8(showDevicePicker, onDismiss = {
+            showDevicePicker = false
+            pendingAutoStart = false
+            pendingDevicePickerOnly = false
+        }) {
+            val canRead = hasBluetoothPermission(context)
+            val fallback = stringResource(R.string.car_bluetooth)
+            val unnamed = stringResource(R.string.unnamed_device)
+            // Cars first; headphones, watches and speakers after them.
+            val devices = remember(showDevicePicker) {
+                if (canRead) pairedDevices(context).sortedByDescending { it.isCar }
+                    .map { Triple(it.name ?: unnamed, it.address, it.isCar) } else emptyList()
+            }
+            with(com.parked.app.ui.v8.Sheets) {
+                Devices(devices, canRead, state.deviceAddress) { name, address ->
+                    autoPickedCar = null
+                    val shouldStart = pendingAutoStart || state.monitoring
+                    showDevicePicker = false
+                    scope.launch {
+                        // Stop the old car's session before switching device.
+                        if (state.monitoring) {
+                            ParkingMonitorService.stop(context)
+                            store.setMonitoring(false)
+                        }
+                        store.selectDevice(if (name == unnamed) fallback else name, address)
+                        if (shouldStart) beginAutoPark(deviceReady = true) else say(sCarSaved)
                     }
                 }
             }
-
-            SectionTitle(stringResource(R.string.settings_preferences), modifier = Modifier.padding(start = 4.dp, top = 28.dp, bottom = 8.dp))
-            SettingsCard {
-                ToggleRow(
-                    icon = Ph.bell,
-                    label = stringResource(R.string.parking_alerts),
-                    checked = notificationsChecked,
-                    onToggle = { enabled ->
-                        when {
-                            !enabled -> fuel.updateNotificationsEnabled(false)
-                            Build.VERSION.SDK_INT >= 33 &&
-                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED ->
-                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            !Channels.canPost(context, Channels.ALERTS) -> {
-                                // Remember the wish before opening Android's settings, so
-                                // alerts are on as soon as the channel is enabled there.
-                                fuel.updateNotificationsEnabled(true)
-                                say(sAlertsInSettings)
-                                runCatching {
-                                    context.startActivity(
-                                        Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-                                            .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
-                                            .putExtra(AndroidSettings.EXTRA_CHANNEL_ID, Channels.ALERTS)
-                                    )
+        }
+        com.parked.app.ui.v8.SheetV8(confirmHistoryOff, onDismiss = { confirmHistoryOff = false }) {
+            with(com.parked.app.ui.v8.Sheets) {
+                ConfirmBody(
+                    title = stringResource(R.string.history_off_title),
+                    body = stringResource(R.string.history_off_body),
+                    confirm = stringResource(R.string.history_off_confirm),
+                    onConfirm = { confirmHistoryOff = false; scope.launch { store.setHistoryEnabled(false) } },
+                    secondary = stringResource(R.string.cancel),
+                    onSecondary = { confirmHistoryOff = false },
+                )
+            }
+        }
+        com.parked.app.ui.v8.SheetV8(confirmClear, onDismiss = { confirmClear = false }) {
+            with(com.parked.app.ui.v8.Sheets) {
+                ConfirmBody(
+                    title = stringResource(R.string.history_clear_title),
+                    body = stringResource(R.string.history_clear_body),
+                    confirm = stringResource(R.string.history_clear),
+                    onConfirm = { confirmClear = false; scope.launch { store.clearHistory() } },
+                    secondary = stringResource(R.string.cancel),
+                    onSecondary = { confirmClear = false },
+                )
+            }
+        }
+        val restore = pendingRestore
+        com.parked.app.ui.v8.SheetV8(restore != null, onDismiss = { pendingRestore = null }) {
+            if (restore != null) {
+                val message = listOfNotNull(
+                    restore.exportedAt.takeIf { it > 0 }?.let { stringResource(R.string.backup_restore_made, dateTime(context, it)) },
+                    stringResource(R.string.backup_restore_body),
+                    // History is opt-in, so say plainly that this backup turns it on.
+                    if (restore.parking.historyEnabled) pluralStringResource(R.plurals.backup_restore_history, restore.parking.history.size, restore.parking.history.size) else null,
+                ).joinToString(" ")
+                with(com.parked.app.ui.v8.Sheets) {
+                    ConfirmBody(
+                        title = stringResource(R.string.backup_restore_title),
+                        body = message,
+                        confirm = stringResource(R.string.backup_restore_confirm),
+                        secondary = stringResource(R.string.cancel),
+                        onSecondary = { pendingRestore = null },
+                        onConfirm = {
+                            pendingRestore = null
+                            // App-wide scope: leaving Settings must not cancel the restore or its Undo.
+                            appScope.launch {
+                                val before = Backup.snapshot(store, fuel)
+                                Backup.restore(context, restore, store, fuel)
+                                snackbar.currentSnackbarData?.dismiss()
+                                val result = snackbar.showSnackbar(
+                                    sBackupRestored,
+                                    actionLabel = if (before != null) sUndo else null,
+                                    duration = SnackbarDuration.Long,
+                                    withDismissAction = true,
+                                )
+                                if (before == null) return@launch
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    Backup.restore(context, before.data, store, fuel, before.photoPath, before.monitoring)
+                                } else {
+                                    // Undo has passed: the replaced spot's photo belongs to nothing now.
+                                    store.deletePhotoFile(before.photoPath)
                                 }
                             }
-                            else -> { fuel.updateNotificationsEnabled(true); say(sAlertsOn) }
-                        }
-                    }
-                )
-                DividerRow()
-                ToggleRow(
-                    icon = Ph.clockCounter,
-                    label = stringResource(R.string.history_toggle),
-                    checked = state.historyEnabled,
-                    supporting = stringResource(R.string.history_toggle_supporting),
-                    onToggle = { on ->
-                        if (on) scope.launch { store.setHistoryEnabled(true) }
-                        else if (state.history.isEmpty()) scope.launch { store.setHistoryEnabled(false) }
-                        else confirmHistoryOff = true
-                    }
-                )
-                if (state.historyEnabled) {
-                    DividerRow()
-                    TextRow(
-                        stringResource(R.string.history_title),
-                        pluralStringResource(R.plurals.history_count, state.history.size, state.history.size),
-                        icon = Ph.mapPin,
-                        onClick = onOpenHistory
+                        },
                     )
-                }
-                if (Build.VERSION.SDK_INT >= 33) {
-                    DividerRow()
-                    val locale = context.resources.configuration.locales[0]
-                    TextRow(
-                        stringResource(R.string.intro_language),
-                        locale.getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) },
-                        icon = Ph.globe,
-                    ) { openAppLanguageSettings(context) }
-                }
-            }
-
-            SectionTitle(stringResource(R.string.backup_section), modifier = Modifier.padding(start = 4.dp, top = 28.dp, bottom = 8.dp))
-            SettingsCard {
-            ActionRow(
-                icon = Ph.cloudUp,
-                title = stringResource(R.string.backup_export),
-                subtitle = stringResource(R.string.backup_export_sub),
-                onClick = {
-                    val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-                    runCatching { exportLauncher.launch("Parked backup $day.json") }
-                }
-            )
-            DividerRow()
-            ActionRow(
-                icon = Ph.download,
-                title = stringResource(R.string.backup_import),
-                subtitle = stringResource(R.string.backup_import_sub),
-                onClick = {
-                    // Many file managers label .json files as plain text or binary.
-                    runCatching { importLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }
-                }
-            )
-            }
-
-            // About: the version, and the crash report when there is one.
-            SectionTitle(stringResource(R.string.about_section), modifier = Modifier.padding(start = 4.dp, top = 28.dp, bottom = 8.dp))
-            SettingsCard {
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Ph.info, contentDescription = null, tint = Green, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(14.dp))
-                    Text(stringResource(R.string.about_version), fontSize = TypeScale.Label, color = TextPrimary, modifier = Modifier.weight(1f))
-                    Text(com.parked.app.BuildConfig.VERSION_NAME, fontSize = TypeScale.Supporting, color = TextMuted)
-                }
-                if (hasCrashReport) {
-                    DividerRow()
-                    TextRow(stringResource(R.string.crash_report), stringResource(R.string.crash_report_share), icon = Ph.warning) {
-                        shareCrashReport(context)
-                        hasCrashReport = false
-                    }
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
-    }
-
-    pendingRestore?.let { r ->
-        val message = listOfNotNull(
-            r.exportedAt.takeIf { it > 0 }?.let { stringResource(R.string.backup_restore_made, dateTime(context, it)) },
-            stringResource(R.string.backup_restore_body),
-            // History is opt-in, so say plainly that this backup turns it on.
-            if (r.parking.historyEnabled) pluralStringResource(R.plurals.backup_restore_history, r.parking.history.size, r.parking.history.size) else null,
-        ).joinToString(" ")
-        ConfirmDialog(
-            visible = true,
-            title = stringResource(R.string.backup_restore_title),
-            message = message,
-            confirmLabel = stringResource(R.string.backup_restore_confirm),
-            onDismiss = { pendingRestore = null },
-            onConfirm = {
-                pendingRestore = null
-                // App-wide scope: leaving Settings must not cancel the restore or its Undo.
-                appScope.launch {
-                    val before = Backup.snapshot(store, fuel)
-                    Backup.restore(context, r, store, fuel)
-                    snackbar.currentSnackbarData?.dismiss()
-                    val result = snackbar.showSnackbar(
-                        sBackupRestored,
-                        actionLabel = if (before != null) sUndo else null,
-                        duration = SnackbarDuration.Long,
-                        withDismissAction = true,
-                    )
-                    if (before == null) return@launch
-                    if (result == SnackbarResult.ActionPerformed) {
-                        Backup.restore(context, before.data, store, fuel, before.photoPath, before.monitoring)
-                    } else {
-                        // Undo has passed: the replaced spot's photo belongs to nothing now.
-                        store.deletePhotoFile(before.photoPath)
-                    }
-                }
-            }
-        )
-    }
-    permStep?.let { step ->
-        PermissionStepSheet(
-            step = step,
-            onContinue = {
-                permStep = null
-                val perms = when (step) {
-                    PermStep.Location -> arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                    PermStep.Bluetooth -> arrayOf(Manifest.permission.BLUETOOTH_CONNECT)
-                    PermStep.Notifications -> { askedNotifications = true; arrayOf(Manifest.permission.POST_NOTIFICATIONS) }
-                }
-                runCatching { autoPermissionLauncher.launch(perms) }.onFailure { pendingAutoStart = false; say(sPermsNeeded) }
-            },
-            onSkip = if (step == PermStep.Notifications) {
-                {
-                    // Skipping is remembered, so the next setup doesn't ask again.
-                    // Alerts can be turned on later in Preferences.
-                    permStep = null
-                    askedNotifications = true
-                    fuel.updateNotificationsEnabled(false)
-                    systemNotificationsAllowed = false
-                    resumeAutoPark()
-                }
-            } else null,
+        // One permission at a time, each explained in a sentence before Android's own prompt.
+        val step = permStep
+        com.parked.app.ui.v8.SheetV8(step != null, onDismiss = {
             // Swiping away the optional notifications step counts as skipping it.
-            onDismiss = {
-                if (step == PermStep.Notifications) {
-                    permStep = null
-                    askedNotifications = true
-                    fuel.updateNotificationsEnabled(false)
-                    systemNotificationsAllowed = false
-                    resumeAutoPark()
-                } else { permStep = null; pendingAutoStart = false }
-            },
-        )
-    }
-    ConfirmDialog(
-        visible = confirmHistoryOff,
-        title = stringResource(R.string.history_off_title),
-        message = stringResource(R.string.history_off_body),
-        confirmLabel = stringResource(R.string.history_off_confirm),
-        onDismiss = { confirmHistoryOff = false },
-        onConfirm = {
-            confirmHistoryOff = false
-            scope.launch { store.setHistoryEnabled(false) }
-        }
-    )
-    if (showDevicePicker) {
-        DevicePickerDialog(
-            onDismiss = {
-                showDevicePicker = false
-                pendingAutoStart = false
-                pendingDevicePickerOnly = false
-            },
-            onSelected = { name, address ->
-                autoPickedCar = null
-                val shouldStart = pendingAutoStart || state.monitoring
-                showDevicePicker = false
-                scope.launch {
-                    // Stop the old car's session before switching device.
-                    if (state.monitoring) {
-                        ParkingMonitorService.stop(context)
-                        store.setMonitoring(false)
-                    }
-                    store.selectDevice(name, address)
-                    if (shouldStart) beginAutoPark(deviceReady = true) else say(sCarSaved)
+            if (step == PermStep.Notifications) {
+                permStep = null
+                askedNotifications = true
+                fuel.updateNotificationsEnabled(false)
+                systemNotificationsAllowed = false
+                resumeAutoPark()
+            } else { permStep = null; pendingAutoStart = false }
+        }) {
+            if (step != null) {
+                val (title, body) = when (step) {
+                    PermStep.Location -> R.string.perm_location_title to R.string.perm_location_body
+                    PermStep.Bluetooth -> R.string.perm_bluetooth_title to R.string.perm_bluetooth_body
+                    PermStep.Notifications -> R.string.perm_notif_title to R.string.perm_notif_body
+                }
+                with(com.parked.app.ui.v8.Sheets) {
+                    ConfirmBody(
+                        title = stringResource(title),
+                        body = stringResource(body),
+                        confirm = stringResource(R.string.perm_continue),
+                        onConfirm = {
+                            permStep = null
+                            val perms = when (step) {
+                                PermStep.Location -> arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                                PermStep.Bluetooth -> arrayOf(Manifest.permission.BLUETOOTH_CONNECT)
+                                PermStep.Notifications -> { askedNotifications = true; arrayOf(Manifest.permission.POST_NOTIFICATIONS) }
+                            }
+                            runCatching { autoPermissionLauncher.launch(perms) }.onFailure { pendingAutoStart = false; say(sPermsNeeded) }
+                        },
+                        secondary = stringResource(if (step == PermStep.Notifications) R.string.perm_skip else R.string.cancel),
+                        onSecondary = {
+                            if (step == PermStep.Notifications) {
+                                // Skipping is remembered, so the next setup doesn't ask again.
+                                permStep = null
+                                askedNotifications = true
+                                fuel.updateNotificationsEnabled(false)
+                                systemNotificationsAllowed = false
+                                resumeAutoPark()
+                            } else { permStep = null; pendingAutoStart = false }
+                        },
+                    )
                 }
             }
-        )
+        }
     }
 }
 
