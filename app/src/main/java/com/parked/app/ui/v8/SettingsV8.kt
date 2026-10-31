@@ -97,12 +97,12 @@ fun SettingsV8(
             PrefRow(DesignIcons.Bell, 19f, 20f, 18f, stringResource(R.string.v8_notifications), top = 11.5f) {
                 SwitchV8(notificationsOn, stringResource(R.string.v8_notifications), onNotifications)
             }
-            PrefRow(DesignIcons.History, 18f, 18f, 19f, stringResource(R.string.v8_history), top = 0f) {
+            PrefRow(DesignIcons.History, 18f, 18f, 19f, stringResource(R.string.v8_history), top = 7f, height = 28f) {
                 SwitchV8(historyOn, stringResource(R.string.v8_history), onHistory)
             }
             AnimatedVisibility(historyOn) {
                 Row(
-                    Modifier.fillMaxWidth().padding(start = 52.dp, end = 18.dp).height(14.dp),
+                    Modifier.fillMaxWidth().padding(start = 52.dp, end = 18.dp).height(28.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -118,7 +118,7 @@ fun SettingsV8(
                 }
             }
             if (language != null) {
-                Spacer(Modifier.height(if (historyOn) 17.dp else 6.dp))
+                Spacer(Modifier.height(if (historyOn) 10.dp else 6.dp))
                 PrefRow(DesignIcons.Language, 20.32f, 11.62f, 19f, stringResource(R.string.v8_language), top = 0f, onClick = onLanguage) {
                     Text(language, style = designStyle(13.sp, FontWeight.Medium, Ink), maxLines = 1)
                 }
@@ -169,14 +169,14 @@ private fun SettingRow(
 /** A row inside the Preferences card: icon, bold label, and a control on the right. */
 @Composable
 private fun PrefRow(
-    icon: ImageVector, w: Float, h: Float, ix: Float, label: String, top: Float,
+    icon: ImageVector, w: Float, h: Float, ix: Float, label: String, top: Float, height: Float = 42f,
     onClick: (() -> Unit)? = null, trailing: @Composable () -> Unit,
 ) {
     Row(
         Modifier
             .padding(top = top.dp)
             .fillMaxWidth()
-            .height(42.dp)
+            .height(height.dp)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(start = ix.dp, end = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
