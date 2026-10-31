@@ -290,9 +290,9 @@ private fun SavedBody(
                     parkedLabel ?: stringResource(R.string.parked_recently),
                     style = designStyle(15.sp, FontWeight.Light, Black), maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.weight(0.001f).widthIn(min = 12.dp))
+                Spacer(Modifier.width(12.dp))
                 AnimatedContent(
                     targetState = waitingForGps,
                     transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) },
