@@ -465,4 +465,23 @@
     <string name="v8_autopark_off_body">Άνοιξέ το και το Parked! θα κρατάει τη θέση σου μόνο του όταν αποσυνδέεται το Bluetooth του αυτοκινήτου.</string>
     <string name="v8_autopark_turn_on">Ενεργοποίηση AutoPark</string>
     <string name="v8_autopark_turn_off">Απενεργοποίηση AutoPark</string>
+    <string name="v8_level_q">Πού είναι το αυτοκίνητο στο πάρκινγκ;</string>
+    <string name="v8_floor_hint">Όροφος, π.χ. -2</string>
+    <string name="v8_zone_hint">Ζώνη, π.χ. B</string>
+    <string name="v8_space_hint">Θέση, π.χ. 114</string>
+    <string name="v8_timer_title">Χρονόμετρο στάθμευσης</string>
+    <string name="v8_timer_sub">Πάρε υπενθύμιση πριν λήξει ο χρόνος στάθμευσης.</string>
+    <string name="v8_timer_ends">Ο χρόνος σου τελειώνει στις %1$s.</string>
+    <string name="v8_30min">30 λεπτά</string>
+    <string name="v8_1h">1 ώρα</string>
+    <string name="v8_2h">2 ώρες</string>
+    <string name="v8_3h">3 ώρες</string>
+    <string name="v8_minutes_hint">Άλλο, σε λεπτά</string>
+    <string name="v8_start">Έναρξη</string>
+    <string name="v8_err_minutes">1 έως 1440</string>
+    <string name="v8_spot_photo">Φωτογραφία θέσης</string>
+    <string name="v8_spot_photo_sub">Μια φωτογραφία βοηθάει να βρεις το αυτοκίνητο σε μεγάλο πάρκινγκ.</string>
+    <string name="v8_retake">Ξανά</string>
+    <string name="v8_remove">Αφαίρεση</string>
+    <string name="v8_done">Τέλος</string>
 </resources>

@@ -468,4 +468,23 @@
     <string name="v8_autopark_off_body">Turn it on and Parked! saves your spot by itself when your car\'s Bluetooth disconnects.</string>
     <string name="v8_autopark_turn_on">Turn on AutoPark</string>
     <string name="v8_autopark_turn_off">Turn off AutoPark</string>
+    <string name="v8_level_q">Where in the parking is your car?</string>
+    <string name="v8_floor_hint">Floor, e.g. -2</string>
+    <string name="v8_zone_hint">Zone, e.g. B</string>
+    <string name="v8_space_hint">Space, e.g. 114</string>
+    <string name="v8_timer_title">Parking timer</string>
+    <string name="v8_timer_sub">Get a reminder before your parking time runs out.</string>
+    <string name="v8_timer_ends">Your time is up at %1$s.</string>
+    <string name="v8_30min">30 min</string>
+    <string name="v8_1h">1 hour</string>
+    <string name="v8_2h">2 hours</string>
+    <string name="v8_3h">3 hours</string>
+    <string name="v8_minutes_hint">Other, in minutes</string>
+    <string name="v8_start">Start</string>
+    <string name="v8_err_minutes">1 to 1440</string>
+    <string name="v8_spot_photo">Spot photo</string>
+    <string name="v8_spot_photo_sub">A photo helps you find the car in a big parking.</string>
+    <string name="v8_retake">Retake</string>
+    <string name="v8_remove">Remove</string>
+    <string name="v8_done">Done</string>
 </resources>
