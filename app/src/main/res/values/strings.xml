@@ -499,7 +499,7 @@
     <string name="v8_ob_b_title">b. Drive and park as usual.</string>
     <string name="v8_ob_b_body">When you turn off the car and\nBluetooth disconnects, Parked!\nsaves your spot.</string>
     <string name="v8_ob_c_title">c. Walk back with the map.</string>
-    <string name="v8_ob_c_body">See your car on the map and\nget walking directions from\nGoogle or Apple Maps.</string>
+    <string name="v8_ob_c_body">See your car on the map and\nget walking directions from\nGoogle Maps.</string>
     <string name="v8_ob_spots_1">Your spots</string>
     <string name="v8_ob_spots_always">always</string>
     <string name="v8_ob_spots_2">stay on your phone.</string>
