@@ -32,8 +32,9 @@ sealed interface MapCommand {
  * CARTO Voyager: a light, warm basemap built from OpenStreetMap data, which
  * sits well on the cream page. Both credits are shown on Home (osm_attribution).
  */
-private val Voyager = XYTileSource(
-    "CartoVoyager", 0, 20, 256, ".png",
+private val Voyager = object : XYTileSource(
+    // New name = new tile cache, so watermarked tiles saved before the key are not reused.
+    "CartoVoyagerKeyed", 0, 20, 256, ".png",
     arrayOf(
         "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
         "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
@@ -41,7 +42,14 @@ private val Voyager = XYTileSource(
         "https://d.basemaps.cartocdn.com/rastertiles/voyager/",
     ),
     "© OpenStreetMap contributors © CARTO",
-)
+) {
+    // Since August 2026 CARTO wants a (free) key on every tile request.
+    override fun getTileURLString(pMapTileIndex: Long): String {
+        val url = super.getTileURLString(pMapTileIndex)
+        val key = com.parked.app.BuildConfig.CARTO_KEY
+        return if (key.isEmpty()) url else "$url?key=$key"
+    }
+}
 
 /**
  * The map. It is sized by the caller to the area that is actually visible

@@ -14,7 +14,10 @@ android {
         targetSdk = 35
         versionCode = 19
         versionName = "0.8.0"
-
+        // CARTO's free basemap key, from the CARTO_API_KEY repository secret
+        // (kept out of the public code). Without it the map tiles carry a watermark.
+        val cartoKey = (System.getenv("CARTO_API_KEY") ?: "").replace("\"", "")
+        buildConfigField("String", "CARTO_KEY", "\"$cartoKey\"")
     }
 
     // CI provides a fixed debug key so every build installs over the previous
