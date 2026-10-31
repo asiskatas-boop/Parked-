@@ -512,4 +512,7 @@
     <string name="v8_ob_saves_itself">θα κρατήσει μόνο του τη θέση.</string>
     <string name="v8_ob_save_anytime">Μπορείς και να την αποθηκεύσεις εσύ.</string>
     <string name="v8_ob_go_map">Στον χάρτη</string>
+    <string name="v8_banner_bt_oops_1">Ουπς! Bluetooth κλειστό.</string>
+    <string name="v8_banner_bt_oops_2">Το AutoPark δεν δουλεύει.</string>
+    <string name="v8_waiting_gps_short">GPS…</string>
 </resources>

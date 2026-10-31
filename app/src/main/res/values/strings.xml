@@ -515,4 +515,7 @@
     <string name="v8_ob_saves_itself">saves the spot by itself.</string>
     <string name="v8_ob_save_anytime">You can also save it yourself anytime.</string>
     <string name="v8_ob_go_map">Go to the map</string>
+    <string name="v8_banner_bt_oops_1">Oops! Bluetooth is still off.</string>
+    <string name="v8_banner_bt_oops_2">AutoPark can\'t see the car</string>
+    <string name="v8_waiting_gps_short">GPS…</string>
 </resources>
