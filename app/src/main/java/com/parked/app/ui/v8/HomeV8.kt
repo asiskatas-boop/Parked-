@@ -51,7 +51,7 @@ import com.parked.app.R
 import com.parked.app.ui.Haptics
 
 /** What the grey banner at the top asks for. Null: no banner. */
-enum class HomeBanner { Permission, LocationOff, BluetoothOff, AutoParkLost }
+enum class HomeBanner { Permission, LocationOff, BluetoothOff, BluetoothRefused, AutoParkLost }
 
 /**
  * Home, 0.8 design. Positions are the Figma coordinates (frame 393 wide);
@@ -63,6 +63,8 @@ fun HomeV8(
     hasSpot: Boolean,
     banner: HomeBanner?,
     autoParkOn: Boolean,
+    /** Goes up each time the user refuses to turn Bluetooth on: the banner shakes. */
+    bannerShake: Int = 0,
     parkedLabel: String?,
     distanceLabel: String?,
     waitingForGps: Boolean,
@@ -96,16 +98,20 @@ fun HomeV8(
         ) {
             var last by remember { mutableStateOf(banner ?: HomeBanner.Permission) }
             if (banner != null) last = banner
-            Banner(last, onBannerAction)
+            Banner(last, bannerShake, onBannerAction)
         }
         val top by animateFloatAsState(if (banner != null) 27f else 16f, spring(dampingRatio = 0.9f, stiffness = 500f), label = "top")
         Spacer(Modifier.height(top.dp))
 
         // AutoPark row (Figma y 110) and the title (baseline 186.33).
-        Box(Modifier.fillMaxWidth().height(108.dp)) {
-            Row(
+        // When AutoPark is on there's nothing to say: the row folds away and the title moves up.
+        val lift by animateFloatAsState(if (autoParkOn) 36f else 0f, spring(dampingRatio = 0.9f, stiffness = 500f), label = "lift")
+        Box(Modifier.fillMaxWidth().height((108f - lift).dp)) {
+            val apAlpha by animateFloatAsState(if (autoParkOn) 0f else 1f, tween(200), label = "apRow")
+            if (apAlpha > 0f) Row(
                 Modifier
                     .offset(24.dp, (-8).dp)
+                    .graphicsLayer { alpha = apAlpha }
                     .height(36.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .clickable(role = Role.Button, onClick = onAutoPark)
@@ -123,7 +129,7 @@ fun HomeV8(
                 targetState = hasSpot || !loaded,
                 transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) },
                 label = "title",
-                modifier = Modifier.semantics { heading() },
+                modifier = Modifier.offset(y = (-lift).dp).semantics { heading() },
             ) { saved ->
                 FigmaText(
                     stringResource(if (saved) R.string.v8_car_here else R.string.v8_no_spot),
@@ -167,17 +173,28 @@ fun HomeV8(
 }
 
 @Composable
-private fun Banner(issue: HomeBanner, onAction: () -> Unit) {
+private fun Banner(issue: HomeBanner, shakeKey: Int, onAction: () -> Unit) {
     val (l1, l2, action) = when (issue) {
         HomeBanner.Permission -> Triple(R.string.v8_banner_gps_1, R.string.v8_banner_gps_2, R.string.v8_turn_on)
         HomeBanner.LocationOff -> Triple(R.string.v8_banner_loc_1, R.string.v8_banner_loc_2, R.string.v8_turn_on)
         HomeBanner.BluetoothOff -> Triple(R.string.v8_banner_bt_1, R.string.v8_banner_bt_2, R.string.v8_turn_on)
+        HomeBanner.BluetoothRefused -> Triple(R.string.v8_banner_bt_oops_1, R.string.v8_banner_bt_oops_2, R.string.v8_turn_on)
         HomeBanner.AutoParkLost -> Triple(R.string.v8_banner_lost_1, R.string.v8_banner_lost_2, R.string.v8_fix)
+    }
+    // Same shake as the onboarding's "Oops!".
+    val shake = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(shakeKey) {
+        if (shakeKey == 0) return@LaunchedEffect
+        shake.animateTo(0f, androidx.compose.animation.core.keyframes {
+            durationMillis = 620
+            -14f at 75; 12f at 175; -9f at 270; 6f at 370; -3f at 470; 0f at 620
+        })
     }
     Box(Modifier.fillMaxWidth().height(83.dp)) {
         Box(
             Modifier
                 .offset(24.dp, 16.dp)
+                .graphicsLayer { translationX = shake.value * density }
                 .size(344.dp, 67.dp)
                 .clip(R15)
                 .background(CardGrey)
@@ -262,18 +279,35 @@ private fun SavedBody(
     val view = LocalView.current
     Column {
         // "Parked today at 13:25" and the distance (baseline 600, 34 under the map).
+        // One row, so a long label and "GPS…" can never overlap: the label gives way.
+        val waitingCd = stringResource(R.string.v8_waiting_gps)
         Box(Modifier.fillMaxWidth().height(53.dp)) {
-            FigmaText(parkedLabel ?: stringResource(R.string.parked_recently), x = 25f, baseline = 34f, size = 15f, weight = FontWeight.Light, color = Black)
-            val right = when {
-                waitingForGps -> stringResource(R.string.v8_waiting_gps)
-                else -> distanceLabel
-            }
-            if (right != null) Row(
-                Modifier.align(Alignment.TopEnd).offset((-28).dp, topForBaseline(34f, 15f)),
+            Row(
+                Modifier.fillMaxWidth().padding(start = 25.dp, end = 28.dp).offset(y = topForBaseline(34f, 15f)),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (waitingForGps) { PulsingDot(); Spacer(Modifier.width(6.dp)) }
-                Text(right, style = designStyle(15.sp, FontWeight.Light, Black), maxLines = 1)
+                Text(
+                    parkedLabel ?: stringResource(R.string.parked_recently),
+                    style = designStyle(15.sp, FontWeight.Light, Black), maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Spacer(Modifier.weight(0.001f).widthIn(min = 12.dp))
+                AnimatedContent(
+                    targetState = waitingForGps,
+                    transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) },
+                    label = "distance",
+                ) { waiting ->
+                    if (waiting) Row(
+                        Modifier.semantics(mergeDescendants = true) { contentDescription = waitingCd },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        PulsingDot(); Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.v8_waiting_gps_short), style = designStyle(15.sp, FontWeight.Light, Black), maxLines = 1)
+                    } else if (distanceLabel != null) {
+                        Text(distanceLabel, style = designStyle(15.sp, FontWeight.Light, Black), maxLines = 1)
+                    }
+                }
             }
         }
         // Go to my car (y 619-668).

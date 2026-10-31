@@ -277,7 +277,7 @@ private class PassiveMarker(map: MapView) : Marker(map) {
 private const val MARKER_CAR = "car"
 private const val MARKER_YOU = "you"
 
-/** Green rounded "P" tile with a white edge, in a soft green halo. */
+/** 0.8: navy rounded tile with the white car (the tab bar's car), white edge, soft navy halo. */
 fun makeParkedMarker(ctx: Context): BitmapDrawable {
     val density = ctx.resources.displayMetrics.density
     val size = (52 * density).toInt()
@@ -286,23 +286,31 @@ fun makeParkedMarker(ctx: Context): BitmapDrawable {
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val cx = size / 2f
     val cy = size / 2f
-    paint.color = 0x293F7A22
+    paint.color = 0x29225079
     c.drawCircle(cx, cy, size / 2f, paint)
     val half = 15 * density
     val r = 5 * density
     paint.color = android.graphics.Color.WHITE
     c.drawRoundRect(cx - half - 2 * density, cy - half - 2 * density, cx + half + 2 * density, cy + half + 2 * density, r + 2 * density, r + 2 * density, paint)
-    paint.color = 0xFF3F7A22.toInt()
+    paint.color = 0xFF225079.toInt()
     c.drawRoundRect(cx - half, cy - half, cx + half, cy + half, r, r, paint)
-    paint.color = android.graphics.Color.WHITE
-    paint.textSize = 18 * density
-    paint.textAlign = Paint.Align.CENTER
-    paint.typeface = runCatching { androidx.core.content.res.ResourcesCompat.getFont(ctx, com.parked.app.R.font.open_sans) }
-        .getOrNull()?.let { Typeface.create(it, Typeface.BOLD) } ?: Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-    val yOffset = (paint.descent() + paint.ascent()) / 2f
-    c.drawText("P", cx, cy - yOffset, paint)
+    // The Figma car (29.82 x 26.51 at 182,763), drawn 18 dp wide in the middle.
+    runCatching {
+        val car = androidx.core.graphics.PathParser.createPathFromPathData(CAR_PATH)
+        val k = 18f * density / 29.82f
+        val m = android.graphics.Matrix().apply {
+            setTranslate(-182f, -763f)
+            postScale(k, k)
+            postTranslate(cx - 29.82f * k / 2f, cy - 26.508f * k / 2f)
+        }
+        car.transform(m)
+        paint.color = android.graphics.Color.WHITE
+        c.drawPath(car, paint)
+    }
     return BitmapDrawable(ctx.resources, bmp)
 }
+
+private const val CAR_PATH = "M186.97 786.193L186.97 787.022C186.97 787.712 186.729 788.299 186.246 788.783C185.763 789.266 185.176 789.508 184.485 789.507C183.794 789.506 183.207 789.264 182.726 788.783C182.244 788.301 182.002 787.714 182 787.022L182 775.177C182 774.983 182.014 774.79 182.041 774.597C182.069 774.403 182.11 774.224 182.166 774.058L185.272 765.237C185.493 764.574 185.893 764.035 186.473 763.621C187.053 763.207 187.702 763 188.42 763L205.4 763C206.118 763 206.767 763.207 207.347 763.621C207.927 764.035 208.327 764.574 208.548 765.237L211.654 774.058C211.71 774.224 211.751 774.403 211.779 774.597C211.806 774.79 211.82 774.983 211.82 775.177L211.82 787.022C211.82 787.712 211.579 788.299 211.096 788.783C210.613 789.266 210.026 789.508 209.335 789.507C208.644 789.506 208.057 789.264 207.576 788.783C207.094 788.301 206.852 787.714 206.85 787.022L206.85 786.193L186.97 786.193M186.639 771.283L207.181 771.283L205.442 766.313L188.378 766.313L186.639 771.283M189.455 781.223C190.145 781.223 190.732 780.982 191.216 780.499C191.7 780.017 191.941 779.43 191.94 778.738C191.939 778.047 191.698 777.461 191.216 776.979C190.734 776.497 190.147 776.256 189.455 776.253C188.763 776.251 188.176 776.493 187.696 776.979C187.215 777.465 186.973 778.051 186.97 778.738C186.967 779.425 187.209 780.012 187.696 780.499C188.183 780.986 188.769 781.228 189.455 781.223M204.365 781.223C205.055 781.223 205.642 780.982 206.126 780.499C206.61 780.017 206.851 779.43 206.85 778.738C206.849 778.047 206.608 777.461 206.126 776.979C205.645 776.497 205.057 776.256 204.365 776.253C203.673 776.251 203.086 776.493 202.606 776.979C202.125 777.465 201.883 778.051 201.88 778.738C201.877 779.425 202.119 780.012 202.606 780.499C203.093 780.986 203.679 781.228 204.365 781.223"
 
 /** You: the familiar blue dot with a white ring and a soft halo. */
 fun makeLiveMarker(ctx: Context): BitmapDrawable {

@@ -149,9 +149,13 @@ fun HomeScreen(
         }
         onDispose { runCatching { context.unregisterReceiver(receiver) } }
     }
+    // Refusing Android's "Turn on Bluetooth?" turns the banner into "Oops! Bluetooth is still off."
+    var bluetoothRefused by remember { mutableIntStateOf(0) }
     val bluetoothLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         bluetoothOn = com.parked.app.util.isBluetoothEnabled(context)
+        if (!bluetoothOn) bluetoothRefused++
     }
+    LaunchedEffect(bluetoothOn) { if (bluetoothOn) bluetoothRefused = 0 }
     var autoParkTipDismissedFor by remember { mutableLongStateOf(uiPrefs.getLong("autopark_tip_dismissed_for", -1L)) }
 
     val msgSaved = stringResource(R.string.spot_saved)
@@ -362,12 +366,13 @@ fun HomeScreen(
         banner = when (issue) {
             MapIssue.Permission -> com.parked.app.ui.v8.HomeBanner.Permission
             MapIssue.LocationOff -> com.parked.app.ui.v8.HomeBanner.LocationOff
-            MapIssue.BluetoothOff -> com.parked.app.ui.v8.HomeBanner.BluetoothOff
+            MapIssue.BluetoothOff -> if (bluetoothRefused > 0) com.parked.app.ui.v8.HomeBanner.BluetoothRefused else com.parked.app.ui.v8.HomeBanner.BluetoothOff
             MapIssue.AutoParkLost -> com.parked.app.ui.v8.HomeBanner.AutoParkLost
             // AutoPark being off is shown by the "AutoPark is off" row instead.
             MapIssue.AutoParkOff, null -> null
         },
         autoParkOn = s?.monitoring == true,
+        bannerShake = bluetoothRefused,
         parkedLabel = s?.parkedAt?.let { parkedAtLabel(context, it) },
         distanceLabel = when {
             isAtCar -> stringResource(R.string.v8_at_car)

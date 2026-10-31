@@ -122,11 +122,12 @@ fun CarV8(fuel: FuelStore, deviceName: String?, openServiceRequest: Boolean, onS
     val rowsShift = sorted.size * 66f
 
     Box(Modifier.fillMaxSize().background(White)) {
+        val scroll = rememberScrollState()
         Column(
             Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
         ) {
             // ---- Name, odometer + colour dot, photo (y 0-320) ----
             Box(Modifier.fillMaxWidth().height(320.dp)) {
@@ -171,15 +172,6 @@ fun CarV8(fuel: FuelStore, deviceName: String?, openServiceRequest: Boolean, onS
                     path = fuel.carPhotoPath,
                     modifier = Modifier.offset(35.dp, 116.dp).size(322.dp, 204.dp),
                     onPick = { choosePhoto() },
-                )
-                ColourPicker(
-                    open = pickerOpen,
-                    selected = carColour,
-                    modifier = Modifier.offset(143.dp, 70.dp),
-                    onPick = { c ->
-                        fuel.setCarColour(c.toArgbLong())
-                        scope.launch { kotlinx.coroutines.delay(160); pickerOpen = false }
-                    },
                 )
             }
 
@@ -234,6 +226,18 @@ fun CarV8(fuel: FuelStore, deviceName: String?, openServiceRequest: Boolean, onS
         // Tap anywhere else to close the colour picker.
         if (pickerOpen) Box(
             Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { pickerOpen = false } }
+        )
+        // Drawn above that layer so the colours can be tapped; follows the page when it scrolls.
+        ColourPicker(
+            open = pickerOpen,
+            selected = carColour,
+            modifier = Modifier
+                .statusBarsPadding()
+                .offset { androidx.compose.ui.unit.IntOffset(143.dp.roundToPx(), 70.dp.roundToPx() - scroll.value) },
+            onPick = { c ->
+                fuel.setCarColour(c.toArgbLong())
+                scope.launch { kotlinx.coroutines.delay(160); pickerOpen = false }
+            },
         )
 
         FuelHistoryPage(
