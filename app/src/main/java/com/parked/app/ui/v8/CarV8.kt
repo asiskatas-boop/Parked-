@@ -598,7 +598,7 @@ internal fun ColumnScope.LevelForm(fuel: FuelStore, onSaved: () -> Unit) {
 }
 
 @Composable
-private fun ColumnScope.OdometerForm(fuel: FuelStore, onSaved: () -> Unit) {
+internal fun ColumnScope.OdometerForm(fuel: FuelStore, onSaved: () -> Unit) {
     var km by remember { mutableStateOf(fuel.currentOdo.takeIf { it > 0 }?.roundToInt()?.toString() ?: "") }
     var err by remember { mutableStateOf<String?>(null) }
     var shake by remember { mutableIntStateOf(0) }

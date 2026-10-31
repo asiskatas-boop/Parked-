@@ -441,13 +441,13 @@ private fun MainContent(
                             onServiceRequestHandled = { openServiceRequest = false }
                         )
                     }
-                    AppTab.Settings -> SettingsScreen(
+                    AppTab.Settings -> com.parked.app.ui.v8.DesignScale { SettingsScreen(
                         fuel = fuel,
                         store = store,
                         autoParkRequest = autoParkRequest,
                         onAutoParkRequestHandled = { autoParkRequest = 0 },
                         appScope = appScope,
-                    )
+                    ) }
                 }
             }
         }
