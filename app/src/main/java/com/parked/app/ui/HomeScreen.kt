@@ -75,6 +75,10 @@ import java.io.File
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlin.math.roundToInt
+import com.parked.app.ui.v8.ConfirmSheetV8
+import com.parked.app.ui.v8.LevelSheetV8
+import com.parked.app.ui.v8.TimerSheetV8
+import com.parked.app.ui.v8.PhotoSheetV8
 
 @Composable
 fun HomeScreen(
@@ -395,7 +399,7 @@ fun HomeScreen(
 
     // 0.8 sheets (ui/v8/HomeSheetsV8.kt), drawn over Home and under the tab bar.
     com.parked.app.ui.v8.SheetV8(confirmReplace, onDismiss = { confirmReplace = false }) {
-        com.parked.app.ui.v8.ConfirmSheetV8(
+        ConfirmSheetV8(
             title = stringResource(R.string.replace_spot_title),
             body = stringResource(R.string.replace_spot_body, distance?.let { formatDistance(it) } ?: ""),
             confirm = stringResource(R.string.replace_spot_confirm),
@@ -405,13 +409,13 @@ fun HomeScreen(
         )
     }
     com.parked.app.ui.v8.SheetV8(showGarage && s != null, onDismiss = { showGarage = false }) {
-        if (s != null) com.parked.app.ui.v8.LevelSheetV8(s.level, s.zone, s.space) { level, zone, space ->
+        if (s != null) LevelSheetV8(s.level, s.zone, s.space) { level, zone, space ->
             showGarage = false
             scope.launch { store.setGarage(level, zone, space); ParkedWidget.refresh(context) }
         }
     }
     com.parked.app.ui.v8.SheetV8(showTimer && s != null, onDismiss = { showTimer = false }) {
-        com.parked.app.ui.v8.TimerSheetV8(s?.timerEndsAt?.takeIf { it > System.currentTimeMillis() }) { endsAt ->
+        TimerSheetV8(s?.timerEndsAt?.takeIf { it > System.currentTimeMillis() }) { endsAt ->
             showTimer = false
             scope.launch {
                 store.setTimerEndsAt(endsAt)
@@ -421,7 +425,7 @@ fun HomeScreen(
     }
     val photoPath = s?.photoPath
     com.parked.app.ui.v8.SheetV8(showPhoto && photoPath != null, onDismiss = { showPhoto = false }) {
-        if (photoPath != null) com.parked.app.ui.v8.PhotoSheetV8(
+        if (photoPath != null) PhotoSheetV8(
             path = photoPath,
             onRetake = { takePhoto() },
             onRemove = { showPhoto = false; scope.launch { store.setPhotoPath(null) } },
