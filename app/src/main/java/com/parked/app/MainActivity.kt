@@ -63,6 +63,9 @@ class MainActivity : ComponentActivity() {
             val stale = requestedAt > 0L && System.currentTimeMillis() - requestedAt > SAVE_REQUEST_MAX_AGE_MS
             if (stale) AppAction.FindCar else AppAction.SaveSpot
         }
+        // NFC tag (or any link) with parked://save: save the spot right where the phone is.
+        android.nfc.NfcAdapter.ACTION_NDEF_DISCOVERED, Intent.ACTION_VIEW ->
+            if (intent.data?.scheme == "parked" && intent.data?.host == "save") AppAction.SaveSpot else null
         ACTION_FIND_CAR -> AppAction.FindCar
         ACTION_OPEN_SETTINGS -> AppAction.OpenSettings
         ACTION_OPEN_SERVICE -> AppAction.OpenService
