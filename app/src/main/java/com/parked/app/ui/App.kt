@@ -150,10 +150,10 @@ private fun ParkedApp(
         label = "appStage"
     ) { current ->
         when (current) {
-            Stage.Onboarding -> OnboardingPage(
-                onNext = { setUp ->
+            Stage.Onboarding -> com.parked.app.ui.v8.OnboardingV8(
+                onFinish = { _ ->
                     uiPrefs.edit().putBoolean("onboarding_done", true).apply()
-                    if (setUp) internalAction = AppAction.SetUpAutoPark
+                    // "Go to the map" lands on Home; its AutoPark button picks the car.
                     showOnboarding = false
                 }
             )

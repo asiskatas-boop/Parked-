@@ -351,6 +351,7 @@ fun HomeScreen(
             null -> Unit
         }
     }
+    Box(Modifier.fillMaxSize()) {
     com.parked.app.ui.v8.HomeV8(
         loaded = s != null,
         hasSpot = hasSpot,
@@ -392,65 +393,41 @@ fun HomeScreen(
         onNote = { note -> scope.launch { store.setNote(note); ParkedWidget.refresh(context) } },
     )
 
-    ConfirmDialog(
-        visible = confirmReplace,
-        title = stringResource(R.string.replace_spot_title),
-        message = stringResource(R.string.replace_spot_body, distance?.let { formatDistance(it) } ?: ""),
-        confirmLabel = stringResource(R.string.replace_spot_confirm),
-        destructive = false,
-        onDismiss = { confirmReplace = false },
-        onConfirm = { confirmReplace = false; onSaveSpot() }
-    )
-
-    if (showNote && s != null) {
-        NoteSheet(
-            initial = s.note.orEmpty(),
-            onDismiss = { showNote = false },
-            onSave = { note ->
-                showNote = false
-                scope.launch { store.setNote(note); ParkedWidget.refresh(context) }
-            }
+    // 0.8 sheets (ui/v8/HomeSheetsV8.kt), drawn over Home and under the tab bar.
+    com.parked.app.ui.v8.SheetV8(confirmReplace, onDismiss = { confirmReplace = false }) {
+        com.parked.app.ui.v8.ConfirmSheetV8(
+            title = stringResource(R.string.replace_spot_title),
+            body = stringResource(R.string.replace_spot_body, distance?.let { formatDistance(it) } ?: ""),
+            confirm = stringResource(R.string.replace_spot_confirm),
+            onConfirm = { confirmReplace = false; onSaveSpot() },
+            secondary = stringResource(R.string.cancel),
+            onSecondary = { confirmReplace = false },
         )
     }
-    if (showGarage && s != null) {
-        GarageSheet(
-            level = s.level, zone = s.zone, space = s.space,
-            hasPhoto = s.photoPath != null,
-            onPhoto = { level, zone, space ->
-                // Keep what was typed, then open the camera.
-                showGarage = false
-                // App scope: the Activity may be recreated while the camera is open.
-                appScope.launch { store.setGarage(level, zone, space) }
-                if (s.photoPath == null) takePhoto() else showPhoto = true
-            },
-            onDismiss = { showGarage = false },
-            onSave = { level, zone, space ->
-                showGarage = false
-                scope.launch { store.setGarage(level, zone, space); ParkedWidget.refresh(context) }
-            }
-        )
+    com.parked.app.ui.v8.SheetV8(showGarage && s != null, onDismiss = { showGarage = false }) {
+        if (s != null) com.parked.app.ui.v8.LevelSheetV8(s.level, s.zone, s.space) { level, zone, space ->
+            showGarage = false
+            scope.launch { store.setGarage(level, zone, space); ParkedWidget.refresh(context) }
+        }
     }
-    if (showTimer && s != null) {
-        TimerSheet(
-            endsAt = s.timerEndsAt?.takeIf { it > System.currentTimeMillis() },
-            onDismiss = { showTimer = false },
-            onSet = { endsAt ->
-                showTimer = false
-                scope.launch {
-                    store.setTimerEndsAt(endsAt)
-                    if (endsAt == null) ParkingTimer.cancel(context) else ParkingTimer.schedule(context, endsAt)
-                }
+    com.parked.app.ui.v8.SheetV8(showTimer && s != null, onDismiss = { showTimer = false }) {
+        com.parked.app.ui.v8.TimerSheetV8(s?.timerEndsAt?.takeIf { it > System.currentTimeMillis() }) { endsAt ->
+            showTimer = false
+            scope.launch {
+                store.setTimerEndsAt(endsAt)
+                if (endsAt == null) ParkingTimer.cancel(context) else ParkingTimer.schedule(context, endsAt)
             }
-        )
+        }
     }
     val photoPath = s?.photoPath
-    if (showPhoto && photoPath != null) {
-        PhotoDialog(
+    com.parked.app.ui.v8.SheetV8(showPhoto && photoPath != null, onDismiss = { showPhoto = false }) {
+        if (photoPath != null) com.parked.app.ui.v8.PhotoSheetV8(
             path = photoPath,
-            onDismiss = { showPhoto = false },
             onRetake = { takePhoto() },
             onRemove = { showPhoto = false; scope.launch { store.setPhotoPath(null) } },
+            onDone = { showPhoto = false },
         )
+    }
     }
 }
 
