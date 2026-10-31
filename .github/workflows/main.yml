@@ -93,11 +93,19 @@ jobs:
             echo "::error title=Signing key::This APK is not signed with the fixed key, so it would not install over the app."
             exit 1
           fi
-          if "$tools/aapt2" dump xmltree --file AndroidManifest.xml "$apk" | grep -q 'debuggable.*=true'; then
+          manifest=$("$tools/aapt2" dump xmltree --file AndroidManifest.xml "$apk")
+          # A release build has no debuggable attribute at all; any mention fails.
+          if printf '%s' "$manifest" | grep -q 'debuggable'; then
             echo "::error title=Debuggable::The APK is debuggable."
             exit 1
           fi
-          echo "::notice title=Debuggable::No (release build)."
+          # Web pages must not be able to open parked://save (it would move the car's spot).
+          if printf '%s' "$manifest" | grep -q 'android.intent.category.BROWSABLE'; then
+            echo "::error title=Web links::The app accepts web links again; parked://save must stay NFC-only."
+            exit 1
+          fi
+          printf '%s' "$manifest" | grep -q 'android.nfc.action.NDEF_DISCOVERED' || { echo "::error title=NFC::The NFC tag entry is missing."; exit 1; }
+          echo "::notice title=Checks::Not debuggable, no web links, NFC tag entry present."
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
