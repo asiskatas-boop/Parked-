@@ -46,6 +46,7 @@ class V8ScreenshotsTest {
                     LocalSnackbar provides remember { SnackbarHostState() },
                     androidx.activity.compose.LocalActivityResultRegistryOwner provides owner,
                     androidx.activity.compose.LocalOnBackPressedDispatcherOwner provides owner,
+                    androidx.compose.ui.platform.LocalInspectionMode provides true,
                 ) {
                     DesignScale {
                         Column(Modifier.fillMaxSize().background(White)) {
@@ -101,5 +102,22 @@ class V8ScreenshotsTest {
     @Test fun car_sheet_level() = both("car_sheet_level", 817, 1) {
         val f = demoFuel(false)
         Box { CarV8(f, "CE235BT", false) {}; SheetV8(true, {}) { LevelForm(f) {} } }
+    }
+
+    @Composable
+    private fun settings(historyOn: Boolean) = SettingsV8(
+        autoParkStatus = "BT connection needed", deviceName = "CE23BT", odometer = "258.852 km",
+        notificationsOn = true, historyOn = historyOn, historyCount = "3 spots saved", language = "English", version = "0.8.0",
+        onAutoPark = {}, onCarBt = {}, onOdometer = {}, onNotifications = {}, onHistory = {}, onSeeAll = {},
+        onLanguage = {}, onExport = {}, onImport = {}, crashReport = null,
+    )
+
+    @Test fun settings() = both("settings", 869, 2) { settings(true) }
+    @Test fun settings_history_off() = both("settings_history_off", 869, 2) { settings(false) }
+    @Test fun settings_sheet_autopark() = both("settings_sheet_autopark", 869, 2) {
+        Box { settings(true); SheetV8(true, {}) { ConfirmSheetV8("AutoPark", "Turn it on and Parked! saves your spot by itself when your car's Bluetooth disconnects.", "Turn on AutoPark", {}) } }
+    }
+    @Test fun settings_sheet_devices() = both("settings_sheet_devices", 869, 2) {
+        Box { settings(true); SheetV8(true, {}) { DeviceSheetV8(listOf(Triple("CE23BT", "a", true), Triple("JBL Flip 5", "b", false)), true, "a") { _, _ -> } } }
     }
 }
