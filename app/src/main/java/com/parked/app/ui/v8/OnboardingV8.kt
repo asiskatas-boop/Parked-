@@ -96,7 +96,8 @@ fun OnboardingV8(initialPage: Int = 0, onFinish: (granted: Boolean) -> Unit) {
     }
     // Back from Android's settings with the permissions allowed: carry on.
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    DisposableEffect(lifecycle) {
+    val preview = androidx.compose.ui.platform.LocalInspectionMode.current
+    if (!preview) DisposableEffect(lifecycle) {
         val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
             if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME && page == Page.Oops && granted()) go(Page.AllSet)
         }
@@ -204,7 +205,7 @@ private fun HowPage() {
         Triple(R.string.v8_ob_c_title, R.string.v8_ob_c_body, 457f),
     )
     steps.forEach { (t, b, base) ->
-        Column(Modifier.offset(46.dp, topForBaseline(base, 20f)).width(335.dp)) {
+        Column(Modifier.offset(46.dp, topForBaseline(base, 20f) - 6.dp).width(335.dp)) {
             Text(stringResource(t), style = designStyle(20.sp, FontWeight.Bold, Black).copy(lineHeight = 32.sp))
             Text(stringResource(b), style = designStyle(20.sp, FontWeight.Light, Black).copy(lineHeight = 32.sp))
         }
@@ -224,7 +225,7 @@ private fun HowPage() {
             .offset(29.dp, 854.dp)
             .size(334.dp, 71.dp)
             .background(CardGrey, RoundedCornerShape(14.dp))
-            .padding(start = 18.dp, end = 12.dp),
+            .padding(start = 18.dp, end = 2.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         Text(
@@ -232,7 +233,7 @@ private fun HowPage() {
                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(stringResource(R.string.v8_ob_also)) }
                 append(" "); append(stringResource(R.string.v8_ob_also_body))
             },
-            style = designStyle(13.sp, FontWeight.Normal, Ink).copy(lineHeight = 22.sp),
+            style = designStyle(13.sp, FontWeight.Normal, Ink).copy(lineHeight = 22.sp, letterSpacing = (-0.1).sp),
         )
     }
 }
